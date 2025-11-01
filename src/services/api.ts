@@ -20,8 +20,8 @@ import reportsData from "@/data/reports.json";
 
 // API Base URL - replace with your actual backend URL
 const API_BASE_URL = "https://api.tenantsphere.com";
-const API_BASE = "http://localhost:5000";
-const API_URL = "http://localhost:5000"; // Change to your backend URL
+const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_URL = "https://billingbackend-1vei.onrender.com"; // Change to your backend URL
 
 // Helper function to get token
 const getAuthHeaders = () => {
