@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
 import { paymentsAPI, tenantAPI, amcAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Calendar, Users } from "lucide-react";
+import { DollarSign, Calendar, Users, Loader2 } from "lucide-react";
 
 const priceMap: Record<string, number> = {
   trial: 0,
@@ -378,9 +378,12 @@ const AMC_report: React.FC = () => {
 
       {/* Debug info - remove after fixing */}
       {loading && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-          Loading tenants from backend...
+       <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading amc report...</p>
         </div>
+      </div>
       )}
 
       {!loading && tenants.length === 0 && (

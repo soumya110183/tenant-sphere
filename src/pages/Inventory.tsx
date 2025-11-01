@@ -90,7 +90,7 @@ const SearchFilter = ({ searchTerm, setSearchTerm, filterCategory, setFilterCate
     </select>
     <Button onClick={onAddProduct} className="whitespace-nowrap">
       <Plus className="h-4 w-4 mr-2" />
-      Add Product
+      Add Inventory
     </Button>
   </div>
 );
@@ -152,7 +152,7 @@ const StockView = ({ products, searchTerm, setSearchTerm, filterCategory, setFil
       filterCategory={filterCategory}
       setFilterCategory={setFilterCategory}
       categories={categories}
-      onAddProduct={() => openModal('product')}
+      onAddProduct={() => openModal('inventory')}
     />
 
     <Card>
@@ -184,7 +184,7 @@ const StockView = ({ products, searchTerm, setSearchTerm, filterCategory, setFil
               {products.length === 0 ? (
                 <tr>
                   <td colSpan="11" className="text-center py-8 text-muted-foreground text-sm">
-                    No products found. Add your first product to get started!
+                    No inventory items found. Add your first inventory item to get started!
                   </td>
                 </tr>
               ) : (
@@ -195,7 +195,7 @@ const StockView = ({ products, searchTerm, setSearchTerm, filterCategory, setFil
                     getStockStatus={getStockStatus}
                     getStockColor={getStockColor}
                     getStockPercentage={getStockPercentage}
-                    onEdit={(item) => openModal('product', item)}
+                    onEdit={(item) => openModal('inventory', item)}
                     onDelete={handleDelete}
                   />
                 ))
@@ -527,7 +527,7 @@ const Modal = ({ showModal, modalType, editingItem, formData, setFormData, produ
 
   const getModalTitle = () => {
     const titles = {
-      product: editingItem ? 'Edit Product' : 'Add New Product',
+      inventory: editingItem ? 'Update Inventory' : 'Add Inventory',
       sale: 'New Sale Transaction',
       purchase: 'New Purchase Order',
       salesReturn: 'New Sales Return',
@@ -536,6 +536,18 @@ const Modal = ({ showModal, modalType, editingItem, formData, setFormData, produ
     };
     return titles[modalType];
   };
+
+  // Sample product catalog - in real scenario, this would come from your product database
+  const productCatalog = [
+    { id: 101, name: 'Basmati Rice', brand: 'India Gate', category: 'Grocery', unit: 'kg', costPrice: 80, sellingPrice: 100, tax: 5 },
+    { id: 102, name: 'Coca Cola', brand: 'Coca Cola', category: 'Beverage', unit: 'ml', costPrice: 30, sellingPrice: 40, tax: 12 },
+    { id: 103, name: 'Sunflower Oil', brand: 'Fortune', category: 'Grocery', unit: 'litre', costPrice: 180, sellingPrice: 220, tax: 5 },
+    { id: 104, name: 'Toothpaste', brand: 'Colgate', category: 'Personal Care', unit: 'piece', costPrice: 45, sellingPrice: 65, tax: 18 },
+    { id: 105, name: 'Milk', brand: 'Amul', category: 'Dairy', unit: 'litre', costPrice: 25, sellingPrice: 32, tax: 0 },
+    { id: 106, name: 'Bread', brand: 'Britannia', category: 'Bakery', unit: 'pack', costPrice: 15, sellingPrice: 25, tax: 5 },
+    { id: 107, name: 'Butter', brand: 'Amul', category: 'Dairy', unit: 'pack', costPrice: 45, sellingPrice: 60, tax: 5 },
+    { id: 108, name: 'Shampoo', brand: 'Head & Shoulders', category: 'Personal Care', unit: 'bottle', costPrice: 180, sellingPrice: 240, tax: 18 },
+  ];
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -548,162 +560,179 @@ const Modal = ({ showModal, modalType, editingItem, formData, setFormData, produ
         </div>
         
         <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-4">
-          {modalType === 'product' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {modalType === 'inventory' && (
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Product Name *</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Brand *</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.brand || ''}
-                  onChange={(e) => setFormData({...formData, brand: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Category *</label>
+                <label className="block text-sm font-medium mb-1">Select Product *</label>
                 <select
                   required
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.category || 'Grocery'}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  value={formData.productId || ''}
+                  onChange={(e) => {
+                    const selectedProduct = productCatalog.find(p => p.id === parseInt(e.target.value));
+                    if (selectedProduct) {
+                      setFormData({
+                        ...formData,
+                        productId: selectedProduct.id,
+                        name: selectedProduct.name,
+                        brand: selectedProduct.brand,
+                        category: selectedProduct.category,
+                        unit: selectedProduct.unit,
+                        costPrice: selectedProduct.costPrice,
+                        sellingPrice: selectedProduct.sellingPrice,
+                        tax: selectedProduct.tax
+                      });
+                    }
+                  }}
+                  disabled={editingItem}
                 >
-                  <option>Grocery</option>
-                  <option>Beverage</option>
-                  <option>Household</option>
-                  <option>Dairy</option>
+                  <option value="">Choose a product...</option>
+                  {productCatalog.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} - {product.brand} - AED {product.sellingPrice}
+                    </option>
+                  ))}
                 </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Select from existing product catalog
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Barcode *</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.barcode || ''}
-                  onChange={(e) => setFormData({...formData, barcode: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Quantity *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.quantity || 0}
-                  onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Unit *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="kg, litre, pieces, etc."
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.unit || ''}
-                  onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Cost Price (AED ) *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.costPrice || 0}
-                  onChange={(e) => setFormData({...formData, costPrice: parseFloat(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Selling Price (AED ) *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.sellingPrice || 0}
-                  onChange={(e) => setFormData({...formData, sellingPrice: parseFloat(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Tax (%) *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.tax || 0}
-                  onChange={(e) => setFormData({...formData, tax: parseFloat(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Reorder Level *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.reorderLevel || 0}
-                  onChange={(e) => setFormData({...formData, reorderLevel: parseInt(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Max Stock *</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.maxStock || 0}
-                  onChange={(e) => setFormData({...formData, maxStock: parseInt(e.target.value) || 0})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Location *</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.location || ''}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Expiry Date</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.expiryDate || ''}
-                  onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Supplier ID *</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.supplierId || 1}
-                  onChange={(e) => setFormData({...formData, supplierId: parseInt(e.target.value) || 1})}
-                />
+
+              {formData.productId && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
+                  <div className="sm:col-span-2">
+                    <h4 className="font-medium text-sm mb-2">Product Details</h4>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Product Name</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.name || ''}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Brand</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.brand || ''}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Category</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.category || ''}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Unit</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.unit || ''}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Cost Price (AED)</label>
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.costPrice || 0}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Selling Price (AED)</label>
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.sellingPrice || 0}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Quantity *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.quantity || 0}
+                    onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Reorder Level *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.reorderLevel || 0}
+                    onChange={(e) => setFormData({...formData, reorderLevel: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Max Stock *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.maxStock || 0}
+                    onChange={(e) => setFormData({...formData, maxStock: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Location *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.location || ''}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Barcode</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.barcode || ''}
+                    onChange={(e) => setFormData({...formData, barcode: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.expiryDate || ''}
+                    onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Supplier ID *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.supplierId || 1}
+                    onChange={(e) => setFormData({...formData, supplierId: parseInt(e.target.value) || 1})}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -1152,7 +1181,7 @@ const Modal = ({ showModal, modalType, editingItem, formData, setFormData, produ
 // Main Component
 const GroceryInventory = () => {
   const [activeTab, setActiveTab] = useState('stock');
-const { products, setProducts } = useInventory();
+  const { products, setProducts } = useInventory();
 
   const [sales, setSales] = useState([
     { id: 1, date: '2025-10-28 10:30', customerId: 'C001', customerName: 'Rajesh Kumar', products: [{productId: 1, name: 'Basmati Rice', qty: 5, price: 100, tax: 5}], paymentType: 'UPI', total: 525, profit: 100, staffId: 'S001' },
@@ -1212,8 +1241,8 @@ const { products, setProducts } = useInventory();
       setFormData(item);
     } else {
       switch(type) {
-        case 'product':
-          setFormData({ name: '', category: 'Grocery', brand: '', quantity: 0, unit: 'kg', costPrice: 0, sellingPrice: 0, tax: 0, reorderLevel: 0, maxStock: 0, location: '', barcode: '', expiryDate: '', supplierId: 1 });
+        case 'inventory':
+          setFormData({ productId: '', name: '', category: '', brand: '', quantity: 0, unit: '', costPrice: 0, sellingPrice: 0, tax: 0, reorderLevel: 0, maxStock: 0, location: '', barcode: '', expiryDate: '', supplierId: 1 });
           break;
         case 'sale':
           setFormData({ customerId: '', customerName: '', paymentType: 'Cash', staffId: 'S001' });
@@ -1252,12 +1281,15 @@ const { products, setProducts } = useInventory();
     e.preventDefault();
     
     switch(modalType) {
-      case 'product':
+      case 'inventory':
         if (editingItem) {
           setProducts(products.map(p => p.id === editingItem.id ? { ...formData, id: editingItem.id } : p));
         } else {
-          const newProduct = { ...formData, id: Math.max(...products.map(p => p.id), 0) + 1 };
-          setProducts([...products, newProduct]);
+          const newInventoryItem = { 
+            ...formData, 
+            id: Math.max(...products.map(p => p.id), 0) + 1
+          };
+          setProducts([...products, newInventoryItem]);
         }
         break;
         

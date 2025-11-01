@@ -24,7 +24,7 @@ const superAdminNavigation = [
   { name: 'Modules', href: '/modules', icon: Puzzle },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'AMC_report', href: '/amc_report', icon: Package },
-  { name: 'Users', href: '/users', icon: Users },
+  // { name: 'Users', href: '/users', icon: Users },
   { name: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
@@ -34,6 +34,7 @@ const tenantNavigation = [
   // { name: 'Orders', href: '/orders', icon: Package },
   { name: 'Billing', href: '/billing', icon: Package },
   { name: 'Inventory', href: '/inventory', icon: ClipboardList },
+  { name: 'Products', href: '/prodcuts', icon: ClipboardList },
   { name: 'Reports', href: '/report', icon: BarChart3 },
   // { name: 'Staff', href: '/staff', icon: Users },
   { name: 'Accounts', href: '/account', icon: CircleUser },

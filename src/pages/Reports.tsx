@@ -150,10 +150,10 @@ const Reports = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 mx-auto text-primary animate-spin mb-4" />
-          <p className="text-muted-foreground">Loading reports...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading Reports...</p>
         </div>
       </div>
     );

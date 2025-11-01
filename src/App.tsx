@@ -29,6 +29,7 @@ import NotFound from "./pages/NotFound";
 import BillingModule from "./pages/tenant/BillingModule.js";
 import ReportsModule from "./pages/tenant/ReportsModule";
 import AccountsModule from "./pages/tenant/AccountsModule.js";
+import ProductCatalog from "./pages/Prodcuts.js";
 
 const queryClient = new QueryClient();
 
@@ -124,6 +125,7 @@ const App = () => (
                 <Route path="report" element={<RoleBasedRoute allowedRoles={['tenant']}><ReportsModule /></RoleBasedRoute>} />
                 <Route path="account" element={<RoleBasedRoute allowedRoles={['tenant']}><AccountsModule /></RoleBasedRoute>} />
                  <Route path="billing" element={<RoleBasedRoute allowedRoles={['tenant']}><BillingModule /></RoleBasedRoute>} />
+                 <Route path="prodcuts" element={<RoleBasedRoute allowedRoles={['tenant']}><ProductCatalog /></RoleBasedRoute>} />
                 <Route
                   path="staff"
                   element={

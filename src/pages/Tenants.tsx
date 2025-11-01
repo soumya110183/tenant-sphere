@@ -365,7 +365,12 @@ const handleDelete = async (id: string) => {
       {loading && tenants.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-gray-500">Loading tenants...</p>
+             <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading tenants...</p>
+        </div>
+      </div>
           </CardContent>
         </Card>
       ) : (

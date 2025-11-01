@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
 import { paymentsAPI, tenantAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Calendar, Users } from "lucide-react";
+import { DollarSign, Calendar, Users, Loader2 } from "lucide-react";
 
 const priceMap: Record<string, number> = {
   trial: 0,
@@ -134,9 +134,12 @@ const Subscriptions: React.FC = () => {
 
       {/* Debug info - remove after fixing */}
       {loading && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-          Loading tenants from backend...
+        <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading Subscriptions...</p>
         </div>
+      </div>
       )}
 
       {!loading && tenants.length === 0 && (
@@ -400,8 +403,8 @@ const Subscriptions: React.FC = () => {
                 {[
                   {
                     key: "trial",
-                    title: "Trial",
-                    note: "7 day use — all features, then cancel",
+                    title: "Trial (7 days)",
+                    
                     users: 0,
                     features: ["All features"],
                   },
