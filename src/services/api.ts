@@ -65,7 +65,7 @@ export const tenantAPI = {
 
   // Update existing tenant
   updateTenant: async (id: number, tenantData: any) => {
-    const res = await fetch(`http://localhost:5000/tenants/${id}`, {
+    const res = await fetch(`https://billingbackend-1vei.onrender.com/tenants/${id}`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(tenantData),
