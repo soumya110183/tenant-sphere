@@ -21,6 +21,7 @@ import {
   MinusCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import jsPDF from "jspdf";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();
@@ -235,28 +236,170 @@ const SupermarketBilling = () => {
     }, 0);
   const calculateTotal = () => calculateSubtotal();
 
-  // 🧾 Generate Bill
-  const generateBill = () => {
-    const validItems = rows.filter((r) => r.name);
+  // 🧾 Generate PDF Bill with manual table
+ // 🧾 Generate PDF Bill with Supermarket Receipt Style
+const generatePDFBill = () => {
+  const validItems = rows.filter((r) => r.name);
 
-    if (validItems.length === 0) {
-      toast({
-        title: "No items entered",
-        description: "Please enter at least one valid product",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  if (validItems.length === 0) {
     toast({
-      title: "Bill Generated",
-      description: `Invoice #INV-${Date.now().toString().slice(-6)} created successfully`,
+      title: "No items entered",
+      description: "Please enter at least one valid product",
+      variant: "destructive",
     });
+    return;
+  }
 
-    // reset rows
-    setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
-    setTimeout(() => inputRefs.current[0]?.focus(), 100);
-  };
+  // Create new PDF document - using smaller width for receipt style
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [80, 297] // Standard receipt width, long length
+  });
+
+  const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+  const currentDate = new Date().toLocaleDateString();
+  const currentTime = new Date().toLocaleTimeString();
+
+  let yPosition = 10;
+
+  // Supermarket Header - Centered and bold
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("SUPERMART", 40, yPosition, { align: "center" });
+  yPosition += 6;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("123 Main Street, Dubai", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text("Tel: +971 4 123 4567", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text("VAT: 123456789012345", 40, yPosition, { align: "center" });
+  yPosition += 8;
+
+  // Separator line
+  doc.setLineWidth(0.3);
+  doc.line(5, yPosition, 75, yPosition);
+  yPosition += 5;
+
+  // Invoice Details
+  doc.setFontSize(9);
+  doc.text(`Invoice: ${invoiceNumber}`, 5, yPosition);
+  yPosition += 4;
+  doc.text(`Date: ${currentDate}`, 5, yPosition);
+  yPosition += 4;
+  doc.text(`Time: ${currentTime}`, 5, yPosition);
+  yPosition += 4;
+  doc.text(`Cashier: Admin`, 5, yPosition);
+  yPosition += 4;
+  doc.text(`Payment: ${paymentMethod.toUpperCase()}`, 5, yPosition);
+  yPosition += 8;
+
+  // Another separator
+  doc.line(5, yPosition, 75, yPosition);
+  yPosition += 5;
+
+  // Items Header
+  doc.setFont("helvetica", "bold");
+  doc.text("QTY  DESCRIPTION", 5, yPosition);
+  doc.text("AMOUNT", 70, yPosition, { align: "right" });
+  yPosition += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.line(5, yPosition, 75, yPosition);
+  yPosition += 8;
+
+  // Items List
+  validItems.forEach((item, index) => {
+    // Item name - wrapped to fit receipt width
+    const itemName = item.name.length > 30 ? item.name.substring(0, 30) + "..." : item.name;
+    
+    // First line: Quantity and Item Name
+    doc.text(`${item.qty}x`, 5, yPosition);
+    doc.text(itemName, 15, yPosition);
+    yPosition += 4;
+
+    // Second line: Price per item
+    doc.text(`@ AED ${item.price.toFixed(2)}`, 15, yPosition);
+    
+    // Total amount for this item, right-aligned
+    doc.text(`AED ${item.total.toFixed(2)}`, 70, yPosition - 4, { align: "right" });
+    yPosition += 6;
+
+    // Check for page break
+    if (yPosition > 250) {
+      doc.addPage();
+      yPosition = 20;
+    }
+  });
+
+  // Final separator before total
+  yPosition += 4;
+  doc.line(5, yPosition, 75, yPosition);
+  yPosition += 8;
+
+  // Totals Section
+  doc.setFont("helvetica", "bold");
+  doc.text("SUB TOTAL:", 40, yPosition, { align: "right" });
+  doc.text(`AED ${calculateSubtotal().toFixed(2)}`, 70, yPosition, { align: "right" });
+  yPosition += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.text("TAX:", 40, yPosition, { align: "right" });
+  doc.text(`AED ${calculateIncludedTax().toFixed(2)}`, 70, yPosition, { align: "right" });
+  yPosition += 5;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("TOTAL:", 40, yPosition, { align: "right" });
+  doc.text(`AED ${calculateTotal().toFixed(2)}`, 70, yPosition, { align: "right" });
+  yPosition += 8;
+
+  // Payment details
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("CASH:", 40, yPosition, { align: "right" });
+  doc.text(`AED ${calculateTotal().toFixed(2)}`, 70, yPosition, { align: "right" });
+  yPosition += 5;
+
+  doc.text("CHANGE:", 40, yPosition, { align: "right" });
+  doc.text("AED 0.00", 70, yPosition, { align: "right" });
+  yPosition += 12;
+
+  // Final separator
+  doc.line(5, yPosition, 75, yPosition);
+  yPosition += 8;
+
+  // Footer messages
+  doc.setFontSize(8);
+  doc.text("Thank you for shopping with us!", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text("*** Items cannot be returned/exchanged ***", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text("Please keep this receipt for returns", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text("Customer Care: +971 800 123456", 40, yPosition, { align: "center" });
+  yPosition += 8;
+
+  // Barcode area (simulated)
+  doc.setFont("helvetica", "bold");
+  doc.text("★★★★★★★★★★★★★★★★", 40, yPosition, { align: "center" });
+  yPosition += 4;
+  doc.text(invoiceNumber, 40, yPosition, { align: "center" });
+
+  // Save the PDF
+  doc.save(`receipt-${invoiceNumber}.pdf`);
+
+  toast({
+    title: "Receipt Generated Successfully",
+    description: `Receipt ${invoiceNumber} has been downloaded`,
+  });
+
+  // Reset rows after successful bill generation
+  setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
+  setTimeout(() => inputRefs.current[0]?.focus(), 100);
+};
 
   // Auto-focus new rows
   useEffect(() => {
@@ -430,7 +573,7 @@ const SupermarketBilling = () => {
               </div>
             </div>
 
-            <Button onClick={generateBill} className="w-full mt-4" size="lg">
+            <Button onClick={generatePDFBill} className="w-full mt-4" size="lg">
               <Printer className="mr-2 h-4 w-4" />
               Print Bill
             </Button>
