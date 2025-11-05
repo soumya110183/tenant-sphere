@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -35,6 +35,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import DownloadReportButton from "@/components/DownloadReportButton";
+
 const Reports = () => {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -45,6 +49,12 @@ const Reports = () => {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const { toast } = useToast();
+
+  // Refs for chart containers (used for client-side capture)
+  const revenueRef = useRef<HTMLDivElement | null>(null);
+  const tenantRef = useRef<HTMLDivElement | null>(null);
+  const categoryRef = useRef<HTMLDivElement | null>(null);
+  const fullReportRef = useRef<HTMLDivElement | null>(null);
 
   // Category colors for pie chart
   const CATEGORY_COLORS = {
@@ -100,8 +110,13 @@ const Reports = () => {
         const revenueArray = Object.entries(monthlyRevenue)
           .map(([month, revenue]) => ({ month, revenue }))
           .sort((a, b) => {
-            const dateA = new Date(a.month);
-            const dateB = new Date(b.month);
+            // Convert 'Mon YYYY' -> using Date by parsing first day
+            const dateA = new Date(
+              `${a.month.split(" ")[0]} 1, ${a.month.split(" ")[1]}`
+            );
+            const dateB = new Date(
+              `${b.month.split(" ")[0]} 1, ${b.month.split(" ")[1]}`
+            );
             return dateA.getTime() - dateB.getTime();
           })
           .slice(-6); // Get last 6 months
@@ -130,6 +145,10 @@ const Reports = () => {
   const handleExport = async (reportType: string) => {
     try {
       setExporting(true);
+
+      // Send the user-selected format directly to the backend.
+      // If the user selected 'pdf' the backend will receive type=pdf and
+      // can generate a PDF (as you observed when opening the direct link).
       await reportsAPI.exportReport(reportType, exportFormat);
 
       toast({
@@ -148,6 +167,112 @@ const Reports = () => {
     }
   };
 
+  // -------------------------
+  // Client-side capture helpers
+  // -------------------------
+  const captureElement = async (el: HTMLDivElement | null) => {
+    if (!el) throw new Error("Element not found for capture");
+    // html2canvas options: increase scale for higher DPI, useCORS to attempt cross-origin images
+    return html2canvas(el, { scale: 2, useCORS: true, logging: false });
+  };
+
+  const downloadDataUrl = (dataUrl: string, filename: string) => {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const exportChartAsPng = async (
+    ref: React.RefObject<HTMLDivElement>,
+    filename = "chart.png"
+  ) => {
+    try {
+      const canvas = await captureElement(ref.current);
+      const dataUrl = canvas.toDataURL("image/png");
+      downloadDataUrl(dataUrl, filename);
+      toast({ title: "Downloaded", description: `${filename} saved.` });
+    } catch (err) {
+      console.error("PNG export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Unable to export PNG.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportChartAsJpg = async (
+    ref: React.RefObject<HTMLDivElement>,
+    filename = "chart.jpg"
+  ) => {
+    try {
+      const canvas = await captureElement(ref.current);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      downloadDataUrl(dataUrl, filename);
+      toast({ title: "Downloaded", description: `${filename} saved.` });
+    } catch (err) {
+      console.error("JPG export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Unable to export JPG.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportChartAsPdf = async (
+    ref: React.RefObject<HTMLDivElement>,
+    filename = "chart.pdf"
+  ) => {
+    try {
+      const canvas = await captureElement(ref.current);
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          let imgW = img.width;
+          let imgH = img.height;
+          const ratio = Math.min(pageWidth / imgW, pageHeight / imgH);
+          imgW *= ratio;
+          imgH *= ratio;
+          const x = (pageWidth - imgW) / 2;
+          const y = (pageHeight - imgH) / 2;
+          pdf.addImage(img, "PNG", x, y, imgW, imgH);
+          pdf.save(filename);
+          resolve();
+        };
+        img.onerror = (e) => {
+          reject(e);
+        };
+        img.src = imgData;
+      });
+
+      toast({ title: "Downloaded", description: `${filename} saved.` });
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Unable to export PDF.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // -------------------------
+  // UI states
+  // -------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -187,7 +312,7 @@ const Reports = () => {
       : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={fullReportRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -213,6 +338,23 @@ const Reports = () => {
               <SelectItem value="excel">Excel</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Option to export the whole visible report as PDF / PNG */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => exportChartAsPng(fullReportRef, "full-report.png")}
+            className="ml-2"
+          >
+            Download Page (PNG)
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => exportChartAsPdf(fullReportRef, "full-report.pdf")}
+          >
+            Download Page (PDF)
+          </Button>
         </div>
       </div>
 
@@ -224,76 +366,95 @@ const Reports = () => {
               <CardTitle>Revenue Analysis</CardTitle>
               <CardDescription>Monthly revenue trends</CardDescription>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => handleExport("revenue")}
-              disabled={exporting}
-            >
-              {exporting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              Export
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Client-side chart exports */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  exportChartAsPng(revenueRef, "revenue-chart.png")
+                }
+              >
+                Download PNG
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  exportChartAsPdf(revenueRef, "revenue-chart.pdf")
+                }
+              >
+                Download PDF
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {revenueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={350}>
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="5%"
-                      stopColor="hsl(var(--primary))"
-                      stopOpacity={0.3}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="hsl(var(--primary))"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="month" className="text-xs" />
-                <YAxis className="text-xs" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: any) =>
-                    new Intl.NumberFormat("en-AE", {
-                      style: "currency",
-                      currency: "AED",
-                      maximumFractionDigits: 0,
-                    }).format(Number(value))
-                  }
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="hsl(var(--primary))"
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[350px] text-muted-foreground">
-              No revenue data available
-            </div>
-          )}
+          <div ref={revenueRef}>
+            {revenueData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={350}>
+                <AreaChart data={revenueData}>
+                  <defs>
+                    <linearGradient
+                      id="colorRevenue"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                  />
+                  <XAxis dataKey="month" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: any) =>
+                      new Intl.NumberFormat("en-AE", {
+                        style: "currency",
+                        currency: "AED",
+                        maximumFractionDigits: 0,
+                      }).format(Number(value))
+                    }
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="hsl(var(--primary))"
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                No revenue data available
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Growth Metrics */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Tenant Growth */}
         {/* Tenant Growth */}
         <Card>
           <CardHeader>
@@ -302,57 +463,66 @@ const Reports = () => {
                 <CardTitle>Tenant Growth</CardTitle>
                 <CardDescription>New tenants per month</CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleExport("tenant-growth")}
-                disabled={exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-                Export
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPng(tenantRef, "tenant-growth.png")
+                  }
+                >
+                  Download PNG
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPdf(tenantRef, "tenant-growth.pdf")
+                  }
+                >
+                  Download PDF
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            {tenantGrowth.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={tenantGrowth}
-                  barCategoryGap="20%"
-                  barSize={tenantGrowth.length === 1 ? 60 : undefined}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-muted"
-                  />
-                  <XAxis dataKey="month" className="text-xs" />
-                  <YAxis className="text-xs" allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Legend />
-                  <Bar
-                    dataKey="tenants"
-                    fill="hsl(var(--primary))"
-                    name="New Tenants"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={80}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                No growth data available
-              </div>
-            )}
+            <div ref={tenantRef}>
+              {tenantGrowth.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={tenantGrowth}
+                    barCategoryGap="20%"
+                    barSize={tenantGrowth.length === 1 ? 60 : undefined}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis dataKey="month" className="text-xs" />
+                    <YAxis className="text-xs" allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Legend />
+                    <Bar
+                      dataKey="tenants"
+                      fill="hsl(var(--primary))"
+                      name="New Tenants"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={80}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No growth data available
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -364,49 +534,58 @@ const Reports = () => {
                 <CardTitle>Category Distribution</CardTitle>
                 <CardDescription>Tenants by business category</CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleExport("categories")}
-                disabled={exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-                Export
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPng(categoryRef, "categories.png")
+                  }
+                >
+                  Download PNG
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPdf(categoryRef, "categories.pdf")
+                  }
+                >
+                  Download PDF
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name}: ${(percent * 100).toFixed(0)}%`
-                    }
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {categoryData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                No category data available
-              </div>
-            )}
+            <div ref={categoryRef}>
+              {categoryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name}: ${(percent * 100).toFixed(0)}%`
+                      }
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categoryData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No category data available
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -496,7 +675,7 @@ const Reports = () => {
             <Button
               variant="outline"
               className="justify-start"
-              onClick={() => handleExport("revenue")}
+              onClick={() => handleExport("payments")}
               disabled={exporting}
             >
               <FileText className="mr-2 h-4 w-4" />
@@ -520,15 +699,11 @@ const Reports = () => {
               <FileText className="mr-2 h-4 w-4" />
               User Report
             </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
-              onClick={() => handleExport("comprehensive")}
-              disabled={exporting}
-            >
+            <Button variant="outline" className="justify-start">
               <FileText className="mr-2 h-4 w-4" />
-              Full Report
+              <DownloadReportButton report="all-data" />
             </Button>
+            {/* Server-side full PDF download */}
           </div>
         </CardContent>
       </Card>

@@ -46,14 +46,14 @@ const calculateAmcAmount = (plan: string, frequency: string): number => {
   if (monthlyRate === 0) return 0;
 
   switch (frequency) {
-    case "monthly":
+    case "1_year":
       return monthlyRate;
-    case "quarterly":
+    case "3_year":
       return monthlyRate * 3;
-    case "semi-annually":
+    case "6_year":
       return monthlyRate * 6;
-    case "annually":
-      return monthlyRate * 12;
+    case "10_year":
+      return monthlyRate * 10;
     default:
       return monthlyRate;
   }
@@ -65,17 +65,17 @@ const calculateExpireDate = (startDate: string, frequency: string): string => {
   let expireDate = new Date(start);
 
   switch (frequency) {
-    case "monthly":
-      expireDate.setMonth(expireDate.getMonth() + 1);
+    case "1_year":
+      expireDate.setMonth(expireDate.getMonth() + 12);
       break;
-    case "quarterly":
-      expireDate.setMonth(expireDate.getMonth() + 3);
+    case "3_year":
+      expireDate.setMonth(expireDate.getMonth() + 36);
       break;
-    case "semi-annually":
-      expireDate.setMonth(expireDate.getMonth() + 6);
+    case "6_year":
+      expireDate.setMonth(expireDate.getMonth() + 72);
       break;
-    case "annually":
-      expireDate.setFullYear(expireDate.getFullYear() + 1);
+    case "10_year":
+      expireDate.setFullYear(expireDate.getFullYear() + 144);
       break;
     default:
       expireDate.setMonth(expireDate.getMonth() + 1);
@@ -707,15 +707,7 @@ const AMC_report: React.FC = () => {
                     AMC Billing Details
                   </h4>
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {/* AMC Number (Auto-generated, read-only) */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        AMC Number (Auto-generated)
-                      </label>
-                      <div className="px-3 py-2 bg-muted/50 rounded-md text-sm font-mono font-semibold">
-                        {amcNumber || "Not generated"}
-                      </div>
-                    </div>
+
 
                     {/* AMC Amount (Auto-calculated based on plan and frequency) */}
                     <div>
@@ -749,33 +741,14 @@ const AMC_report: React.FC = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                          <SelectItem value="quarterly">Quarterly</SelectItem>
-                          <SelectItem value="semi-annually">
-                            Semi-Annually
+                          <SelectItem value="1_year">1 Year</SelectItem>
+                          <SelectItem value="3_year">3 Year</SelectItem>
+                          <SelectItem value="6_year">
+                            6 Year
                           </SelectItem>
-                          <SelectItem value="annually">Annually</SelectItem>
+                          <SelectItem value="10_year">10 Year</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    {/* Due Date (Display only) */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        <Calendar className="h-3 w-3 inline mr-1" />
-                        Due Date
-                      </label>
-                      <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
-                        {dueDate ? (
-                          new Date(dueDate).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })
-                        ) : (
-                          <span className="text-muted-foreground">Not set</span>
-                        )}
-                      </div>
                     </div>
 
                     {/* Expire Date (Display only) */}
