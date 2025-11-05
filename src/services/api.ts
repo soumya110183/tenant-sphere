@@ -3,7 +3,7 @@ import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
 
 // Base URLs
-const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
