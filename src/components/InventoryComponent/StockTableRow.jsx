@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 export const StockTableRow = ({ item, getStockStatus, getStockColor, getStockPercentage, onEdit, onDelete }) => {
   const status = getStockStatus(item.quantity, item.reorderLevel);
   const percentage = getStockPercentage(item.quantity, item.maxStock);
-  const margin = item.sellingPrice - item.costPrice;
-  const marginPercent = ((margin / item.costPrice) * 100).toFixed(1);
+  const margin = item.selling_price - item.cost_price;
+  const marginPercent = ((margin / item.cost_price) * 100).toFixed(1);
   
   return (
     <tr className="border-b hover:bg-muted/50">
@@ -23,11 +23,11 @@ export const StockTableRow = ({ item, getStockStatus, getStockColor, getStockPer
           </p>
         </div>
       </td>
-      <td className="py-3 px-2 sm:px-4 text-sm">₹{item.costPrice}</td>
-      <td className="py-3 px-2 sm:px-4 text-sm">₹{item.sellingPrice}</td>
+      <td className="py-3 px-2 sm:px-4 text-sm">AED {item.cost_price}</td>
+      <td className="py-3 px-2 sm:px-4 text-sm">AED {item.selling_price}</td>
       <td className="py-3 px-2 sm:px-4">
         <span className="text-green-600 font-medium text-xs sm:text-sm">
-          ₹{margin} ({marginPercent}%)
+          AED {margin} ({marginPercent}%)
         </span>
       </td>
       <td className="py-3 px-2 sm:px-4">

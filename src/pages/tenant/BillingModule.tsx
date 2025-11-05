@@ -21,17 +21,50 @@ import {
   MinusCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useInventory } from "@/contexts/InventoryContext";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();
-  const { products, reduceStock } = useInventory(); // ✅ shared inventory data
-
+  const [products, setProducts] = useState([]); // ✅ products from API
   const [rows, setRows] = useState([
     { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 },
   ]);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const inputRefs = useRef([]);
+
+  // 🔄 Fetch products from backend API
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const token = localStorage.getItem("auth_token"); // 🟢 must exist if protected
+        const res = await fetch("http://localhost:5000/api/products", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const json = await res.json();
+
+        if (res.ok) {
+          setProducts(json.data || []);
+        } else {
+          toast({
+            title: "Failed to load products",
+            description: json.error || "Please check your token or server",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        toast({
+          title: "Error fetching products",
+          description: err.message,
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchProducts();
+  }, [toast]);
 
   // ➕ Add new empty row
   const addNewRow = () => {
@@ -48,38 +81,37 @@ const SupermarketBilling = () => {
   };
 
   // 🏷️ Handle code or name entry
-const handleItemCodeChange = (index, value) => {
-  const updated = [...rows];
-  updated[index].code = value;
+  const handleItemCodeChange = (index, value) => {
+    const updated = [...rows];
+    updated[index].code = value;
 
-  // 🧹 If user clears the barcode field, reset that row
-  if (value.trim() === "") {
-    updated[index] = { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 };
+    if (value.trim() === "") {
+      updated[index] = { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 };
+      setRows(updated);
+      return;
+    }
+
+    // 🔍 Find matching product by ID, barcode, or name
+    const found = products.find(
+      (item) =>
+        item.id.toString() === value.toString() ||
+        (item.barcode &&
+          item.barcode.toString().toLowerCase() === value.toLowerCase()) ||
+         ( item.sku.toString().toLowerCase() === value.toLowerCase()) ||
+        item.name.toLowerCase() === value.toLowerCase() 
+    );
+
+    if (found) {
+      updated[index].name = found.name;
+      updated[index].price = found.selling_price || 0; // match your DB field
+      updated[index].tax = found.tax || 0;
+      updated[index].total = found.selling_price * updated[index].qty;
+
+      if (index === rows.length - 1) addNewRow(); // Auto-add next row
+    }
+
     setRows(updated);
-    return;
-  }
-
-  // 🔍 Find matching product in inventory (by code or name)
-  const found = products.find(
-    (item) =>
-      item.id.toString() === value.toString() ||
-      (item.barcode &&
-        item.barcode.toString().toLowerCase() === value.toLowerCase()) ||
-      item.name.toLowerCase() === value.toLowerCase()
-  );
-
-  if (found) {
-    updated[index].name = found.name;
-    updated[index].price = found.sellingPrice;
-    updated[index].tax = found.tax || 0;
-    updated[index].total = found.sellingPrice * updated[index].qty;
-
-    if (index === rows.length - 1) addNewRow(); // Auto-add new row
-  }
-
-  setRows(updated);
-};
-
+  };
 
   // 🔢 Handle quantity update
   const handleQtyChange = (index, qty) => {
@@ -89,7 +121,7 @@ const handleItemCodeChange = (index, value) => {
     setRows(updated);
   };
 
-  // ⌨️ Handle Enter key for quick navigation
+  // ⌨️ Enter key navigation
   const handleEnterKey = (e, index) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -105,9 +137,8 @@ const handleItemCodeChange = (index, value) => {
     }
   };
 
-  // 🧮 Billing Calculations
+  // 🧮 Calculations
   const calculateSubtotal = () => rows.reduce((s, r) => s + r.total, 0);
-
   const calculateIncludedTax = () =>
     rows.reduce((s, r) => {
       if (r.tax && r.price) {
@@ -116,10 +147,9 @@ const handleItemCodeChange = (index, value) => {
       }
       return s;
     }, 0);
-
   const calculateTotal = () => calculateSubtotal();
 
-  // 🧾 Finalize & Generate Bill
+  // 🧾 Generate Bill
   const generateBill = () => {
     const validItems = rows.filter((r) => r.name);
 
@@ -132,20 +162,12 @@ const handleItemCodeChange = (index, value) => {
       return;
     }
 
-    // ✅ Reduce stock in inventory
-    validItems.forEach((item) => {
-      const found = products.find((p) => p.name === item.name);
-      if (found) {
-        reduceStock(found.id, item.qty);
-      }
-    });
-
     toast({
       title: "Bill Generated",
       description: `Invoice #INV-${Date.now().toString().slice(-6)} created successfully`,
     });
 
-    // Reset after payment
+    // reset rows
     setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
     setTimeout(() => inputRefs.current[0]?.focus(), 100);
   };
@@ -167,7 +189,7 @@ const handleItemCodeChange = (index, value) => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: Billing Table */}
+        {/* Billing Table */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Billing Table</CardTitle>
@@ -228,14 +250,13 @@ const handleItemCodeChange = (index, value) => {
                 ))}
               </TableBody>
             </Table>
-
             <Button variant="outline" onClick={addNewRow} className="mt-4">
               + Add Row
             </Button>
           </CardContent>
         </Card>
 
-        {/* Right: Bill Summary */}
+        {/* Bill Summary */}
         <Card>
           <CardHeader>
             <CardTitle>Bill Summary</CardTitle>
@@ -265,7 +286,7 @@ const handleItemCodeChange = (index, value) => {
             <div>
               <Label>Payment Method</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {[
+                {[ 
                   { id: "cash", icon: Banknote, label: "Cash" },
                   { id: "card", icon: CreditCard, label: "Card" },
                   { id: "upi", icon: Smartphone, label: "UPI" },

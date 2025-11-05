@@ -12,7 +12,7 @@ export const StockView = ({ products, searchTerm, setSearchTerm, filterCategory,
       filterCategory={filterCategory}
       setFilterCategory={setFilterCategory}
       categories={categories}
-      onAddProduct={() => openModal('product')}
+      onAddProduct={() => openModal('inventory')}
     />
 
     <Card>
@@ -44,7 +44,7 @@ export const StockView = ({ products, searchTerm, setSearchTerm, filterCategory,
               {products.length === 0 ? (
                 <tr>
                   <td colSpan="11" className="text-center py-8 text-muted-foreground text-sm">
-                    No products found. Add your first product to get started!
+                    No inventory items found. Add your first inventory item to get started!
                   </td>
                 </tr>
               ) : (
@@ -55,7 +55,7 @@ export const StockView = ({ products, searchTerm, setSearchTerm, filterCategory,
                     getStockStatus={getStockStatus}
                     getStockColor={getStockColor}
                     getStockPercentage={getStockPercentage}
-                    onEdit={(item) => openModal('product', item)}
+                    onEdit={(item) => openModal('inventory', item)}
                     onDelete={handleDelete}
                   />
                 ))

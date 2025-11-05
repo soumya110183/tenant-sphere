@@ -16,3 +16,4 @@ export const RoleBasedRoute = ({ children, allowedRoles }: RoleBasedRouteProps) 
 
   return <>{children}</>;
 };
+    

@@ -36,13 +36,13 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <AuthProvider>
         <InventoryProvider>
         
         <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
+      <AuthProvider>
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<Login />} />
@@ -147,10 +147,10 @@ const App = () => (
               {/* Catch all - redirect to login */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+      </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>
         </InventoryProvider>
-      </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

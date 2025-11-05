@@ -68,7 +68,7 @@ export const SearchFilter = ({ searchTerm, setSearchTerm, filterCategory, setFil
     </select>
     <Button onClick={onAddProduct} className="whitespace-nowrap">
       <Plus className="h-4 w-4 mr-2" />
-      Add Product
+      Add Inventory
     </Button>
   </div>
 );
