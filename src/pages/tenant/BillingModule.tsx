@@ -36,7 +36,7 @@ const SupermarketBilling = () => {
     const fetchProducts = async () => {
       try {
         const token = localStorage.getItem("auth_token"); // 🟢 must exist if protected
-        const res = await fetch("http://localhost:5000/api/products", {
+        const res = await fetch("https://billingbackend-1vei.onrender.com/api/products", {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
