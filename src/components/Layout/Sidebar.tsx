@@ -24,6 +24,7 @@ const superAdminNavigation = [
   { name: 'Modules', href: '/modules', icon: Puzzle },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'AMC_report', href: '/amc_report', icon: Package },
+  {name: 'amc_notification', href: '/amc_notification', icon: FileText},
   // { name: 'Users', href: '/users', icon: Users },
   { name: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
   { name: 'Settings', href: '/settings', icon: Settings },

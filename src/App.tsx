@@ -11,6 +11,7 @@ import { RoleBasedRoute } from "@/components/RoleBasedRoute";
 import { DashboardRouter } from "@/components/DashboardRouter";
 import { DashboardLayout } from "@/components/Layout/DashboardLayout";
 import Login from "./pages/Login";
+import AMC_notification from "./pages/amc_notification.js"; 
 import Dashboard from "./pages/Dashboard";
 import TenantDashboard from "./pages/TenantDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
@@ -86,6 +87,14 @@ const App = () => (
                   element={
                     <RoleBasedRoute allowedRoles={["superadmin"]}>
                       <AMC_report />
+                    </RoleBasedRoute>
+                  }
+                />
+                <Route
+                  path="amc_notification"
+                  element={
+                    <RoleBasedRoute allowedRoles={["superadmin"]}>
+                      <AMC_notification />
                     </RoleBasedRoute>
                   }
                 />
