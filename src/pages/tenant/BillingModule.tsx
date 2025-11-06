@@ -84,14 +84,19 @@ const SupermarketBilling = () => {
 const getMatchingProducts = (term) => {
   if (!term || term.length < 1) return [];
   const lower = term.toLowerCase();
-  return products
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(lower) ||
-        p.barcode?.toLowerCase().includes(lower) ||
-        p.id.toString().includes(lower)
-    )
-    .slice(0, 8);
+  
+  console.log("Searching for:", term); // Debug log
+  console.log("Available products:", products); // Debug log
+  
+  const matches = products.filter(
+    (p) =>
+      p.name?.toLowerCase().includes(lower) ||
+      p.barcode?.toLowerCase().includes(lower) ||
+      p.id?.toString().includes(lower)
+  ).slice(0, 8);
+  
+  console.log("Found matches:", matches); // Debug log
+  return matches;
 };
 
 
@@ -144,7 +149,7 @@ const getMatchingProducts = (term) => {
     updated[currentInputIndex].name = product.name;
     updated[currentInputIndex].price = product.selling_price || 0;
     updated[currentInputIndex].tax = product.tax_percent || 0;
-    updated[currentInputIndex].product_id = product.id; // ✅ FIXED // ✅ store it
+    updated[currentInputIndex].product_id = product.product_id; // ✅ correct// ✅ FIXED // ✅ store it
     updated[currentInputIndex].total =
       product.selling_price * updated[currentInputIndex].qty;
   }
@@ -164,12 +169,19 @@ const getMatchingProducts = (term) => {
 };
 
 
-  const handleQtyChange = (index, qty) => {
-    const updated = [...rows];
+ const handleQtyChange = (index, value) => {
+  const updated = [...rows];
+  if (value === "" || value === null) {
+    updated[index].qty = "";
+    updated[index].total = 0;
+  } else {
+    const qty = Number(value);
     updated[index].qty = qty;
     updated[index].total = updated[index].price * qty;
-    setRows(updated);
-  };
+  }
+  setRows(updated);
+};
+
 
   const calculateSubtotal = () => rows.reduce((sum, r) => sum + r.total, 0);
   const calculateIncludedTax = () =>
@@ -205,26 +217,23 @@ const getMatchingProducts = (term) => {
   const token = localStorage.getItem("auth_token");
   console.log("Generating invoice with items:", validItems);
   try {
-    const res = await fetch("http://localhost:5000/api/invoices", {
+    const res = await fetch("https://billingbackend-1vei.onrender.com/api/invoices", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-     body: JSON.stringify({
+body: JSON.stringify({
   payment_method: paymentMethod,
-  items: validItems.map((r) => {
-    const matchedProduct = products.find((p) => p.name === r.name);
-    return {
-      product_id: matchedProduct?.product_id, // ✅ product_id from inventory API
-      qty: r.qty,
-      price: r.price,
-      tax: r.tax,
-      total: r.total,
-    };
-  }),
+  items: validItems.map((r) => ({
+    product_id: r.product_id, // ✅ already stored from selection
+    qty: r.qty,
+    price: r.price,
+    tax: r.tax,
+    total: r.total,
+  })),
+}),
 
-      }),
     });
 
     const json = await res.json();
@@ -359,12 +368,20 @@ console.log(suggestions)
                       )}
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        value={r.qty}
-                        min={1}
-                        onChange={(e) => handleQtyChange(i, Number(e.target.value))}
-                      />
+                     <Input
+  type="number"
+  value={r.qty}
+  onChange={(e) => handleQtyChange(i, e.target.value)}
+  onBlur={() => {
+    if (rows[i].qty === "" || rows[i].qty === 0) {
+      const updated = [...rows];
+      updated[i].qty = 1;
+      updated[i].total = updated[i].price;
+      setRows(updated);
+    }
+  }}
+/>
+
                     </TableCell>
                     <TableCell>AED {r.price.toFixed(2)}</TableCell>
                     <TableCell>AED {r.total.toFixed(2)}</TableCell>
