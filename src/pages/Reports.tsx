@@ -149,7 +149,8 @@ const Reports = () => {
       // Send the user-selected format directly to the backend.
       // If the user selected 'pdf' the backend will receive type=pdf and
       // can generate a PDF (as you observed when opening the direct link).
-      await reportsAPI.exportReport(reportType, exportFormat);
+      // Pass an empty filters/options object as the third parameter to match the API signature.
+      await reportsAPI.exportReport(reportType, exportFormat, {});
 
       toast({
         title: "Export successful",

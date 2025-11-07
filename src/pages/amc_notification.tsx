@@ -22,7 +22,6 @@ import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Users } from "lucide-react";
 
 /* ========= Types ========= */
-
 type BillingFrequency = "1_year" | "3_year" | "6_year" | "10_year";
 
 interface Tenant {
@@ -41,6 +40,7 @@ interface Tenant {
   amc_number?: string;
   due_date?: string;
   expire_date?: string;
+  [key: string]: unknown;
 }
 
 interface Payment {
@@ -70,23 +70,22 @@ interface AMCRecord {
 }
 
 type Buckets = {
-  green: Tenant[];   // > 100 days OR no end date
-  blue: Tenant[];    // 11..100 days
-  orange: Tenant[];  // 1..10 days
-  red: Tenant[];     // <= 0 days (expired)
+  green: Tenant[];
+  blue: Tenant[];
+  orange: Tenant[];
+  red: Tenant[];
 };
 
 /* ========= Constants & pure helpers (module scope) ========= */
 
-// Annual AMC rates per plan
+// AMC annual rates per plan
 const amcAnnualRates: Record<string, number> = {
   trial: 0,
   basic: 100,
   professional: 250,
   enterprise: 350,
-  // tolerate common aliases found in data
-  proffection: 250,
-  enterprice: 350,
+  proffection: 250, // tolerate common alias
+  enterprice: 350, // tolerate common alias
 };
 
 function calculateAmcAmount(
@@ -95,7 +94,6 @@ function calculateAmcAmount(
 ): number {
   const planKey = (plan ?? "").toLowerCase().split(/[-_\s]/)[0];
   const annualRate = amcAnnualRates[planKey] ?? 0;
-
   if (!annualRate) return 0;
 
   switch (frequency) {
@@ -115,7 +113,6 @@ function calculateAmcAmount(
 function calculateExpireDate(startDate: string, frequency: BillingFrequency): string {
   const start = new Date(startDate);
   const expireDate = new Date(start);
-
   switch (frequency) {
     case "1_year":
       expireDate.setMonth(expireDate.getMonth() + 12);
@@ -132,11 +129,9 @@ function calculateExpireDate(startDate: string, frequency: BillingFrequency): st
     default:
       expireDate.setMonth(expireDate.getMonth() + 12);
   }
-
   return expireDate.toISOString().split("T")[0];
 }
 
-// End date for a tenant; AMC record overrides tenant fields
 function getEndDateForTenant(tenant: Tenant, amcs: AMCRecord[]): string | null {
   const amc = amcs.find((a) => String(a.tenat_amcid) === String(tenant.id));
   const end = amc?.end_date ?? tenant.expire_date ?? null;
@@ -169,8 +164,463 @@ function classifyTenantsByExpiry(tenants: Tenant[], amcs: AMCRecord[]): Buckets 
   return buckets;
 }
 
-/* ========= Component ========= */
+/* ========= Helpers for Additional Fields table ========= */
+const HIDDEN_KEYS = new Set<string>([
+  "id",
+  "name",
+  "category",
+  "plan",
+  "status",
+  "created_at",
+  "modules",
+  "email",
+  "phone",
+  "address",
+  "amc_amount",
+  "billing_frequency",
+  "amc_number",
+  "due_date",
+  "expire_date",
+  "_id",
+  "__v",
+]);
 
+function titleCaseKey(k: string): string {
+  return k.replace(/[_\-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function renderValue(v: unknown): string {
+  if (v == null) return "—";
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "object") {
+    try {
+      return JSON.stringify(v, null, 2);
+    } catch {
+      return String(v);
+    }
+  }
+  return String(v);
+}
+
+function extractDisplayPairs(full: Tenant): Array<[string, string]> {
+  const pairs: Array<[string, string]> = [];
+  for (const [k, v] of Object.entries(full)) {
+    if (HIDDEN_KEYS.has(k)) continue;
+    pairs.push([titleCaseKey(k), renderValue(v)]);
+  }
+  pairs.sort((a, b) => a[0].localeCompare(b[0]));
+  return pairs;
+}
+
+/* ========= Raw JSON viewer helpers ========= */
+const SENSITIVE_KEYS = ["password", "secret", "token", "apiKey", "api_key", "authorization", "auth"];
+
+function redactDeep(value: any, keys: string[] = SENSITIVE_KEYS): any {
+  if (Array.isArray(value)) return value.map((v) => redactDeep(v, keys));
+  if (value && typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (keys.some((s) => k.toLowerCase().includes(s.toLowerCase()))) {
+        out[k] = "•••";
+      } else {
+        out[k] = redactDeep(v, keys);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
+function safeStringify(input: unknown, space = 2): string {
+  const seen = new WeakSet();
+  return JSON.stringify(
+    input,
+    (key, val) => {
+      if (typeof val === "object" && val !== null) {
+        if (seen.has(val as object)) return "[Circular]";
+        seen.add(val as object);
+      }
+      return val;
+    },
+    space
+  );
+}
+
+function byteSize(text: string): number {
+  return new Blob([text]).size;
+}
+
+async function copyToClipboard(text: string) {
+  await navigator.clipboard.writeText(text);
+}
+
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ==== DetailsPanel helpers (flat key→value rendering) ====
+
+const DEFAULT_HIDDEN_KEYS = new Set<string>(["_id", "__v"]); // show everything else
+
+// Heuristic ISO date detection (YYYY-MM-DD or ISO timestamp)
+function looksLikeISODate(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?$/.test(v);
+}
+
+function formatMaybeDate(v: string): string {
+  if (!looksLikeISODate(v)) return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Flatten nested objects into dot paths; arrays stay arrays,
+// but object items inside arrays get flattened with [index] in the path.
+type FlatEntries = Array<{ path: string; value: unknown }>;
+
+function flattenObject(input: unknown, prefix = ""): FlatEntries {
+  const out: FlatEntries = [];
+  if (Array.isArray(input)) {
+    input.forEach((item, idx) => {
+      const path = prefix ? `${prefix}[${idx}]` : `[${idx}]`;
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        out.push(...flattenObject(item, path));
+      } else {
+        out.push({ path, value: item });
+      }
+    });
+    return out;
+  }
+
+  if (input && typeof input === "object") {
+    for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+      const path = prefix ? `${prefix}.${k}` : k;
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        out.push(...flattenObject(v, path));
+      } else {
+        out.push({ path, value: v });
+      }
+    }
+    return out;
+  }
+
+  out.push({ path: prefix || "(value)", value: input });
+  return out;
+}
+
+function labelForPath(path: string): { title: string; sub?: string } {
+  const last =
+    path.includes(".")
+      ? path.split(".").pop()!
+      : path.includes("[")
+      ? path.replace(/^.*\.(?=\[)/, "")
+      : path;
+
+  const title = last
+    .replace(/[_\-]+/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+
+  if (path === last) return { title };
+  return { title, sub: path };
+}
+
+function isLongText(v: string): boolean {
+  return v.length > 160 || /\n/.test(v);
+}
+
+/* ========= Child component: Raw JSON Panel ========= */
+function RawJsonPanel({ data }: { data: any }) {
+  const [pretty, setPretty] = React.useState(true);
+  const [wrap, setWrap] = React.useState(false);
+  const [redact, setRedact] = React.useState(true);
+  const [query, setQuery] = React.useState("");
+  const containerRef = React.useRef<HTMLPreElement | null>(null);
+
+  const computed = React.useMemo(() => {
+    const base = redact ? redactDeep(data) : data;
+    const txt = safeStringify(base, pretty ? 2 : 0);
+    const sizeBytes = byteSize(txt);
+    const lines = pretty ? txt.split("\n").length : 1;
+    return { txt, sizeBytes, lines };
+  }, [data, pretty, redact]);
+
+  const firstIndex = React.useMemo(() => {
+    if (!query.trim()) return -1;
+    return computed.txt.toLowerCase().indexOf(query.toLowerCase());
+  }, [computed.txt, query]);
+
+  React.useEffect(() => {
+    if (firstIndex >= 0 && containerRef.current) {
+      const before = computed.txt.slice(0, firstIndex);
+      const approxLine = before.split("\n").length - 1;
+      const lineHeightPx = 18;
+      containerRef.current.scrollTop = Math.max(approxLine * lineHeightPx - 60, 0);
+    }
+  }, [firstIndex, computed.txt]);
+
+  const onCopy = async () => {
+    await copyToClipboard(computed.txt);
+  };
+
+  const onDownload = () => {
+    const name =
+      typeof data?.name === "string" && data.name.trim().length
+        ? data.name.trim().toLowerCase().replace(/\s+/g, "-")
+        : "tenant";
+    const idPart = data?.id != null ? `-${String(data.id)}` : "";
+    downloadText(`${name}${idPart}-payload.json`, computed.txt);
+  };
+
+  return (
+    <div className="mt-6 pt-6 border-t">
+      <details className="rounded-md bg-muted/30">
+        <summary className="cursor-pointer text-sm font-medium px-3 py-2">
+          Raw JSON payload
+        </summary>
+
+        <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5"
+                checked={pretty}
+                onChange={(e) => setPretty(e.target.checked)}
+              />
+              Pretty
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5"
+                checked={wrap}
+                onChange={(e) => setWrap(e.target.checked)}
+              />
+              Wrap
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5"
+                checked={redact}
+                onChange={(e) => setRedact(e.target.checked)}
+              />
+              Redact sensitive keys
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
+            <span>{(computed.sizeBytes / 1024).toFixed(2)} KB</span>
+            <span>•</span>
+            <span>
+              {computed.lines} {computed.lines === 1 ? "line" : "lines"}
+            </span>
+          </div>
+
+          <div className="w-full flex flex-wrap items-center justify-between gap-2 mt-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search in JSON…"
+                className="h-8 w-56 rounded-md border bg-background px-2 text-sm"
+              />
+              {query && (
+                <span className="text-xs text-muted-foreground">
+                  {firstIndex >= 0 ? "Match found" : "No match"}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onCopy} className="h-8 rounded-md border px-3 text-xs">
+                Copy JSON
+              </button>
+              <button type="button" onClick={onDownload} className="h-8 rounded-md border px-3 text-xs">
+                Download
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-md border bg-background w-full">
+            <pre
+              ref={containerRef}
+              className={`text-xs leading-[1.15rem] p-3 max-h-[420px] overflow-auto ${
+                wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
+              }`}
+            >
+              {firstIndex >= 0 ? (
+                <>
+                  {computed.txt.slice(0, firstIndex)}
+                  <mark className="bg-yellow-200">
+                    {computed.txt.slice(firstIndex, firstIndex + query.length)}
+                  </mark>
+                  {computed.txt.slice(firstIndex + query.length)}
+                </>
+              ) : (
+                computed.txt
+              )}
+            </pre>
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/* ========= Child component: Details Panel (TOP-LEVEL) ========= */
+function DetailsPanel({
+  data,
+  title = "Tenant Details (all fields)",
+  hiddenByDefault = DEFAULT_HIDDEN_KEYS,
+}: {
+  data: any;
+  title?: string;
+  hiddenByDefault?: Set<string>;
+}) {
+  const [showHidden, setShowHidden] = React.useState(false);
+
+  const rows = React.useMemo(() => {
+    const flat = flattenObject(data);
+    flat.sort((a, b) => a.path.localeCompare(b.path));
+
+    const visible: typeof flat = [];
+    const hidden: typeof flat = [];
+    for (const entry of flat) {
+      const rootKey = entry.path.split(".")[0].split("[")[0];
+      if (hiddenByDefault.has(rootKey)) hidden.push(entry);
+      else visible.push(entry);
+    }
+    return { visible, hidden };
+  }, [data, hiddenByDefault]);
+
+  const renderValueNode = (value: unknown) => {
+    if (value == null) return <span className="text-muted-foreground">—</span>;
+
+    if (typeof value === "boolean") {
+      return (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+            value ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"
+          }`}
+        >
+          {String(value)}
+        </span>
+      );
+    }
+
+    if (typeof value === "number") {
+      return <span className="tabular-nums">{value}</span>;
+    }
+
+    if (typeof value === "string") {
+      const formatted = formatMaybeDate(value);
+      if (isLongText(formatted)) {
+        return <pre className="text-xs whitespace-pre-wrap leading-snug">{formatted}</pre>;
+      }
+      return <span>{formatted}</span>;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span className="text-muted-foreground">[]</span>;
+
+      const simple = value.every(
+        (v) => v == null || ["string", "number", "boolean"].includes(typeof v)
+      );
+      if (simple) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {value.map((v, i) => (
+              <span key={i} className="px-2 py-0.5 rounded border text-xs">
+                {typeof v === "string" ? v : JSON.stringify(v)}
+              </span>
+            ))}
+          </div>
+        );
+      }
+
+      return (
+        <pre className="text-xs whitespace-pre-wrap leading-snug">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      );
+    }
+
+    return (
+      <pre className="text-xs whitespace-pre-wrap leading-snug">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  };
+
+  const renderRow = (path: string, value: unknown) => {
+    const { title: t, sub } = labelForPath(path);
+    return (
+      <tr key={path} className="border-t">
+        <td className="px-3 py-2 align-top w-[28%]">
+          <div className="font-medium">{t}</div>
+          {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+        </td>
+        <td className="px-3 py-2 align-top">{renderValueNode(value)}</td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="mt-6 pt-6 border-t">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <label className="text-xs flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5"
+            checked={showHidden}
+            onChange={(e) => setShowHidden(e.target.checked)}
+          />
+          Show technical keys
+        </label>
+      </div>
+
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium">Field</th>
+              <th className="text-left px-3 py-2 font-medium">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.visible.map((e) => renderRow(e.path, e.value))}
+            {showHidden && rows.hidden.map((e) => renderRow(e.path, e.value))}
+            {!rows.visible.length && !rows.hidden.length && (
+              <tr>
+                <td className="px-3 py-4 text-muted-foreground" colSpan={2}>
+                  No fields to display.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ========= Component ========= */
 const AMC_notification: React.FC = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selected, setSelected] = useState<Tenant | null>(null);
@@ -194,6 +644,11 @@ const AMC_notification: React.FC = () => {
   // Cache of all AMC records (for lists and bucketing)
   const [allAmcs, setAllAmcs] = useState<AMCRecord[]>([]);
 
+  // Full tenant payload by id
+  const [selectedFull, setSelectedFull] = useState<Tenant | null>(null);
+  const [selectedFullLoading, setSelectedFullLoading] = useState<boolean>(false);
+  const [selectedFullError, setSelectedFullError] = useState<string | null>(null);
+
   // Load tenants on mount
   useEffect(() => {
     const loadTenants = async () => {
@@ -206,7 +661,7 @@ const AMC_notification: React.FC = () => {
         setTenants(tenantsList);
         if (tenantsList.length > 0) setSelected(tenantsList[0]);
       } catch {
-        const local = (tenantsData as unknown) as Tenant[];
+        const local = tenantsData as unknown as Tenant[];
         setTenants(local);
         if (local.length > 0) setSelected(local[0]);
       } finally {
@@ -242,26 +697,27 @@ const AMC_notification: React.FC = () => {
     void loadPayments();
   }, [selected]);
 
-  // Populate AMC fields when tenant is selected
+  // Load full tenant details on selection
   useEffect(() => {
-    if (!selected) return;
-
-    const frequency: BillingFrequency =
-      (selected.billing_frequency as BillingFrequency) || "1_year";
-    setBillingFrequency(frequency);
-
-    const calculatedAmount = calculateAmcAmount(selected.plan, frequency);
-    setAmcAmount(String(calculatedAmount));
-
-    const generatedAmcNumber =
-      selected.amc_number ||
-      `AMC-${String(selected.id).padStart(6, "0")}-${new Date().getFullYear()}`;
-    setAmcNumber(generatedAmcNumber);
-
-    setDueDate(selected.due_date || "");
-    setExpireDate(selected.expire_date || "");
-
-    void loadAMCRecord(String(selected.id));
+    const loadFull = async () => {
+      if (!selected?.id) {
+        setSelectedFull(null);
+        return;
+      }
+      setSelectedFullLoading(true);
+      setSelectedFullError(null);
+      try {
+        const res: any = await tenantAPI.getTenant(String(selected.id));
+        const full: Tenant = (res && (res.tenant ?? res)) || (selected as Tenant);
+        setSelectedFull(full);
+      } catch (e: any) {
+        setSelectedFull(selected as Tenant);
+        setSelectedFullError(e?.message ?? "Failed to load full tenant details");
+      } finally {
+        setSelectedFullLoading(false);
+      }
+    };
+    void loadFull();
   }, [selected]);
 
   // Load AMC record(s)
@@ -293,6 +749,28 @@ const AMC_notification: React.FC = () => {
     }
   };
 
+  // Populate AMC fields when tenant is selected
+  useEffect(() => {
+    if (!selected) return;
+
+    const frequency: BillingFrequency =
+      (selected.billing_frequency as BillingFrequency) || "1_year";
+    setBillingFrequency(frequency);
+
+    const calculatedAmount = calculateAmcAmount(selected.plan, frequency);
+    setAmcAmount(String(calculatedAmount));
+
+    const generatedAmcNumber =
+      selected.amc_number ||
+      `AMC-${String(selected.id).padStart(6, "0")}-${new Date().getFullYear()}`;
+    setAmcNumber(generatedAmcNumber);
+
+    setDueDate(selected.due_date || "");
+    setExpireDate(selected.expire_date || "");
+
+    void loadAMCRecord(String(selected.id));
+  }, [selected]);
+
   // Recompute amount and expire date when frequency or due date changes
   useEffect(() => {
     if (!selected) return;
@@ -314,13 +792,11 @@ const AMC_notification: React.FC = () => {
     }, {});
   }, [tenants]);
 
-  // Memoized expiry buckets for the four status cards
   const expiryBuckets = useMemo(
     () => classifyTenantsByExpiry(tenants, allAmcs),
     [tenants, allAmcs]
   );
 
-  // AMC helpers tied to selected tenant
   const getTenantAMC = (tenantId: Tenant["id"]): AMCRecord | undefined => {
     return allAmcs.find((amc) => String(amc.tenat_amcid) === String(tenantId));
   };
@@ -360,15 +836,13 @@ const AMC_notification: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">AMC Notification </h1>
-        <p className="text-muted-foreground mt-1">
-          View tenant plans and details
-        </p>
+        <p className="text-muted-foreground mt-1">View tenant plans and details</p>
       </div>
 
       {/* Expiry Overview */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
         {/* Green */}
-        <Card className="border-green-200">
+        <Card className="border border-green-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
             <CardTitle className="text-green-700">&gt; 100 days</CardTitle>
             <CardDescription>Healthy renewals</CardDescription>
@@ -378,7 +852,7 @@ const AMC_notification: React.FC = () => {
               <span className="text-sm text-muted-foreground">Tenants</span>
               <Badge className="bg-green-600">{expiryBuckets.green.length}</Badge>
             </div>
-            <div className="space-y-2 max-h-56 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.green.length === 0 && (
                 <p className="text-sm text-muted-foreground">No tenants</p>
               )}
@@ -389,7 +863,9 @@ const AMC_notification: React.FC = () => {
                   <div key={String(t.id)} className="p-2 rounded border border-green-100">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">{label}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {label}
+                      </Badge>
                     </div>
                     {end && (
                       <p className="text-xs text-muted-foreground">
@@ -408,18 +884,19 @@ const AMC_notification: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Blue */}
-        <Card className="border-blue-200">
+
+ {/* blue */}
+        <Card className="border border-blue-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-blue-700">11–100 days</CardTitle>
-            <CardDescription>Upcoming renewals</CardDescription>
+            <CardTitle className="text-blue-700">11 - 100 days</CardTitle>
+            <CardDescription>Upcoming Renewals</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-muted-foreground">Tenants</span>
               <Badge className="bg-blue-600">{expiryBuckets.blue.length}</Badge>
             </div>
-            <div className="space-y-2 max-h-56 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.blue.length === 0 && (
                 <p className="text-sm text-muted-foreground">No tenants</p>
               )}
@@ -430,7 +907,9 @@ const AMC_notification: React.FC = () => {
                   <div key={String(t.id)} className="p-2 rounded border border-blue-100">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">{label}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {label}
+                      </Badge>
                     </div>
                     {end && (
                       <p className="text-xs text-muted-foreground">
@@ -449,8 +928,9 @@ const AMC_notification: React.FC = () => {
           </CardContent>
         </Card>
 
+
         {/* Orange */}
-        <Card className="border-amber-200">
+        <Card className="border border-amber-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
             <CardTitle className="text-amber-700">1–10 days</CardTitle>
             <CardDescription>Urgent reminders</CardDescription>
@@ -460,7 +940,7 @@ const AMC_notification: React.FC = () => {
               <span className="text-sm text-muted-foreground">Tenants</span>
               <Badge className="bg-amber-600">{expiryBuckets.orange.length}</Badge>
             </div>
-            <div className="space-y-2 max-h-56 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.orange.length === 0 && (
                 <p className="text-sm text-muted-foreground">No tenants</p>
               )}
@@ -471,7 +951,9 @@ const AMC_notification: React.FC = () => {
                   <div key={String(t.id)} className="p-2 rounded border border-amber-100">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">{label}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {label}
+                      </Badge>
                     </div>
                     {end && (
                       <p className="text-xs text-muted-foreground">
@@ -491,7 +973,7 @@ const AMC_notification: React.FC = () => {
         </Card>
 
         {/* Red */}
-        <Card className="border-red-200">
+        <Card className="border border-red-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
             <CardTitle className="text-red-700">Expired</CardTitle>
             <CardDescription>Action required</CardDescription>
@@ -501,7 +983,7 @@ const AMC_notification: React.FC = () => {
               <span className="text-sm text-muted-foreground">Tenants</span>
               <Badge variant="destructive">{expiryBuckets.red.length}</Badge>
             </div>
-            <div className="space-y-2 max-h-56 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.red.length === 0 && (
                 <p className="text-sm text-muted-foreground">No tenants</p>
               )}
@@ -512,7 +994,9 @@ const AMC_notification: React.FC = () => {
                   <div key={String(t.id)} className="p-2 rounded border border-red-100">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">{label}</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {label}
+                      </Badge>
                     </div>
                     {end && (
                       <p className="text-xs text-muted-foreground">
@@ -553,9 +1037,7 @@ const AMC_notification: React.FC = () => {
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Select Tenant</CardTitle>
-                <CardDescription>
-                  Choose a tenant to view subscription details
-                </CardDescription>
+                <CardDescription>Choose a tenant to view subscription details</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -613,9 +1095,7 @@ const AMC_notification: React.FC = () => {
                   {Object.keys(totalByPlan).map((plan) => (
                     <div key={plan} className="flex items-center justify-between">
                       <div className="font-medium capitalize">{plan}</div>
-                      <div className="text-muted-foreground">
-                        {totalByPlan[plan]}
-                      </div>
+                      <div className="text-muted-foreground">{totalByPlan[plan]}</div>
                     </div>
                   ))}
                 </div>
@@ -623,514 +1103,102 @@ const AMC_notification: React.FC = () => {
             </Card>
           </div>
 
+          {/* All Tenant Details (auto-generated from full record) */}
           {selected && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Tenant Details</CardTitle>
+                    <CardTitle>All Tenant Details</CardTitle>
                     <CardDescription>
-                      Complete information for {selected.name}
+                      Full payload for <span className="font-medium">{selected.name}</span>
                     </CardDescription>
                   </div>
-                  <Button
-                    size="default"
-                    onClick={async () => {
-                      toast({
-                        title: "Saving changes",
-                        description: `Updating AMC details for ${selected.name}...`,
-                      });
-
-                      try {
-                        const startDate =
-                          dueDate ||
-                          selected.created_at?.split("T")[0] ||
-                          new Date().toISOString().split("T")[0];
-
-                        const calculatedExpireDate = calculateExpireDate(
-                          startDate,
-                          billingFrequency
-                        );
-                        const endDate = expireDate || calculatedExpireDate;
-
-                        const amcData: AMCRecord = {
-                          client_name: selected.name,
-                          plan: selected.plan,
-                          start_date: startDate,
-                          end_date: endDate,
-                          status: true,
-                          amount: Number(amcAmount) || 0,
-                          billing_frequency: billingFrequency,
-                          tenat_amcid: String(selected.id),
-                        };
-
-                        let updatedAMC: any;
-
-                        if (amcRecord?.id) {
-                          updatedAMC = await amcAPI.updateAMC(amcRecord.id, amcData);
-                        } else {
-                          updatedAMC = await amcAPI.createAMC(amcData);
-                        }
-
-                        setAmcRecord(updatedAMC.amc);
-
-                        setDueDate(startDate);
-                        setExpireDate(endDate);
-
-                        const updatedTenantData: Tenant = {
-                          ...selected,
-                          amc_amount: Number(amcAmount) || 0,
-                          billing_frequency: billingFrequency,
-                          amc_number: amcNumber,
-                          due_date: startDate,
-                          expire_date: endDate,
-                        };
-
-                        await tenantAPI.updateTenant(selected.id, updatedTenantData);
-
-                        setSelected(updatedTenantData);
-                        setTenants((prev) =>
-                          prev.map((t) => (t.id === selected.id ? updatedTenantData : t))
-                        );
-
-                        toast({
-                          title: "Changes saved",
-                          description: `AMC details updated successfully for ${selected.name}.`,
-                        });
-                      } catch (err: any) {
-                        toast({
-                          title: "Update failed",
-                          description: err?.message ?? String(err),
-                        });
-                      }
-                    }}
-                  >
-                    Save Changes
-                  </Button>
+                  {selectedFullLoading && <Badge variant="outline">Loading…</Badge>}
                 </div>
+                {selectedFullError && (
+                  <p className="text-sm text-red-600 mt-2">{selectedFullError}</p>
+                )}
               </CardHeader>
               <CardContent>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {/* Basic Information */}
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Tenant ID
-                      </p>
-                      <p className="text-base font-semibold">{String(selected.id)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Tenant Name
-                      </p>
-                      <p className="text-base font-semibold">{selected.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Category
-                      </p>
-                      <Badge variant="secondary" className="text-sm">
-                        {selected.category}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Subscription Information */}
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Current Plan
-                      </p>
-                      <Badge className="text-sm">{selected.plan}</Badge>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Status
-                      </p>
-                      <Badge
-                        variant={selected.status === "active" ? "default" : "secondary"}
-                        className="text-sm"
-                      >
-                        {selected.status || "Active"}
-                      </Badge>
-                    </div>
-                    {selected.created_at && (
+                {selectedFull ? (
+                  <>
+                    {/* Key facts */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">
-                          <Calendar className="h-4 w-4 inline mr-1" />
-                          Created Date
-                        </p>
-                        <p className="text-base">
-                          {new Date(selected.created_at).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
-                        </p>
+                        <p className="text-sm text-muted-foreground mb-1">Name</p>
+                        <p className="font-semibold">{String(selectedFull.name)}</p>
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Category</p>
+                        <Badge variant="secondary">{String(selectedFull.category ?? "—")}</Badge>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Plan</p>
+                        <Badge>{String(selectedFull.plan ?? "—")}</Badge>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Status</p>
+                        <Badge variant={selectedFull.status === "active" ? "default" : "secondary"}>
+                          {String(selectedFull.status ?? "Active")}
+                        </Badge>
+                      </div>
+                      {selectedFull.created_at && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">Created</p>
+                          <p>
+                            {new Date(String(selectedFull.created_at)).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Modules Information */}
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-2">
-                        Active Modules
-                      </p>
+                    {/* Modules */}
+                    <div className="mt-6">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Modules</p>
                       <div className="flex flex-wrap gap-2">
-                        {selected.modules ? (
-                          Array.isArray(selected.modules) ? (
-                            selected.modules.length > 0 ? (
-                              selected.modules.map((mod) => (
-                                <Badge key={mod} variant="outline" className="text-xs">
-                                  {mod}
+                        {selectedFull.modules ? (
+                          Array.isArray(selectedFull.modules) ? (
+                            selectedFull.modules.length > 0 ? (
+                              selectedFull.modules.map((m: any) => (
+                                <Badge key={String(m)} variant="outline" className="text-xs">
+                                  {String(m)}
                                 </Badge>
                               ))
                             ) : (
-                              <p className="text-sm text-muted-foreground">No modules</p>
+                              <span className="text-sm text-muted-foreground">None</span>
                             )
-                          ) : typeof selected.modules === "object" ? (
-                            Object.keys(selected.modules)
-                              .filter((key) => (selected.modules as Record<string, boolean>)[key])
-                              .map((mod) => (
-                                <Badge key={mod} variant="outline" className="text-xs capitalize">
-                                  {mod}
+                          ) : (
+                            Object.entries(selectedFull.modules as Record<string, boolean>)
+                              .filter(([, on]) => on)
+                              .map(([k]) => (
+                                <Badge key={k} variant="outline" className="text-xs capitalize">
+                                  {k}
                                 </Badge>
                               ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No modules</p>
                           )
                         ) : (
-                          <p className="text-sm text-muted-foreground">No modules</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* AMC Billing Information */}
-                <div className="mt-6 pt-6 border-t">
-                  <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    AMC Billing Details
-                  </h4>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {/* AMC Amount */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        AMC Amount (Auto-calculated)
-                      </label>
-                      <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
-                        <span className="font-semibold text-lg">
-                          {new Intl.NumberFormat("en-AE", {
-                            style: "currency",
-                            currency: "AED",
-                            maximumFractionDigits: 0,
-                          }).format(Number(amcAmount) || 0)}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          ({billingFrequency})
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Billing Frequency */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        Billing Frequency
-                      </label>
-                      <Select
-                        value={billingFrequency}
-                        onValueChange={(v) => setBillingFrequency(v as BillingFrequency)}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1_year">1 Year</SelectItem>
-                          <SelectItem value="3_year">3 Year</SelectItem>
-                          <SelectItem value="6_year">6 Year</SelectItem>
-                          <SelectItem value="10_year">10 Year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Expire Date */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        <Calendar className="h-3 w-3 inline mr-1" />
-                        Expire Date
-                      </label>
-                      <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
-                        {expireDate ? (
-                          new Date(expireDate).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })
-                        ) : (
-                          <span className="text-muted-foreground">Not set</span>
+                          <span className="text-sm text-muted-foreground">None</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Latest Transaction Date */}
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        <Calendar className="h-3 w-3 inline mr-1" />
-                        Latest Transaction
-                      </label>
-                      <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
-                        {payments && payments.length > 0 ? (
-                          new Date(payments[0].payment_date).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })
-                        ) : (
-                          <span className="text-muted-foreground">No transactions</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                    
 
-                {/* Payment History */}
-                {payments && payments.length > 0 && (
-                  <div className="mt-6 pt-6 border-t">
-                    <div className="flex items-center gap-2 mb-4">
-                      <DollarSign className="h-5 w-5 text-primary" />
-                      <h4 className="text-sm font-semibold">Recent Payments</h4>
-                    </div>
-                    <div className="space-y-2">
-                      {payments.slice(0, 5).map((payment) => (
-                        <div
-                          key={String(payment.id)}
-                          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                        >
-                          <div>
-                            <p className="text-sm font-medium capitalize">
-                              {payment.plan} Plan
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(payment.payment_date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold">
-                              {new Intl.NumberFormat("en-AE", {
-                                style: "currency",
-                                currency: "AED",
-                                maximumFractionDigits: 0,
-                              }).format(Number(payment.amount))}
-                            </p>
-                            {payment.status && (
-                              <Badge variant="outline" className="text-xs">
-                                {payment.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {paymentsLoading && (
-                  <div className="mt-6 pt-6 border-t text-center text-sm text-muted-foreground">
-                    Loading payment history...
-                  </div>
+                    {/* Technical flat view + JSON */}
+                    <DetailsPanel data={selectedFull} title="Tenant Details (all fields)" />
+                    
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No tenant selected.</p>
                 )}
               </CardContent>
             </Card>
           )}
-
-          {/* Active and Expired Subscriptions */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Active Subscriptions */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-green-600 dark:text-green-400">
-                      Active Subscriptions
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      Active tenants (no expire date or expire date in future)
-                    </CardDescription>
-                  </div>
-                  <Badge className="bg-green-600">
-                    {tenants.filter((t) => isActive(t)).length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {tenants
-                    .filter((t) => isActive(t))
-                    .map((tenant) => {
-                      const tenantAMC = getTenantAMC(tenant.id);
-                      const startDate = tenantAMC?.start_date || tenant.created_at;
-                      const endDate = tenantAMC?.end_date || tenant.expire_date;
-                      const statusMsg = getExpirationStatus(tenant);
-
-                      return (
-                        <div
-                          key={String(tenant.id)}
-                          className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h4 className="font-semibold">{tenant.name}</h4>
-                                <Badge variant="outline" className="text-xs">
-                                  {tenant.category}
-                                </Badge>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">
-                                  Plan:{" "}
-                                  <span className="font-medium text-foreground capitalize">
-                                    {tenant.plan}
-                                  </span>
-                                </p>
-                                {startDate && (
-                                  <p className="text-xs text-muted-foreground">
-                                    <Calendar className="h-3 w-3 inline mr-1" />
-                                    Started:{" "}
-                                    {new Date(startDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                  </p>
-                                )}
-                                {endDate && (
-                                  <p className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                    <Calendar className="h-3 w-3 inline mr-1" />
-                                    Expires:{" "}
-                                    {new Date(endDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                    {statusMsg && ` (${statusMsg})`}
-                                  </p>
-                                )}
-                                {tenant.email && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Email: {tenant.email}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <Badge className="bg-green-600">Active</Badge>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {tenants.filter((t) => isActive(t)).length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Users className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm">No active subscriptions found</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Expired Subscriptions */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-red-600 dark:text-red-400">
-                      Expired Subscriptions
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      Tenants with expire date passed
-                    </CardDescription>
-                  </div>
-                  <Badge variant="destructive">
-                    {tenants.filter((t) => isExpired(t)).length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {tenants
-                    .filter((t) => isExpired(t))
-                    .map((tenant) => {
-                      const tenantAMC = getTenantAMC(tenant.id);
-                      const startDate = tenantAMC?.start_date || tenant.created_at;
-                      const endDate = tenantAMC?.end_date || tenant.expire_date;
-                      const statusMsg = getExpirationStatus(tenant);
-
-                      return (
-                        <div
-                          key={String(tenant.id)}
-                          className="p-4 border rounded-lg hover:bg-muted/50 transition-colors opacity-75"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h4 className="font-semibold">{tenant.name}</h4>
-                                <Badge variant="outline" className="text-xs">
-                                  {tenant.category}
-                                </Badge>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-sm text-muted-foreground">
-                                  Plan:{" "}
-                                  <span className="font-medium text-foreground capitalize">
-                                    {tenant.plan}
-                                  </span>
-                                </p>
-                                {startDate && (
-                                  <p className="text-xs text-muted-foreground">
-                                    <Calendar className="h-3 w-3 inline mr-1" />
-                                    Started:{" "}
-                                    {new Date(startDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                  </p>
-                                )}
-                                {endDate && (
-                                  <p className="text-xs text-red-600 font-bold">
-                                    <Calendar className="h-3 w-3 inline mr-1" />
-                                    Expired:{" "}
-                                    {new Date(endDate).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                    {statusMsg && ` (${statusMsg})`}
-                                  </p>
-                                )}
-                                {tenant.email && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Email: {tenant.email}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <Badge variant="destructive">Expired</Badge>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {tenants.filter((t) => isExpired(t)).length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Users className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm">No expired subscriptions found</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </>
       )}
     </div>

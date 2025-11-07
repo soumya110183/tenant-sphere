@@ -15,7 +15,10 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("auth_token");
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    // ensure headers object exists (safer for some axios/TS setups)
+    // header typing can vary, cast to any for assignment here
+    if (!config.headers) config.headers = {} as any;
+    (config.headers as any).Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -43,15 +46,34 @@ export const tenantAPI = {
 export const authAPI = {
   login: async (email, password) => {
     const { data } = await api.post("/api/auth/login", { email, password });
+    // persist token and user info so other calls/refreshes work automatically
+    try {
+      localStorage.setItem("auth_token", data.token);
+      const userPayload = {
+        id: data.user?.id,
+        name: data.user?.full_name ?? data.user?.name,
+        email: data.user?.email,
+        role: data.user?.role,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+          data.user?.full_name ?? data.user?.name
+        }`,
+      };
+      localStorage.setItem("user_data", JSON.stringify(userPayload));
+    } catch (e) {
+      // ignore localStorage errors (e.g., quota or sandboxed env)
+    }
+
     return {
       success: true,
       token: data.token,
       user: {
-        id: data.user.id,
-        name: data.user.full_name,
-        email: data.user.email,
-        role: data.user.role,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.full_name}`,
+        id: data.user?.id,
+        name: data.user?.full_name ?? data.user?.name,
+        email: data.user?.email,
+        role: data.user?.role,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+          data.user?.full_name ?? data.user?.name
+        }`,
       },
     };
   },
@@ -101,18 +123,27 @@ export const reportsAPI = {
 
   exportReport: async (reportType, format, filters) => {
     const params = { type: format, report: reportType, ...filters };
-    const { data } = await api.get("/reports/export", {
+    // axios with responseType 'blob' returns response.data as a Blob
+    const response = await api.get("/reports/export", {
       params,
       responseType: "blob",
     });
 
-    const url = window.URL.createObjectURL(new Blob([data]));
+    const blob = response.data as Blob;
+    const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${reportType}_${new Date().toISOString().split("T")[0]}.${format}`;
+    // map logical format to a sensible extension
+    const ext =
+      format === "excel" || format === "xlsx" ? "xlsx" : String(format);
+    a.download = `${reportType}_${
+      new Date().toISOString().split("T")[0]
+    }.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    // cleanup
+    window.URL.revokeObjectURL(url);
   },
 };
 
@@ -120,11 +151,33 @@ export const reportsAPI = {
 // ACTIVITY API (Dummy)
 // ===============================
 export const activityAPI = {
-  getRecentActivity: async (limit = 10) => [
-    { id: 1, user: "Maria Bella", action: "upgraded plan", target: "Professional", time: "5m ago", type: "upgrade" },
-    { id: 2, user: "John Davis", action: "created new branch", target: "Downtown", time: "12m ago", type: "create" },
-    { id: 3, user: "Sarah Thompson", action: "enabled module", target: "Appointments", time: "23m ago", type: "update" },
-  ].slice(0, limit),
+  getRecentActivity: async (limit = 10) =>
+    [
+      {
+        id: 1,
+        user: "Maria Bella",
+        action: "upgraded plan",
+        target: "Professional",
+        time: "5m ago",
+        type: "upgrade",
+      },
+      {
+        id: 2,
+        user: "John Davis",
+        action: "created new branch",
+        target: "Downtown",
+        time: "12m ago",
+        type: "create",
+      },
+      {
+        id: 3,
+        user: "Sarah Thompson",
+        action: "enabled module",
+        target: "Appointments",
+        time: "23m ago",
+        type: "update",
+      },
+    ].slice(0, limit),
 };
 
 // ===============================
@@ -132,8 +185,22 @@ export const activityAPI = {
 // ===============================
 export const userAPI = {
   getUsers: async () => [
-    { id: 1, name: "Super Admin", email: "admin@tenantsphere.com", role: "Super Admin", status: "Active", lastLogin: "2024-10-23" },
-    { id: 2, name: "Jane Smith", email: "jane@tenantsphere.com", role: "Admin", status: "Active", lastLogin: "2024-10-22" },
+    {
+      id: 1,
+      name: "Super Admin",
+      email: "admin@tenantsphere.com",
+      role: "Super Admin",
+      status: "Active",
+      lastLogin: "2024-10-23",
+    },
+    {
+      id: 2,
+      name: "Jane Smith",
+      email: "jane@tenantsphere.com",
+      role: "Admin",
+      status: "Active",
+      lastLogin: "2024-10-22",
+    },
   ],
 };
 
@@ -172,7 +239,6 @@ export const productService = {
   delete: async (id) => (await api.delete(`/api/products/${id}`)).data,
 };
 
-
 export const inventoryService = {
   // ✅ Get all inventory items (joined with product details)
   getAll: async () => (await api.get("/api/inventory")).data,
@@ -184,7 +250,8 @@ export const inventoryService = {
   create: async (data) => (await api.post("/api/inventory", data)).data,
 
   // ✅ Update existing inventory record
-  update: async (id, data) => (await api.put(`/api/inventory/${id}`, data)).data,
+  update: async (id, data) =>
+    (await api.put(`/api/inventory/${id}`, data)).data,
 
   // ✅ Delete inventory record
   delete: async (id) => (await api.delete(`/api/inventory/${id}`)).data,
