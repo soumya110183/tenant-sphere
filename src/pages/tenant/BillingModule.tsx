@@ -34,6 +34,7 @@ const SupermarketBilling = () => {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentInputIndex, setCurrentInputIndex] = useState(null);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const inputRefs = useRef([]);
   const suggestionRef = useRef(null);
 
@@ -69,6 +70,14 @@ const SupermarketBilling = () => {
     fetchProducts();
   }, [toast]);
 
+  // Debug: Log products when they change
+  useEffect(() => {
+    if (products.length > 0) {
+      console.log("Products available for search:", products);
+      console.log("Sample SKUs:", products.map(p => ({ name: p.name, sku: p.sku, barcode: p.barcode })));
+    }
+  }, [products]);
+
   const addNewRow = () => {
     setRows((prev) => [
       ...prev,
@@ -81,107 +90,132 @@ const SupermarketBilling = () => {
     setRows(rows.filter((_, i) => i !== index));
   };
 
-const getMatchingProducts = (term) => {
-  if (!term || term.length < 1) return [];
-  const lower = term.toLowerCase();
-  
-  console.log("Searching for:", term); // Debug log
-  console.log("Available products:", products); // Debug log
-  
-  const matches = products.filter(
-    (p) =>
-      p.name?.toLowerCase().includes(lower) ||
-      p.barcode?.toLowerCase().includes(lower) ||
-      p.id?.toString().includes(lower)
-  ).slice(0, 8);
-  
-  console.log("Found matches:", matches); // Debug log
-  return matches;
-};
-
+  const getMatchingProducts = (term) => {
+    if (!term || term.length < 1) return [];
+    const lower = term.toLowerCase();
+    
+    console.log("Searching for:", term);
+    
+    const matches = products.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(lower) ||
+        p.barcode?.toLowerCase().includes(lower) ||
+        p.sku?.toLowerCase().includes(lower) ||
+        p.id?.toString().includes(lower)
+    ).slice(0, 8);
+    
+    console.log("Found matches:", matches);
+    return matches;
+  };
 
   const handleItemCodeChange = (index, value) => {
-  const updated = [...rows];
-  updated[index].code = value;
-  const matches = getMatchingProducts(value);
-  setSuggestions(matches);
-  setCurrentInputIndex(index);
-  setShowSuggestions(matches.length > 0);
+    const updated = [...rows];
+    updated[index].code = value;
+    
+    // Get matching products for suggestions
+    const matches = getMatchingProducts(value);
+    setSuggestions(matches);
+    setCurrentInputIndex(index);
+    setShowSuggestions(matches.length > 0);
 
-  const exactMatch = products.find(
-    (p) =>
-      p.name.toLowerCase() === value.toLowerCase() ||
-      p.barcode?.toLowerCase() === value.toLowerCase() ||
-      p.id.toString() === value
-  );
+    // ✅ Clear all fields if input is empty
+    if (!value.trim()) {
+      updated[index].name = "";
+      updated[index].price = 0;
+      updated[index].tax = 0;
+      updated[index].total = 0;
+      updated[index].product_id = null;
+      setRows(updated);
+      setShowSuggestions(false);
+      return;
+    }
 
-  if (exactMatch) {
-    updated[index].name = exactMatch.name;
-    updated[index].price = exactMatch.selling_price || 0; // ✅ fixed
-    updated[index].tax = exactMatch.tax_percent || 0; // ✅ fixed
-    updated[index].total = updated[index].qty * updated[index].price;
+    // ✅ FIXED: Auto-fill when exact match found (barcode, SKU, or name)
+    const exactMatch = products.find(
+      (p) =>
+        p.name?.toLowerCase() === value.toLowerCase() ||
+        p.barcode?.toLowerCase() === value.toLowerCase() ||
+        p.sku?.toLowerCase() === value.toLowerCase() ||
+        p.id?.toString() === value
+    );
+
+    console.log("Exact match search for:", value, "Found:", exactMatch);
+
+    if (exactMatch) {
+      // ✅ Auto-fill the row with product details
+      updated[index].code = exactMatch.name; // ✅ Change input to show product name
+      updated[index].name = exactMatch.name;
+      updated[index].price = exactMatch.selling_price || 0;
+      updated[index].tax = exactMatch.tax_percent || 0;
+      updated[index].product_id = exactMatch.product_id;
+      updated[index].total = updated[index].qty * updated[index].price;
+      setShowSuggestions(false);
+      
+      console.log("Auto-filled row with:", exactMatch.name);
+    } else {
+      // ✅ Keep the search term but clear other fields if no exact match
+      updated[index].name = "";
+      updated[index].price = 0;
+      updated[index].tax = 0;
+      updated[index].total = 0;
+      updated[index].product_id = null;
+    }
+    
+    setRows(updated);
+  };
+
+  const handleSuggestionClick = (product) => {
+    if (currentInputIndex === null) return;
+
+    const updated = [...rows];
+    const existingIndex = updated.findIndex(
+      (r) => r.name.toLowerCase() === product.name.toLowerCase()
+    );
+    
+    if (existingIndex !== -1 && existingIndex !== currentInputIndex) {
+      // ✅ Item already exists in bill → just increase quantity
+      updated[existingIndex].qty += 1;
+      updated[existingIndex].total =
+        updated[existingIndex].qty * updated[existingIndex].price;
+
+      // Remove the duplicate row
+      updated.splice(currentInputIndex, 1);
+    } else {
+      // 🆕 First-time selection
+      updated[currentInputIndex].code = product.name; // ✅ Show product name in input
+      updated[currentInputIndex].name = product.name;
+      updated[currentInputIndex].price = product.selling_price || 0;
+      updated[currentInputIndex].tax = product.tax_percent || 0;
+      updated[currentInputIndex].product_id = product.product_id;
+      updated[currentInputIndex].total =
+        product.selling_price * updated[currentInputIndex].qty;
+    }
+
+    setRows(updated);
     setShowSuggestions(false);
-  }
-  setRows(updated);
-};
+    setCurrentInputIndex(null);
 
+    // Auto-add new row only if we're at the last one
+    if (currentInputIndex === updated.length - 1) {
+      addNewRow();
+      setTimeout(() => inputRefs.current[currentInputIndex + 1]?.focus(), 100);
+    } else {
+      inputRefs.current[currentInputIndex + 1]?.focus();
+    }
+  };
 
- const handleSuggestionClick = (product) => {
-  if (currentInputIndex === null) return;
-
-  const updated = [...rows];
-  const existingIndex = updated.findIndex(
-    (r) => r.name.toLowerCase() === product.name.toLowerCase()
-  );
-  
-
-  if (existingIndex !== -1 && existingIndex !== currentInputIndex) {
-    // ✅ Item already exists in bill → just increase quantity
-    updated[existingIndex].qty += 1;
-    updated[existingIndex].total =
-      updated[existingIndex].qty * updated[existingIndex].price;
-
-    // Remove the duplicate row
-    updated.splice(currentInputIndex, 1);
-  } else {
-    // 🆕 First-time selection — store product_id too!
-    updated[currentInputIndex].code = product.name;
-    updated[currentInputIndex].name = product.name;
-    updated[currentInputIndex].price = product.selling_price || 0;
-    updated[currentInputIndex].tax = product.tax_percent || 0;
-    updated[currentInputIndex].product_id = product.product_id; // ✅ correct// ✅ FIXED // ✅ store it
-    updated[currentInputIndex].total =
-      product.selling_price * updated[currentInputIndex].qty;
-  }
-
-  setRows(updated);
-  setShowSuggestions(false);
-  setCurrentInputIndex(null);
-  
-
-  // Auto-add new row only if we’re at the last one
-  if (currentInputIndex === updated.length - 1) {
-    addNewRow();
-    setTimeout(() => inputRefs.current[currentInputIndex + 1]?.focus(), 100);
-  } else {
-    inputRefs.current[currentInputIndex + 1]?.focus();
-  }
-};
-
-
- const handleQtyChange = (index, value) => {
-  const updated = [...rows];
-  if (value === "" || value === null) {
-    updated[index].qty = "";
-    updated[index].total = 0;
-  } else {
-    const qty = Number(value);
-    updated[index].qty = qty;
-    updated[index].total = updated[index].price * qty;
-  }
-  setRows(updated);
-};
-
+  const handleQtyChange = (index, value) => {
+    const updated = [...rows];
+    if (value === "" || value === null) {
+      updated[index].qty = "";
+      updated[index].total = 0;
+    } else {
+      const qty = Number(value);
+      updated[index].qty = qty;
+      updated[index].total = updated[index].price * qty;
+    }
+    setRows(updated);
+  };
 
   const calculateSubtotal = () => rows.reduce((sum, r) => sum + r.total, 0);
   const calculateIncludedTax = () =>
@@ -190,128 +224,195 @@ const getMatchingProducts = (term) => {
 
   // 🧾 Generate and Save Invoice
   const handleGenerateInvoice = async () => {
-  const validItems = rows.filter((r) => r.name);
-  if (validItems.length === 0) {
-    toast({
-      title: "No items",
-      description: "Please add at least one product",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  // ✅ STOCK VALIDATION (Add here)
-  for (const item of validItems) {
-    const product = products.find((p) => p.name === item.name);
-    if (product && item.qty > product.quantity) {
+    setIsGeneratingInvoice(true);
+    
+    const validItems = rows.filter((r) => r.name);
+    if (validItems.length === 0) {
       toast({
-        title: "Insufficient Stock",
-        description: `${product.name} has only ${product.quantity} left.`,
+        title: "No items",
+        description: "Please add at least one product",
         variant: "destructive",
       });
-      return; // 🚫 stop billing if stock too low
+      setIsGeneratingInvoice(false);
+      return;
     }
-  }
 
-  // ✅ Proceed only if all items have enough stock
-  const token = localStorage.getItem("auth_token");
-  console.log("Generating invoice with items:", validItems);
-  try {
-    const res = await fetch("https://billingbackend-1vei.onrender.com/api/invoices", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-body: JSON.stringify({
-  payment_method: paymentMethod,
-  items: validItems.map((r) => ({
-    product_id: r.product_id, // ✅ already stored from selection
-    qty: r.qty,
-    price: r.price,
-    tax: r.tax,
-    total: r.total,
-  })),
-}),
+    // ✅ STOCK VALIDATION
+    for (const item of validItems) {
+      const product = products.find((p) => p.name === item.name);
+      if (product && item.qty > product.quantity) {
+        toast({
+          title: "Insufficient Stock",
+          description: `${product.name} has only ${product.quantity} left.`,
+          variant: "destructive",
+        });
+        setIsGeneratingInvoice(false);
+        return;
+      }
+    }
 
-    });
+    const token = localStorage.getItem("auth_token");
+    console.log("Generating invoice with items:", validItems);
+    try {
+      const res = await fetch("https://billingbackend-1vei.onrender.com/api/invoices", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          payment_method: paymentMethod,
+          items: validItems.map((r) => ({
+            product_id: r.product_id,
+            qty: r.qty,
+            price: r.price,
+            tax: r.tax,
+            total: r.total,
+          })),
+        }),
+      });
 
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Invoice creation failed");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Invoice creation failed");
 
-    toast({
-      title: "Invoice Created",
-      description: `Invoice ${json.invoice.invoice_number} generated`,
-    });
+      toast({
+        title: "Invoice Created",
+        description: `Invoice ${json.invoice.invoice_number} generated`,
+      });
 
-    generatePDFBill(json.invoice.invoice_number);
+      generatePDFBill(json.invoice.invoice_number);
 
-    setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
-  } catch (err) {
-    console.error(err);
-    toast({
-      title: "Error",
-      description: err.message,
-      variant: "destructive",
-    });
-  }
-};
-
-
-  // 🧾 PDF Receipt Generator (reused)
-  const generatePDFBill = (invoiceNumber) => {
-    const validItems = rows.filter((r) => r.name);
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: [80, 297],
-    });
-
-    const date = new Date().toLocaleDateString();
-    const time = new Date().toLocaleTimeString();
-
-    let y = 10;
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("SUPERMART", 40, y, { align: "center" });
-    y += 6;
-
-    doc.setFontSize(9);
-    doc.text("Invoice No: " + invoiceNumber, 5, y);
-    y += 4;
-    doc.text("Date: " + date + " " + time, 5, y);
-    y += 8;
-    doc.line(5, y, 75, y);
-    y += 5;
-
-    doc.setFont("helvetica", "bold");
-    doc.text("QTY  ITEM", 5, y);
-    doc.text("AMT", 70, y, { align: "right" });
-    y += 4;
-    doc.line(5, y, 75, y);
-    y += 4;
-
-    doc.setFont("helvetica", "normal");
-    validItems.forEach((i) => {
-      doc.text(`${i.qty}x ${i.name}`, 5, y);
-      doc.text(`AED ${i.total.toFixed(2)}`, 70, y, { align: "right" });
-      y += 5;
-    });
-
-    y += 3;
-    doc.line(5, y, 75, y);
-    y += 6;
-
-    doc.setFont("helvetica", "bold");
-    doc.text("TOTAL:", 40, y, { align: "right" });
-    doc.text(`AED ${calculateTotal().toFixed(2)}`, 70, y, { align: "right" });
-
-    y += 8;
-    doc.setFontSize(8);
-    doc.text("Thank you for shopping!", 40, y, { align: "center" });
-    doc.save(`receipt-${invoiceNumber}.pdf`);
+      setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingInvoice(false);
+    }
   };
-console.log(suggestions)
+
+  // 🧾 PDF Receipt Generator
+ const generatePDFBill = (invoiceNumber) => {
+  const validItems = rows.filter((r) => r.name);
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [80, 297],
+  });
+
+  const date = new Date().toLocaleDateString('en-US', { 
+    month: '2-digit', 
+    day: '2-digit', 
+    year: 'numeric' 
+  });
+  const time = new Date().toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  });
+
+  // Format payment method for display
+  const paymentMethodDisplay = {
+    'cash': 'CASH',
+    'card': 'CARD',
+    'upi': 'UPI',
+    'credit': 'CREDIT'
+  };
+
+  let y = 10;
+  
+  // Top border stars
+  doc.setFontSize(10);
+  doc.setFont("courier", "normal");
+  doc.text("********************************", 40, y, { align: "center" });
+  y += 5;
+  
+  // Store name
+  doc.setFontSize(16);
+  doc.setFont("courier", "bold");
+  doc.text("SUPERMART", 40, y, { align: "center" });
+  y += 5;
+  
+  // Bottom border stars
+  doc.setFontSize(10);
+  doc.setFont("courier", "normal");
+  doc.text("********************************", 40, y, { align: "center" });
+  y += 6;
+  
+  // Invoice number and timestamp
+  doc.setFontSize(9);
+  doc.text(`Invoice No: ${invoiceNumber}`, 5, y);
+  y += 4;
+  doc.text(`Date: ${date} ${time}`, 5, y);
+  y += 4;
+  
+  // Dashed line
+  doc.text("----------------------------------------", 5, y);
+  y += 6;
+
+  // Items
+  doc.setFont("courier", "normal");
+  doc.setFontSize(10);
+  
+  validItems.forEach((item) => {
+    const itemLine = `${item.qty}x ${item.name}`;
+    const price = `AED ${item.total.toFixed(2)}`;
+    
+    doc.text(itemLine, 5, y);
+    doc.text(price, 75, y, { align: "right" });
+    y += 5;
+  });
+
+  // Dashed line before totals
+  y += 2;
+  doc.setFontSize(9);
+  doc.text("----------------------------------------", 5, y);
+  y += 6;
+
+  // Total amount
+  doc.setFont("courier", "bold");
+  doc.setFontSize(11);
+  doc.text("TOTAL:", 40, y, { align: "right" });
+  doc.text(`AED ${calculateTotal().toFixed(2)}`, 75, y, { align: "right" });
+  y += 6;
+
+  // Payment method
+  doc.setFont("courier", "normal");
+  doc.setFontSize(10);
+  doc.text("Payment Method:", 5, y);
+  doc.text(paymentMethodDisplay[paymentMethod] || paymentMethod.toUpperCase(), 75, y, { align: "right" });
+  y += 5;
+
+  // Dashed line
+  doc.setFontSize(9);
+  doc.text("----------------------------------------", 5, y);
+  y += 6;
+  
+  // Thank you message
+  doc.setFontSize(10);
+  doc.setFont("courier", "bold");
+  doc.text("********* THANK YOU! *********", 40, y, { align: "center" });
+  y += 8;
+
+  // Barcode representation (using lines)
+  doc.setLineWidth(0.5);
+  const barcodeY = y;
+  const barcodeWidth = 60;
+  const barcodeStart = (80 - barcodeWidth) / 2;
+  
+  // Simple barcode simulation with vertical lines
+  for (let i = 0; i < 40; i++) {
+    const lineWidth = Math.random() > 0.5 ? 1 : 0.5;
+    doc.setLineWidth(lineWidth);
+    doc.line(barcodeStart + i * 1.5, barcodeY, barcodeStart + i * 1.5, barcodeY + 15);
+  }
+
+  doc.save(`receipt-${invoiceNumber}.pdf`);
+};
   return (
     <div className="space-y-6">
       <div>
@@ -341,7 +442,7 @@ console.log(suggestions)
                         ref={(el) => (inputRefs.current[i] = el)}
                         value={r.code}
                         onChange={(e) => handleItemCodeChange(i, e.target.value)}
-                        placeholder="Enter name or barcode"
+                        placeholder="Enter name, barcode, or SKU"
                       />
                       {showSuggestions && currentInputIndex === i && (
                         <div
@@ -355,33 +456,36 @@ console.log(suggestions)
                           {suggestions.map((p, idx) => (
                             <div
                               key={p.id}
-                              className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+                              className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
                               onClick={() => handleSuggestionClick(p)}
                             >
-                             <div className="font-medium text-sm">
-  {p.name} <span className="text-xs text-gray-500"> (Stock: {p.quantity})</span>
-</div>
-
+                              <div className="font-medium text-sm">
+                                {p.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {p.sku && `SKU: ${p.sku} • `}
+                                {p.barcode && `Barcode: ${p.barcode} • `}
+                                Stock: {p.quantity} • AED {p.selling_price}
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </TableCell>
                     <TableCell>
-                     <Input
-  type="number"
-  value={r.qty}
-  onChange={(e) => handleQtyChange(i, e.target.value)}
-  onBlur={() => {
-    if (rows[i].qty === "" || rows[i].qty === 0) {
-      const updated = [...rows];
-      updated[i].qty = 1;
-      updated[i].total = updated[i].price;
-      setRows(updated);
-    }
-  }}
-/>
-
+                      <Input
+                        type="number"
+                        value={r.qty}
+                        onChange={(e) => handleQtyChange(i, e.target.value)}
+                        onBlur={() => {
+                          if (rows[i].qty === "" || rows[i].qty === 0) {
+                            const updated = [...rows];
+                            updated[i].qty = 1;
+                            updated[i].total = updated[i].price;
+                            setRows(updated);
+                          }
+                        }}
+                      />
                     </TableCell>
                     <TableCell>AED {r.price.toFixed(2)}</TableCell>
                     <TableCell>AED {r.total.toFixed(2)}</TableCell>
@@ -448,9 +552,23 @@ console.log(suggestions)
               </div>
             </div>
 
-            <Button onClick={handleGenerateInvoice} className="w-full mt-4" size="lg">
-              <Printer className="mr-2 h-4 w-4" />
-              Print Bill
+            <Button 
+              onClick={handleGenerateInvoice} 
+              className="w-full mt-4" 
+              size="lg"
+              disabled={isGeneratingInvoice}
+            >
+              {isGeneratingInvoice ? (
+                <>
+                  <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print Bill
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>

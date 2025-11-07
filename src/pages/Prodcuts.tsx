@@ -478,6 +478,7 @@ const ProductCatalog = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
+  
 
   // Load products on component mount
   useEffect(() => {
