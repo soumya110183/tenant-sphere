@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Package, Plus, AlertTriangle, ShoppingCart, TrendingUp, TrendingDown, RotateCcw, Edit, Trash2, Search, X, Save, Loader2 } from 'lucide-react';
 import { useInventory } from '@/contexts/InventoryContext';
-import { inventoryService, productService } from '@/services/api';
+import { inventoryService, invoiceService, productService, purchaseService } from '@/services/api';
 import {StatsCard} from '../components/InventoryComponent/StatsCard.jsx';
 import {LowStockAlert,SearchFilter,TabNavigation} from '../components/InventoryComponent/SmallComponents.jsx';
 // import{Modal} from '../components/InventoryComponent/Modal.jsx';
@@ -325,119 +325,192 @@ onChange={(e) => {
           )}
 
           {modalType === 'purchase' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Supplier ID *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplierId || 1}
-                    onChange={(e) => setFormData({...formData, supplierId: parseInt(e.target.value) || 1})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Supplier Name *</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplierName || ''}
-                    onChange={(e) => setFormData({...formData, supplierName: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Invoice No *</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.invoiceNo || ''}
-                    onChange={(e) => setFormData({...formData, invoiceNo: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Date *</label>
-                  <input
-                    type="date"
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.date || ''}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Payment Mode *</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.paymentMode || 'Cash'}
-                    onChange={(e) => setFormData({...formData, paymentMode: e.target.value})}
-                  >
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Card</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Status *</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.status || 'Unpaid'}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  >
-                    <option>Paid</option>
-                    <option>Unpaid</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="font-medium text-sm">Products *</label>
-                  <Button type="button" size="sm" onClick={() => setPurchaseProducts([...purchaseProducts, { productId: '', qty: 1 }])}>
-                    <Plus className="h-3 w-3 mr-1" /> Add Product
-                  </Button>
-                </div>
-                {purchaseProducts.map((pp, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-                    <select
-                      required
-                      className="sm:col-span-2 px-3 py-2 border rounded-md bg-background text-sm"
-                      value={pp.productId}
-                      onChange={(e) => {
-                        const updated = [...purchaseProducts];
-                        updated[idx].productId = e.target.value;
-                        setPurchaseProducts(updated);
-                      }}
-                    >
-                      <option value="">Select Product</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} - AED {p.costPrice} per {p.unit}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      placeholder="Qty"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={pp.qty}
-                      onChange={(e) => {
-                        const updated = [...purchaseProducts];
-                        updated[idx].qty = parseInt(e.target.value) || 1;
-                        setPurchaseProducts(updated);
-                      }}
-                    />
-                  </div>
+  <div className="space-y-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">Supplier ID *</label>
+        <input
+          type="number"
+          required
+          min="1"
+          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+          value={formData.supplier_id || 1}
+          onChange={(e) => setFormData({...formData, supplier_id: parseInt(e.target.value) || 1})}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Invoice Number</label>
+        <input
+          type="text"
+          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+          value={formData.invoice_number || ''}
+          onChange={(e) => setFormData({...formData, invoice_number: e.target.value})}
+          placeholder="Leave empty for auto-generation"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Will auto-generate if left empty
+        </p>
+      </div>
+    </div>
+    
+        <div className="border-t pt-4">
+      <div className="flex justify-between items-center mb-3">
+        <label className="font-medium text-sm">Purchase Items *</label>
+        <Button 
+          type="button" 
+          size="sm" 
+          onClick={() => setPurchaseProducts([...purchaseProducts, { 
+            product_id: '', 
+            quantity: 1, 
+            cost_price: 0,
+            expiry_date: '',
+            reorder_level: 0,
+            max_stock: 0
+          }])}
+        >
+          <Plus className="h-3 w-3 mr-1" /> Add Item
+        </Button>
+      </div>
+      
+      {purchaseProducts.map((pp, idx) => (
+        <div key={idx} className="grid grid-cols-1 sm:grid-cols-1 gap-4 mb-4 p-4 border rounded-lg bg-muted/20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium mb-1">Product *</label>
+              <select
+                required
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.product_id}
+                onChange={(e) => {
+                  const selectedProduct = productCatalog.find(p => p.id === parseInt(e.target.value)); // CHANGE: use productCatalog
+                  const updated = [...purchaseProducts];
+                  updated[idx].product_id = e.target.value;
+                  if (selectedProduct) {
+                    updated[idx].cost_price = selectedProduct.cost_price || 0;
+                  }
+                  setPurchaseProducts(updated);
+                }}
+              >
+                <option value="">Select Product</option>
+                {productCatalog.map(product => ( // CHANGE: use productCatalog
+                  <option key={product.id} value={product.id}>
+                    {product.name} - {product.brand} - AED {product.cost_price} per {product.unit}
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
-          )}
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Quantity *</label>
+              <input
+                type="number"
+                required
+                min="1"
+                step="0.01"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.quantity}
+                onChange={(e) => {
+                  const updated = [...purchaseProducts];
+                  updated[idx].quantity = parseFloat(e.target.value) || 1;
+                  setPurchaseProducts(updated);
+                }}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Cost Price (AED) *</label>
+              <input
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.cost_price}
+                onChange={(e) => {
+                  const updated = [...purchaseProducts];
+                  updated[idx].cost_price = parseFloat(e.target.value) || 0;
+                  setPurchaseProducts(updated);
+                }}
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Expiry Date</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.expiry_date || ''}
+                onChange={(e) => {
+                  const updated = [...purchaseProducts];
+                  updated[idx].expiry_date = e.target.value;
+                  setPurchaseProducts(updated);
+                }}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Reorder Level</label>
+              <input
+                type="number"
+                min="0"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.reorder_level || 0}
+                onChange={(e) => {
+                  const updated = [...purchaseProducts];
+                  updated[idx].reorder_level = parseInt(e.target.value) || 0;
+                  setPurchaseProducts(updated);
+                }}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Max Stock</label>
+              <input
+                type="number"
+                min="0"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                value={pp.max_stock || 0}
+                onChange={(e) => {
+                  const updated = [...purchaseProducts];
+                  updated[idx].max_stock = parseInt(e.target.value) || 0;
+                  setPurchaseProducts(updated);
+                }}
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const updated = purchaseProducts.filter((_, i) => i !== idx);
+                setPurchaseProducts(updated);
+              }}
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Remove Item
+            </Button>
+          </div>
+        </div>
+      ))}
+      
+      {purchaseProducts.length > 0 && (
+        <div className="mt-4 p-3 bg-primary/5 rounded-lg">
+          <div className="flex justify-between items-center">
+            <span className="font-medium">Total Amount:</span>
+            <span className="font-bold text-lg">
+              AED {purchaseProducts.reduce((sum, item) => sum + (item.quantity * item.cost_price), 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
           {modalType === 'salesReturn' && (
             <div className="space-y-4">
@@ -799,6 +872,7 @@ const StockView = ({ products, searchTerm, setSearchTerm, filterCategory, setFil
 );
 
 // Sales View Component
+// Sales View Component - Updated to use invoices
 const SalesView = ({ sales, openModal, handleDelete }) => (
   <Card>
     <CardHeader>
@@ -807,10 +881,6 @@ const SalesView = ({ sales, openModal, handleDelete }) => (
           <ShoppingCart className="h-5 w-5 text-primary" />
           Sales Transactions ({sales.length})
         </CardTitle>
-        <Button onClick={() => openModal('sale')} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          New Sale
-        </Button>
       </div>
     </CardHeader>
     <CardContent>
@@ -818,39 +888,35 @@ const SalesView = ({ sales, openModal, handleDelete }) => (
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="border-b">
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Sale ID</th>
+              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Invoice No</th>
               <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Date & Time</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Customer</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Products</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Payment</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Total</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Profit</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Staff</th>
+              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Payment Method</th>
+              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Total Amount</th>
               <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sales.length === 0 ? (
               <tr>
-                <td colSpan="9" className="text-center py-8 text-muted-foreground text-sm">
-                  No sales recorded yet. Create your first sale!
+                <td colSpan="5" className="text-center py-8 text-muted-foreground text-sm">
+                  No sales recorded yet.
                 </td>
               </tr>
             ) : (
               sales.map((sale) => (
                 <tr key={sale.id} className="border-b hover:bg-muted/50">
-                  <td className="py-3 px-2 sm:px-4 font-medium text-sm">#{sale.id}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{sale.date}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{sale.customerName || sale.customerId || 'Walk-in'}</td>
+                  <td className="py-3 px-2 sm:px-4 font-medium text-sm">#{sale.invoice_number}</td>
                   <td className="py-3 px-2 sm:px-4 text-sm">
-                    {sale.products.map(p => `${p.name} (${p.qty})`).join(', ')}
+                    {new Date(sale.created_at).toLocaleString()}
                   </td>
                   <td className="py-3 px-2 sm:px-4">
-                    <Badge variant="outline">{sale.paymentType}</Badge>
+                    <Badge variant="outline" className="capitalize">
+                      {sale.payment_method}
+                    </Badge>
                   </td>
-                  <td className="py-3 px-2 sm:px-4 font-semibold text-sm">AED {sale.total}</td>
-                  <td className="py-3 px-2 sm:px-4 text-green-600 font-medium text-sm">AED {sale.profit}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{sale.staffId}</td>
+                  <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                    AED {sale.total_amount?.toFixed(2)}
+                  </td>
                   <td className="py-3 px-2 sm:px-4">
                     <div className="flex gap-1 sm:gap-2 justify-end">
                       <Button variant="outline" size="sm" onClick={() => handleDelete('sale', sale.id)}>
@@ -869,78 +935,92 @@ const SalesView = ({ sales, openModal, handleDelete }) => (
 );
 
 // Purchases View Component
-const PurchasesView = ({ purchases, openModal, handleDelete }) => (
-  <Card>
-    <CardHeader>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-          <TrendingDown className="h-5 w-5 text-primary" />
-          Purchase Records ({purchases.length})
-        </CardTitle>
-        <Button onClick={() => openModal('purchase')} className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          New Purchase
-        </Button>
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px]">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Purchase ID</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Supplier</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Invoice No</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Date</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Products</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Payment</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Total</th>
-              <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Status</th>
-              <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {purchases.length === 0 ? (
-              <tr>
-                <td colSpan="9" className="text-center py-8 text-muted-foreground text-sm">
-                  No purchases recorded yet. Create your first purchase!
-                </td>
+// Purchases View Component
+// Purchases View Component - Updated with your actual data structure
+const PurchasesView = ({ purchases, openModal, handleDelete }) => {
+  const safePurchases = Array.isArray(purchases) ? purchases : [];
+  
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <TrendingDown className="h-5 w-5 text-primary" />
+            Purchase Records ({safePurchases.length})
+          </CardTitle>
+          <Button onClick={() => openModal('purchase')} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            New Purchase
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px]">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Purchase ID</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Invoice No</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Supplier ID</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Date</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Items</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Total Amount</th>
+                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Actions</th>
               </tr>
-            ) : (
-              purchases.map((purchase) => (
-                <tr key={purchase.id} className="border-b hover:bg-muted/50">
-                  <td className="py-3 px-2 sm:px-4 font-medium text-sm">#{purchase.id}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{purchase.supplierName || `Supplier-${purchase.supplierId}`}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{purchase.invoiceNo}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">{purchase.date}</td>
-                  <td className="py-3 px-2 sm:px-4 text-sm">
-                    {purchase.products.map(p => `${p.name} (${p.qty})`).join(', ')}
-                  </td>
-                  <td className="py-3 px-2 sm:px-4">
-                    <Badge variant="outline">{purchase.paymentMode}</Badge>
-                  </td>
-                  <td className="py-3 px-2 sm:px-4 font-semibold text-sm">AED {purchase.total}</td>
-                  <td className="py-3 px-2 sm:px-4">
-                    <Badge className={purchase.status === 'Paid' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}>
-                      {purchase.status}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-2 sm:px-4">
-                    <div className="flex gap-1 sm:gap-2 justify-end">
-                      <Button variant="outline" size="sm" onClick={() => handleDelete('purchase', purchase.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+            </thead>
+            <tbody>
+              {safePurchases.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-muted-foreground text-sm">
+                    No purchases recorded yet. Create your first purchase!
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </CardContent>
-  </Card>
-);
+              ) : (
+                safePurchases.map((purchase) => (
+                  <tr key={purchase.id} className="border-b hover:bg-muted/50">
+                    <td className="py-3 px-2 sm:px-4 font-medium text-sm">#{purchase.id}</td>
+                    <td className="py-3 px-2 sm:px-4 text-sm font-mono">{purchase.invoice_number}</td>
+                    <td className="py-3 px-2 sm:px-4 text-sm">Supplier #{purchase.supplier_id}</td>
+                    <td className="py-3 px-2 sm:px-4 text-sm">
+                      {new Date(purchase.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="py-3 px-2 sm:px-4 text-sm">
+                      <div className="max-w-xs">
+                        {purchase.items && purchase.items.slice(0, 2).map((item, index) => (
+                          <div key={item.id} className="text-xs">
+                            {item.product_name} ({item.quantity} {item.product_unit})
+                          </div>
+                        ))}
+                        {purchase.items_count > 2 && (
+                          <div className="text-xs text-muted-foreground">
+                            +{purchase.items_count - 2} more items
+                          </div>
+                        )}
+                        {(!purchase.items || purchase.items.length === 0) && (
+                          <div className="text-xs text-muted-foreground">No items</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                      AED {purchase.total_amount?.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-2 sm:px-4">
+                      <div className="flex gap-1 sm:gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => handleDelete('purchase', purchase.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 // Returns View Component
 const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => (
@@ -1119,10 +1199,61 @@ const GroceryInventory = () => {
   const [ products, setProducts ] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 const [productCatalog,setProductCatalog] = useState([]);
+const [purchases, setPurchases] = useState([]);
+const [sales, setSales] = useState([]);
+
+// Add function to load purchases
+// Update your loadPurchases function to match the actual API response
+
+const loadSales = async () => {
+  try {
+    const response = await invoiceService.getAll();
+    console.log("Invoices API response:", response);
+    
+    if (response.data && response.data.success && Array.isArray(response.data.data)) {
+      setSales(response.data.data);
+    } else {
+      console.error("Unexpected invoices response structure:", response);
+      setSales([]);
+    }
+  } catch (error) {
+    console.error("Error loading invoices:", error);
+    setSales([]);
+    toast({
+      title: "Error",
+      description: "Failed to load sales data",
+      variant: "destructive"
+    });
+  }
+};
+const loadPurchases = async () => {
+  try {
+    const response = await purchaseService.getAll();
+    console.log("Purchases API response:", response);
+    
+    // Based on your response structure: { success: true, data: [...] }
+    if (response.data && response.data.success && Array.isArray(response.data.data)) {
+      setPurchases(response.data.data);
+    } else {
+      console.error("Unexpected purchases response structure:", response);
+      setPurchases([]);
+    }
+  } catch (error) {
+    console.error("Error loading purchases:", error);
+    setPurchases([]);
+    toast({
+      title: "Error",
+      description: "Failed to load purchases",
+      variant: "destructive"
+    });
+  }
+};
  const { toast } = useToast();
  useEffect(() => {
       loadProducts();
       loadInventory();
+      loadPurchases();
+      loadSales();
     }, []);
 
       const loadProducts = async () => {
@@ -1152,15 +1283,15 @@ const [productCatalog,setProductCatalog] = useState([]);
 
   
 
-  const [sales, setSales] = useState([
-    { id: 1, date: '2025-10-28 10:30', customerId: 'C001', customerName: 'Rajesh Kumar', products: [{productId: 1, name: 'Basmati Rice', qty: 5, price: 100, tax: 5}], paymentType: 'UPI', total: 525, profit: 100, staffId: 'S001' },
-    { id: 2, date: '2025-10-28 11:15', customerId: 'C002', customerName: 'Priya Sharma', products: [{productId: 2, name: 'Coca Cola', qty: 6, price: 40, tax: 12}], paymentType: 'Cash', total: 269, profit: 60, staffId: 'S001' },
-  ]);
+  // const [sales, setSales] = useState([
+  //   { id: 1, date: '2025-10-28 10:30', customerId: 'C001', customerName: 'Rajesh Kumar', products: [{productId: 1, name: 'Basmati Rice', qty: 5, price: 100, tax: 5}], paymentType: 'UPI', total: 525, profit: 100, staffId: 'S001' },
+  //   { id: 2, date: '2025-10-28 11:15', customerId: 'C002', customerName: 'Priya Sharma', products: [{productId: 2, name: 'Coca Cola', qty: 6, price: 40, tax: 12}], paymentType: 'Cash', total: 269, profit: 60, staffId: 'S001' },
+  // ]);
 
-  const [purchases, setPurchases] = useState([
-    { id: 1, supplierId: 1, supplierName: 'ABC Distributors', invoiceNo: 'INV-2025-001', date: '2025-10-25', products: [{productId: 1, name: 'Basmati Rice', qty: 50, cost: 80}], paymentMode: 'Credit', total: 4000, status: 'Unpaid' },
-    { id: 2, supplierId: 2, supplierName: 'XYZ Wholesale', invoiceNo: 'INV-2025-002', date: '2025-10-26', products: [{productId: 2, name: 'Coca Cola', qty: 100, cost: 30}], paymentMode: 'Cash', total: 3000, status: 'Paid' },
-  ]);
+  // const [purchases, setPurchases] = useState([
+  //   { id: 1, supplierId: 1, supplierName: 'ABC Distributors', invoiceNo: 'INV-2025-001', date: '2025-10-25', products: [{productId: 1, name: 'Basmati Rice', qty: 50, cost: 80}], paymentMode: 'Credit', total: 4000, status: 'Unpaid' },
+  //   { id: 2, supplierId: 2, supplierName: 'XYZ Wholesale', invoiceNo: 'INV-2025-002', date: '2025-10-26', products: [{productId: 2, name: 'Coca Cola', qty: 100, cost: 30}], paymentMode: 'Cash', total: 3000, status: 'Paid' },
+  // ]);
 
   const [salesReturns, setSalesReturns] = useState([
     { id: 1, originalSaleId: 1, date: '2025-10-28', items: [{productId: 1, name: 'Basmati Rice', qty: 1, reason: 'Damaged packaging'}], refundType: 'Cash', totalRefund: 105 },
@@ -1314,7 +1445,62 @@ const handleSubmit = async (e) => {
         });
       }
       break;
+      case 'purchase':
+  try {
+    const purchaseData = {
+      supplier_id: parseInt(formData.supplier_id) || 1,
+      invoice_number: formData.invoice_number || '',
+      items: purchaseProducts
+        .filter(item => item.product_id && item.quantity > 0)
+        .map(item => ({
+          product_id: parseInt(item.product_id),
+          quantity: parseFloat(item.quantity) || 1,
+          cost_price: parseFloat(item.cost_price) || 0,
+          expiry_date: item.expiry_date || null,
+          reorder_level: parseInt(item.reorder_level) || 0,
+          max_stock: parseInt(item.max_stock) || 0
+        }))
+    };
+
+    // Validate at least one item
+    if (purchaseData.items.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one product to the purchase",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const response = await purchaseService.create(purchaseData);
+    console.log("Purchase creation response:", response);
+
+    // Match your API response structure: { data: { success: true, purchase_id, invoice_number } }
+    if (response.data && response.data.success) {
+      await loadPurchases();
+      await loadInventory();
       
+      toast({
+        title: "Purchase Created",
+        description: `Purchase ${response.data.invoice_number} created successfully!`,
+      });
+      closeModal();
+    } else {
+      toast({
+        title: "Error",
+        description: response.data?.error || "Failed to create purchase",
+        variant: "destructive"
+      });
+    }
+  } catch (error) {
+    console.error("Error creating purchase:", error);
+    toast({
+      title: "Error",
+      description: error.response?.data?.error || error.message || "Failed to create purchase",
+      variant: "destructive"
+    });
+  }
+  break;
     // ... rest of your cases remain the same
   }
   
@@ -1330,18 +1516,55 @@ const handleSubmit = async (e) => {
          await inventoryService.delete(id);
         setProducts(products.filter(p => p.id !== id));
         break;
-      case 'sale':
-        setSales(sales.filter(s => s.id !== id));
-        break;
-      case 'purchase':
-        setPurchases(purchases.filter(p => p.id !== id));
+        case 'sale':
+      try {
+        await invoiceService.delete(id);
+        await loadSales(); // Reload the sales list
+        toast({
+          title: "Sale Deleted",
+          description: "Sale record deleted successfully",
+        });
+      } catch (error) {
+        console.error("Error deleting sale:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete sale",
+          variant: "destructive"
+        });
+      }
+      break;
+    case 'purchase':
+  try {
+    await purchaseService.delete(id);
+    // Reload purchases to get updated list
+    await loadPurchases();
+    toast({
+      title: "Purchase Deleted",
+      description: "Purchase deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting purchase:", error);
+    toast({
+      title: "Error",
+      description: "Failed to delete purchase",
+      variant: "destructive"
+    });
+  }
+  break;
         break;
     }
   };
 
   const lowStockItems = products.filter(item => getStockStatus(item.quantity, item.reorderLevel) === 'low').length;
   const totalValue = products.reduce((sum, item) => sum + (item.quantity * item.selling_price), 0);
-  const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalRevenue = sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+
+const stats = [
+  { label: 'Total Products', value: products.length, icon: Package },
+  { label: 'Low Stock Items', value: lowStockItems, icon: AlertTriangle, color: 'text-red-500' },
+  { label: 'Total Stock Value', value: `AED ${totalValue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-500' },
+  { label: 'Total Sales Today', value: `AED ${totalRevenue.toLocaleString()}`, icon: ShoppingCart, color: 'text-blue-500' },
+];
 
   const categories = ['All', ...new Set(products.map(p => p.category))];
   
@@ -1361,12 +1584,6 @@ const filteredProducts = products.filter(product => {
 });
 
 
-  const stats = [
-    { label: 'Total Products', value: products.length, icon: Package },
-    { label: 'Low Stock Items', value: lowStockItems, icon: AlertTriangle, color: 'text-red-500' },
-    { label: 'Total Stock Value', value: `AED ${totalValue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-500' },
-    { label: 'Total Sales Today', value: `AED ${totalRevenue.toLocaleString()}`, icon: ShoppingCart, color: 'text-blue-500' },
-  ];
 
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">

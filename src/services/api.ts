@@ -3,7 +3,8 @@ import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
 
 // Base URLs
-const API_URL = "https://billingbackend-1vei.onrender.com";
+// const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
@@ -188,4 +189,22 @@ export const inventoryService = {
 
   // ✅ Delete inventory record
   delete: async (id) => (await api.delete(`/api/inventory/${id}`)).data,
+};
+
+// In your services/api.js
+export const purchaseService = {
+  getAll: () => api.get('api/purchases'),
+  getById: (id) => api.get(`api/purchases/${id}`),
+  create: (data) => api.post('api/purchases', data),
+  update: (id, data) => api.put(`api/purchases/${id}`, data),
+  delete: (id) => api.delete(`api/purchases/${id}`),
+};
+
+// services/api.js - Add invoice service
+export const invoiceService = {
+  getAll: () => api.get('api/invoices'),
+  getById: (id) => api.get(`api/invoices/${id}`),
+  create: (data) => api.post('api/invoices', data),
+  delete: (id) => api.delete(`api/invoices/${id}`),
+  getStats: () => api.get('api/invoices/stats'),
 };
