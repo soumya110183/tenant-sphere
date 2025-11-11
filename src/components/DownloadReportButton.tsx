@@ -17,7 +17,7 @@ export default function DownloadReportButton({
   label,
 }: Props) {
   const [loading, setLoading] = useState(false);
-  const base = apiBase || (import.meta.env?.VITE_API_URL ?? (window as any).__API_BASE__) || "http://localhost:5000";
+  const base = apiBase || (import.meta.env?.VITE_API_URL ?? (window as any).__API_BASE__) || "https://billingbackend-1vei.onrender.com";
 
   async function download() {
     try {

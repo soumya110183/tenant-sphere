@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       alert('⚠️ Session expired. Please log in again.');
     }
 
-    navigate('/login');
+    navigate('/');
   };
 
   useEffect(() => {

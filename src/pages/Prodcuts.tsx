@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Package, Plus, Edit, Trash2, Search, X, Save, Tag, DollarSign, BarChart, Layers, Loader2, AlertCircle } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000/api/products';
+const API_BASE_URL = 'https://billingbackend-1vei.onrender.com/api/products';
 
 // Helper function to get auth token
 const getAuthToken = () => {
@@ -478,6 +478,7 @@ const ProductCatalog = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
+  
 
   // Load products on component mount
   useEffect(() => {

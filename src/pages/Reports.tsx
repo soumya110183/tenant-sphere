@@ -340,21 +340,7 @@ const Reports = () => {
           </Select>
 
           {/* Option to export the whole visible report as PDF / PNG */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => exportChartAsPng(fullReportRef, "full-report.png")}
-            className="ml-2"
-          >
-            Download Page (PNG)
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => exportChartAsPdf(fullReportRef, "full-report.pdf")}
-          >
-            Download Page (PDF)
-          </Button>
+          
         </div>
       </div>
 
@@ -368,24 +354,7 @@ const Reports = () => {
             </div>
             <div className="flex items-center gap-2">
               {/* Client-side chart exports */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  exportChartAsPng(revenueRef, "revenue-chart.png")
-                }
-              >
-                Download PNG
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  exportChartAsPdf(revenueRef, "revenue-chart.pdf")
-                }
-              >
-                Download PDF
-              </Button>
+              
             </div>
           </div>
         </CardHeader>
@@ -464,24 +433,7 @@ const Reports = () => {
                 <CardDescription>New tenants per month</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    exportChartAsPng(tenantRef, "tenant-growth.png")
-                  }
-                >
-                  Download PNG
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    exportChartAsPdf(tenantRef, "tenant-growth.pdf")
-                  }
-                >
-                  Download PDF
-                </Button>
+                
               </div>
             </div>
           </CardHeader>
@@ -535,24 +487,6 @@ const Reports = () => {
                 <CardDescription>Tenants by business category</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    exportChartAsPng(categoryRef, "categories.png")
-                  }
-                >
-                  Download PNG
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    exportChartAsPdf(categoryRef, "categories.pdf")
-                  }
-                >
-                  Download PDF
-                </Button>
               </div>
             </div>
           </CardHeader>
