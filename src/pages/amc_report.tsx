@@ -378,12 +378,12 @@ const AMC_report: React.FC = () => {
 
       {/* Debug info - remove after fixing */}
       {loading && (
-       <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading amc report...</p>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading amc report...</p>
+          </div>
         </div>
-      </div>
       )}
 
       {!loading && tenants.length === 0 && (
@@ -588,12 +588,6 @@ const AMC_report: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Tenant ID
-                      </p>
-                      <p className="text-base font-semibold">{selected.id}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
                         Tenant Name
                       </p>
                       <p className="text-base font-semibold">{selected.name}</p>
@@ -629,24 +623,7 @@ const AMC_report: React.FC = () => {
                         {selected.status || "Active"}
                       </Badge>
                     </div>
-                    {selected.created_at && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">
-                          <Calendar className="h-4 w-4 inline mr-1" />
-                          Created Date
-                        </p>
-                        <p className="text-base">
-                          {new Date(selected.created_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
-                        </p>
-                      </div>
-                    )}
+                   
                   </div>
 
                   {/* Modules Information */}
@@ -696,6 +673,26 @@ const AMC_report: React.FC = () => {
                           </p>
                         )}
                       </div>
+
+                      {/* Created Date (full block) - placed below Active Modules */}
+                      {selected.created_at && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium text-muted-foreground mb-1">
+                            <Calendar className="h-4 w-4 inline mr-1" />
+                            Created Date
+                          </p>
+                          <p className="text-base">
+                            {new Date(selected.created_at).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -707,8 +704,6 @@ const AMC_report: React.FC = () => {
                     AMC Billing Details
                   </h4>
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-
-
                     {/* AMC Amount (Auto-calculated based on plan and frequency) */}
                     <div>
                       <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -743,9 +738,7 @@ const AMC_report: React.FC = () => {
                         <SelectContent>
                           <SelectItem value="1_year">1 Year</SelectItem>
                           <SelectItem value="3_year">3 Year</SelectItem>
-                          <SelectItem value="6_year">
-                            6 Year
-                          </SelectItem>
+                          <SelectItem value="6_year">6 Year</SelectItem>
                           <SelectItem value="10_year">10 Year</SelectItem>
                         </SelectContent>
                       </Select>
@@ -971,6 +964,11 @@ const AMC_report: React.FC = () => {
                               {tenant.email && (
                                 <p className="text-xs text-muted-foreground">
                                   Email: {tenant.email}
+                                </p>
+                              )}
+                              {tenant.phone && (
+                                <p className="text-xs text-muted-foreground">
+                                  Phone: {tenant.phone}
                                 </p>
                               )}
                             </div>

@@ -41,6 +41,19 @@ export const tenantAPI = {
 };
 
 // ===============================
+// NOTIFICATIONS (per-tenant JSONB)
+// ===============================
+export const notificationAPI = {
+  // Returns merged preferences (server returns defaults overlaid with DB values)
+  getTenantNotifications: async (tenantId) =>
+    (await api.get(`/notification/${tenantId}/notifications`)).data,
+
+  // Partially update preferences (only whitelisted keys accepted server-side)
+  updateTenantNotifications: async (tenantId, payload) =>
+    (await api.put(`/notification/${tenantId}/notifications`, payload)).data,
+};
+
+// ===============================
 // AUTH API
 // ===============================
 export const authAPI = {

@@ -7,7 +7,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -17,9 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
-import { paymentsAPI, tenantAPI, amcAPI } from "@/services/api";
-import { useToast } from "@/hooks/use-toast";
-import { DollarSign, Calendar, Users } from "lucide-react";
+import { tenantAPI, amcAPI } from "@/services/api";
 
 /* ========= Types ========= */
 type BillingFrequency = "1_year" | "3_year" | "6_year" | "10_year";
@@ -41,14 +38,6 @@ interface Tenant {
   due_date?: string;
   expire_date?: string;
   [key: string]: unknown;
-}
-
-interface Payment {
-  id: string | number;
-  plan?: string;
-  payment_date: string;
-  amount: number | string;
-  status?: string;
 }
 
 interface ExpirationInfo {
@@ -76,7 +65,7 @@ type Buckets = {
   red: Tenant[];
 };
 
-/* ========= Constants & pure helpers (module scope) ========= */
+/* ========= Constants & pure helpers ========= */
 
 // AMC annual rates per plan
 const amcAnnualRates: Record<string, number> = {
@@ -110,7 +99,10 @@ function calculateAmcAmount(
   }
 }
 
-function calculateExpireDate(startDate: string, frequency: BillingFrequency): string {
+function calculateExpireDate(
+  startDate: string,
+  frequency: BillingFrequency
+): string {
   const start = new Date(startDate);
   const expireDate = new Date(start);
   switch (frequency) {
@@ -147,7 +139,10 @@ function daysUntil(isoDate: string): number {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function classifyTenantsByExpiry(tenants: Tenant[], amcs: AMCRecord[]): Buckets {
+function classifyTenantsByExpiry(
+  tenants: Tenant[],
+  amcs: AMCRecord[]
+): Buckets {
   const buckets: Buckets = { green: [], blue: [], orange: [], red: [] };
   for (const t of tenants) {
     const end = getEndDateForTenant(t, amcs);
@@ -162,108 +157,6 @@ function classifyTenantsByExpiry(tenants: Tenant[], amcs: AMCRecord[]): Buckets 
     else buckets.red.push(t);
   }
   return buckets;
-}
-
-/* ========= Helpers for Additional Fields table ========= */
-const HIDDEN_KEYS = new Set<string>([
-  "id",
-  "name",
-  "category",
-  "plan",
-  "status",
-  "created_at",
-  "modules",
-  "email",
-  "phone",
-  "address",
-  "amc_amount",
-  "billing_frequency",
-  "amc_number",
-  "due_date",
-  "expire_date",
-  "_id",
-  "__v",
-]);
-
-function titleCaseKey(k: string): string {
-  return k.replace(/[_\-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function renderValue(v: unknown): string {
-  if (v == null) return "—";
-  if (v instanceof Date) return v.toISOString();
-  if (typeof v === "object") {
-    try {
-      return JSON.stringify(v, null, 2);
-    } catch {
-      return String(v);
-    }
-  }
-  return String(v);
-}
-
-function extractDisplayPairs(full: Tenant): Array<[string, string]> {
-  const pairs: Array<[string, string]> = [];
-  for (const [k, v] of Object.entries(full)) {
-    if (HIDDEN_KEYS.has(k)) continue;
-    pairs.push([titleCaseKey(k), renderValue(v)]);
-  }
-  pairs.sort((a, b) => a[0].localeCompare(b[0]));
-  return pairs;
-}
-
-/* ========= Raw JSON viewer helpers ========= */
-const SENSITIVE_KEYS = ["password", "secret", "token", "apiKey", "api_key", "authorization", "auth"];
-
-function redactDeep(value: any, keys: string[] = SENSITIVE_KEYS): any {
-  if (Array.isArray(value)) return value.map((v) => redactDeep(v, keys));
-  if (value && typeof value === "object") {
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (keys.some((s) => k.toLowerCase().includes(s.toLowerCase()))) {
-        out[k] = "•••";
-      } else {
-        out[k] = redactDeep(v, keys);
-      }
-    }
-    return out;
-  }
-  return value;
-}
-
-function safeStringify(input: unknown, space = 2): string {
-  const seen = new WeakSet();
-  return JSON.stringify(
-    input,
-    (key, val) => {
-      if (typeof val === "object" && val !== null) {
-        if (seen.has(val as object)) return "[Circular]";
-        seen.add(val as object);
-      }
-      return val;
-    },
-    space
-  );
-}
-
-function byteSize(text: string): number {
-  return new Blob([text]).size;
-}
-
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-}
-
-function downloadText(filename: string, text: string) {
-  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 // ==== DetailsPanel helpers (flat key→value rendering) ====
@@ -323,12 +216,11 @@ function flattenObject(input: unknown, prefix = ""): FlatEntries {
 }
 
 function labelForPath(path: string): { title: string; sub?: string } {
-  const last =
-    path.includes(".")
-      ? path.split(".").pop()!
-      : path.includes("[")
-      ? path.replace(/^.*\.(?=\[)/, "")
-      : path;
+  const last = path.includes(".")
+    ? path.split(".").pop()!
+    : path.includes("[")
+    ? path.replace(/^.*\.(?=\[)/, "")
+    : path;
 
   const title = last
     .replace(/[_\-]+/g, " ")
@@ -340,146 +232,6 @@ function labelForPath(path: string): { title: string; sub?: string } {
 
 function isLongText(v: string): boolean {
   return v.length > 160 || /\n/.test(v);
-}
-
-/* ========= Child component: Raw JSON Panel ========= */
-function RawJsonPanel({ data }: { data: any }) {
-  const [pretty, setPretty] = React.useState(true);
-  const [wrap, setWrap] = React.useState(false);
-  const [redact, setRedact] = React.useState(true);
-  const [query, setQuery] = React.useState("");
-  const containerRef = React.useRef<HTMLPreElement | null>(null);
-
-  const computed = React.useMemo(() => {
-    const base = redact ? redactDeep(data) : data;
-    const txt = safeStringify(base, pretty ? 2 : 0);
-    const sizeBytes = byteSize(txt);
-    const lines = pretty ? txt.split("\n").length : 1;
-    return { txt, sizeBytes, lines };
-  }, [data, pretty, redact]);
-
-  const firstIndex = React.useMemo(() => {
-    if (!query.trim()) return -1;
-    return computed.txt.toLowerCase().indexOf(query.toLowerCase());
-  }, [computed.txt, query]);
-
-  React.useEffect(() => {
-    if (firstIndex >= 0 && containerRef.current) {
-      const before = computed.txt.slice(0, firstIndex);
-      const approxLine = before.split("\n").length - 1;
-      const lineHeightPx = 18;
-      containerRef.current.scrollTop = Math.max(approxLine * lineHeightPx - 60, 0);
-    }
-  }, [firstIndex, computed.txt]);
-
-  const onCopy = async () => {
-    await copyToClipboard(computed.txt);
-  };
-
-  const onDownload = () => {
-    const name =
-      typeof data?.name === "string" && data.name.trim().length
-        ? data.name.trim().toLowerCase().replace(/\s+/g, "-")
-        : "tenant";
-    const idPart = data?.id != null ? `-${String(data.id)}` : "";
-    downloadText(`${name}${idPart}-payload.json`, computed.txt);
-  };
-
-  return (
-    <div className="mt-6 pt-6 border-t">
-      <details className="rounded-md bg-muted/30">
-        <summary className="cursor-pointer text-sm font-medium px-3 py-2">
-          Raw JSON payload
-        </summary>
-
-        <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5"
-                checked={pretty}
-                onChange={(e) => setPretty(e.target.checked)}
-              />
-              Pretty
-            </label>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5"
-                checked={wrap}
-                onChange={(e) => setWrap(e.target.checked)}
-              />
-              Wrap
-            </label>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5"
-                checked={redact}
-                onChange={(e) => setRedact(e.target.checked)}
-              />
-              Redact sensitive keys
-            </label>
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
-            <span>{(computed.sizeBytes / 1024).toFixed(2)} KB</span>
-            <span>•</span>
-            <span>
-              {computed.lines} {computed.lines === 1 ? "line" : "lines"}
-            </span>
-          </div>
-
-          <div className="w-full flex flex-wrap items-center justify-between gap-2 mt-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search in JSON…"
-                className="h-8 w-56 rounded-md border bg-background px-2 text-sm"
-              />
-              {query && (
-                <span className="text-xs text-muted-foreground">
-                  {firstIndex >= 0 ? "Match found" : "No match"}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={onCopy} className="h-8 rounded-md border px-3 text-xs">
-                Copy JSON
-              </button>
-              <button type="button" onClick={onDownload} className="h-8 rounded-md border px-3 text-xs">
-                Download
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 rounded-md border bg-background w-full">
-            <pre
-              ref={containerRef}
-              className={`text-xs leading-[1.15rem] p-3 max-h-[420px] overflow-auto ${
-                wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"
-              }`}
-            >
-              {firstIndex >= 0 ? (
-                <>
-                  {computed.txt.slice(0, firstIndex)}
-                  <mark className="bg-yellow-200">
-                    {computed.txt.slice(firstIndex, firstIndex + query.length)}
-                  </mark>
-                  {computed.txt.slice(firstIndex + query.length)}
-                </>
-              ) : (
-                computed.txt
-              )}
-            </pre>
-          </div>
-        </div>
-      </details>
-    </div>
-  );
 }
 
 /* ========= Child component: Details Panel (TOP-LEVEL) ========= */
@@ -497,14 +249,28 @@ function DetailsPanel({
   const rows = React.useMemo(() => {
     const flat = flattenObject(data);
     flat.sort((a, b) => a.path.localeCompare(b.path));
-
     const visible: typeof flat = [];
     const hidden: typeof flat = [];
+
+    // Avoid accidentally displaying sensitive values (passwords, tokens, API keys).
+    // We treat any path that contains these keywords as sensitive and omit them.
+    const sensitiveRe =
+      /pass(word|wd)?|secret|token|api[_-]?key|auth(_|-)?token|credential/i;
+
     for (const entry of flat) {
+      // skip sensitive entries entirely
+      if (sensitiveRe.test(entry.path)) continue;
+
+      // also skip bare `id` fields (e.g. `id`, `tenant.id`, `modules[0].id`)
+      const lastPart = entry.path.split(".").pop() ?? entry.path;
+      const lastKey = lastPart.replace(/\[\d+\]$/, "");
+      if (String(lastKey).toLowerCase() === "id") continue;
+
       const rootKey = entry.path.split(".")[0].split("[")[0];
       if (hiddenByDefault.has(rootKey)) hidden.push(entry);
       else visible.push(entry);
     }
+
     return { visible, hidden };
   }, [data, hiddenByDefault]);
 
@@ -530,13 +296,18 @@ function DetailsPanel({
     if (typeof value === "string") {
       const formatted = formatMaybeDate(value);
       if (isLongText(formatted)) {
-        return <pre className="text-xs whitespace-pre-wrap leading-snug">{formatted}</pre>;
+        return (
+          <pre className="text-xs whitespace-pre-wrap leading-snug">
+            {formatted}
+          </pre>
+        );
       }
       return <span>{formatted}</span>;
     }
 
     if (Array.isArray(value)) {
-      if (value.length === 0) return <span className="text-muted-foreground">[]</span>;
+      if (value.length === 0)
+        return <span className="text-muted-foreground">[]</span>;
 
       const simple = value.every(
         (v) => v == null || ["string", "number", "boolean"].includes(typeof v)
@@ -573,7 +344,9 @@ function DetailsPanel({
       <tr key={path} className="border-t">
         <td className="px-3 py-2 align-top w-[28%]">
           <div className="font-medium">{t}</div>
-          {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+          {sub && (
+            <div className="text-[11px] text-muted-foreground">{sub}</div>
+          )}
         </td>
         <td className="px-3 py-2 align-top">{renderValueNode(value)}</td>
       </tr>
@@ -626,14 +399,10 @@ const AMC_notification: React.FC = () => {
   const [selected, setSelected] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const [payments, setPayments] = useState<Payment[] | null>(null);
-  const [paymentsLoading, setPaymentsLoading] = useState<boolean>(false);
-
-  const { toast } = useToast();
-
   // AMC editable fields
   const [amcAmount, setAmcAmount] = useState<string>("");
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>("1_year");
+  const [billingFrequency, setBillingFrequency] =
+    useState<BillingFrequency>("1_year");
   const [amcNumber, setAmcNumber] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
   const [expireDate, setExpireDate] = useState<string>("");
@@ -646,8 +415,11 @@ const AMC_notification: React.FC = () => {
 
   // Full tenant payload by id
   const [selectedFull, setSelectedFull] = useState<Tenant | null>(null);
-  const [selectedFullLoading, setSelectedFullLoading] = useState<boolean>(false);
-  const [selectedFullError, setSelectedFullError] = useState<string | null>(null);
+  const [selectedFullLoading, setSelectedFullLoading] =
+    useState<boolean>(false);
+  const [selectedFullError, setSelectedFullError] = useState<string | null>(
+    null
+  );
 
   // Load tenants on mount
   useEffect(() => {
@@ -657,7 +429,7 @@ const AMC_notification: React.FC = () => {
         const data: unknown = await tenantAPI.getTenants();
         const tenantsList = Array.isArray(data)
           ? (data as Tenant[])
-          : ((data as any)?.tenants ?? []);
+          : (data as any)?.tenants ?? [];
         setTenants(tenantsList);
         if (tenantsList.length > 0) setSelected(tenantsList[0]);
       } catch {
@@ -671,32 +443,6 @@ const AMC_notification: React.FC = () => {
     void loadTenants();
   }, []);
 
-  // Load payments when selected tenant changes
-  useEffect(() => {
-    const loadPayments = async () => {
-      if (!selected?.id) {
-        setPayments(null);
-        return;
-      }
-      setPaymentsLoading(true);
-      try {
-        const res: any = await paymentsAPI.getPaymentsByTenant(String(selected.id));
-        const list: Payment[] = (res?.payments ?? res ?? []) as Payment[];
-        list.sort((a, b) => {
-          const da = new Date(a.payment_date).getTime();
-          const db = new Date(b.payment_date).getTime();
-          return db - da;
-        });
-        setPayments(Array.isArray(list) ? list : []);
-      } catch {
-        setPayments([]);
-      } finally {
-        setPaymentsLoading(false);
-      }
-    };
-    void loadPayments();
-  }, [selected]);
-
   // Load full tenant details on selection
   useEffect(() => {
     const loadFull = async () => {
@@ -708,11 +454,14 @@ const AMC_notification: React.FC = () => {
       setSelectedFullError(null);
       try {
         const res: any = await tenantAPI.getTenant(String(selected.id));
-        const full: Tenant = (res && (res.tenant ?? res)) || (selected as Tenant);
+        const full: Tenant =
+          (res && (res.tenant ?? res)) || (selected as Tenant);
         setSelectedFull(full);
       } catch (e: any) {
         setSelectedFull(selected as Tenant);
-        setSelectedFullError(e?.message ?? "Failed to load full tenant details");
+        setSelectedFullError(
+          e?.message ?? "Failed to load full tenant details"
+        );
       } finally {
         setSelectedFullLoading(false);
       }
@@ -727,20 +476,27 @@ const AMC_notification: React.FC = () => {
       const amcs: AMCRecord[] = response?.amcs || [];
       setAllAmcs(amcs);
 
-      const tenantAMC = amcs.find((amc) => String(amc.tenat_amcid) === String(tenantId));
+      const tenantAMC = amcs.find(
+        (amc) => String(amc.tenat_amcid) === String(tenantId)
+      );
 
       if (tenantAMC) {
         setAmcRecord(tenantAMC);
         if (tenantAMC.amount != null) setAmcAmount(String(tenantAMC.amount));
-        if (tenantAMC.billing_frequency) setBillingFrequency(tenantAMC.billing_frequency);
+        if (tenantAMC.billing_frequency)
+          setBillingFrequency(tenantAMC.billing_frequency);
         if (tenantAMC.start_date) setDueDate(tenantAMC.start_date);
         if (tenantAMC.end_date) setExpireDate(tenantAMC.end_date);
       } else {
         setAmcRecord(null);
         const startDate =
-          selected?.created_at?.split("T")[0] || new Date().toISOString().split("T")[0];
+          selected?.created_at?.split("T")[0] ||
+          new Date().toISOString().split("T")[0];
         setDueDate(startDate);
-        const calculatedExpire = calculateExpireDate(startDate, billingFrequency);
+        const calculatedExpire = calculateExpireDate(
+          startDate,
+          billingFrequency
+        );
         setExpireDate(calculatedExpire);
       }
     } catch {
@@ -775,11 +531,17 @@ const AMC_notification: React.FC = () => {
   useEffect(() => {
     if (!selected) return;
 
-    const calculatedAmount = calculateAmcAmount(selected.plan, billingFrequency);
+    const calculatedAmount = calculateAmcAmount(
+      selected.plan,
+      billingFrequency
+    );
     setAmcAmount(String(calculatedAmount));
 
     if (dueDate) {
-      const calculatedExpireDate = calculateExpireDate(dueDate, billingFrequency);
+      const calculatedExpireDate = calculateExpireDate(
+        dueDate,
+        billingFrequency
+      );
       setExpireDate(calculatedExpireDate);
     }
   }, [billingFrequency, selected, dueDate]);
@@ -797,46 +559,13 @@ const AMC_notification: React.FC = () => {
     [tenants, allAmcs]
   );
 
-  const getTenantAMC = (tenantId: Tenant["id"]): AMCRecord | undefined => {
-    return allAmcs.find((amc) => String(amc.tenat_amcid) === String(tenantId));
-  };
-
-  const isExpired = (tenant: Tenant): boolean => {
-    const tenantAMC = getTenantAMC(tenant.id);
-    if (tenantAMC?.expiration_info?.is_expired !== undefined) {
-      return Boolean(tenantAMC.expiration_info.is_expired);
-    }
-    const dateStr = tenantAMC?.end_date ?? tenant.expire_date;
-    if (!dateStr) return false;
-    const expire = new Date(dateStr);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return expire < today;
-  };
-
-  const isActive = (tenant: Tenant): boolean => {
-    const tenantAMC = getTenantAMC(tenant.id);
-    if (tenantAMC?.expiration_info?.is_expired !== undefined) {
-      return !tenantAMC.expiration_info.is_expired;
-    }
-    const dateStr = tenantAMC?.end_date ?? tenant.expire_date;
-    if (!dateStr) return true;
-    const expire = new Date(dateStr);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return expire >= today;
-  };
-
-  const getExpirationStatus = (tenant: Tenant): string | null => {
-    const tenantAMC = getTenantAMC(tenant.id);
-    return tenantAMC?.expiration_info?.status_message ?? null;
-  };
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">AMC Notification </h1>
-        <p className="text-muted-foreground mt-1">View tenant plans and details</p>
+        <p className="text-muted-foreground mt-1">
+          View tenant plans and details
+        </p>
       </div>
 
       {/* Expiry Overview */}
@@ -844,13 +573,15 @@ const AMC_notification: React.FC = () => {
         {/* Green */}
         <Card className="border border-green-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-green-700">&gt; 100 days</CardTitle>
+            <CardTitle className="text-green-700">Active </CardTitle>
             <CardDescription>Healthy renewals</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge className="bg-green-600">{expiryBuckets.green.length}</Badge>
+              <Badge className="bg-green-600">
+                {expiryBuckets.green.length}
+              </Badge>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.green.length === 0 && (
@@ -860,7 +591,10 @@ const AMC_notification: React.FC = () => {
                 const end = getEndDateForTenant(t, allAmcs);
                 const label = end ? `${daysUntil(end)}d` : "No end date";
                 return (
-                  <div key={String(t.id)} className="p-2 rounded border border-green-100">
+                  <div
+                    key={String(t.id)}
+                    className="p-2 rounded border border-green-100"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
                       <Badge variant="outline" className="text-xs">
@@ -884,8 +618,7 @@ const AMC_notification: React.FC = () => {
           </CardContent>
         </Card>
 
-
- {/* blue */}
+        {/* blue */}
         <Card className="border border-blue-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
             <CardTitle className="text-blue-700">11 - 100 days</CardTitle>
@@ -904,7 +637,10 @@ const AMC_notification: React.FC = () => {
                 const end = getEndDateForTenant(t, allAmcs);
                 const label = end ? `${daysUntil(end)}d` : "No end date";
                 return (
-                  <div key={String(t.id)} className="p-2 rounded border border-blue-100">
+                  <div
+                    key={String(t.id)}
+                    className="p-2 rounded border border-blue-100"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
                       <Badge variant="outline" className="text-xs">
@@ -928,7 +664,6 @@ const AMC_notification: React.FC = () => {
           </CardContent>
         </Card>
 
-
         {/* Orange */}
         <Card className="border border-amber-500/40 shadow-sm min-h-[450px] max-h-[550px]">
           <CardHeader className="pb-2">
@@ -938,7 +673,9 @@ const AMC_notification: React.FC = () => {
           <CardContent>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge className="bg-amber-600">{expiryBuckets.orange.length}</Badge>
+              <Badge className="bg-amber-600">
+                {expiryBuckets.orange.length}
+              </Badge>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
               {expiryBuckets.orange.length === 0 && (
@@ -948,7 +685,10 @@ const AMC_notification: React.FC = () => {
                 const end = getEndDateForTenant(t, allAmcs);
                 const label = end ? `${daysUntil(end)}d` : "No end date";
                 return (
-                  <div key={String(t.id)} className="p-2 rounded border border-amber-100">
+                  <div
+                    key={String(t.id)}
+                    className="p-2 rounded border border-amber-100"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
                       <Badge variant="outline" className="text-xs">
@@ -991,7 +731,10 @@ const AMC_notification: React.FC = () => {
                 const end = getEndDateForTenant(t, allAmcs);
                 const label = end ? `${daysUntil(end)}d` : "Expired";
                 return (
-                  <div key={String(t.id)} className="p-2 rounded border border-red-100">
+                  <div
+                    key={String(t.id)}
+                    className="p-2 rounded border border-red-100"
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{t.name}</span>
                       <Badge variant="outline" className="text-xs">
@@ -1037,7 +780,9 @@ const AMC_notification: React.FC = () => {
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Select Tenant</CardTitle>
-                <CardDescription>Choose a tenant to view subscription details</CardDescription>
+                <CardDescription>
+                  Choose a tenant to view subscription details
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -1045,7 +790,9 @@ const AMC_notification: React.FC = () => {
                     <Select
                       value={selected?.id?.toString() || ""}
                       onValueChange={(value) => {
-                        const tenant = tenants.find((t) => String(t.id) === value);
+                        const tenant = tenants.find(
+                          (t) => String(t.id) === value
+                        );
                         if (tenant) setSelected(tenant);
                       }}
                     >
@@ -1054,7 +801,10 @@ const AMC_notification: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {tenants.map((tenant) => (
-                          <SelectItem key={String(tenant.id)} value={String(tenant.id)}>
+                          <SelectItem
+                            key={String(tenant.id)}
+                            value={String(tenant.id)}
+                          >
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{tenant.name}</span>
                               <span className="text-muted-foreground">·</span>
@@ -1093,9 +843,14 @@ const AMC_notification: React.FC = () => {
               <CardContent>
                 <div className="space-y-3">
                   {Object.keys(totalByPlan).map((plan) => (
-                    <div key={plan} className="flex items-center justify-between">
+                    <div
+                      key={plan}
+                      className="flex items-center justify-between"
+                    >
                       <div className="font-medium capitalize">{plan}</div>
-                      <div className="text-muted-foreground">{totalByPlan[plan]}</div>
+                      <div className="text-muted-foreground">
+                        {totalByPlan[plan]}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1111,13 +866,18 @@ const AMC_notification: React.FC = () => {
                   <div>
                     <CardTitle>All Tenant Details</CardTitle>
                     <CardDescription>
-                      Full payload for <span className="font-medium">{selected.name}</span>
+                      Full payload for{" "}
+                      <span className="font-medium">{selected.name}</span>
                     </CardDescription>
                   </div>
-                  {selectedFullLoading && <Badge variant="outline">Loading…</Badge>}
+                  {selectedFullLoading && (
+                    <Badge variant="outline">Loading…</Badge>
+                  )}
                 </div>
                 {selectedFullError && (
-                  <p className="text-sm text-red-600 mt-2">{selectedFullError}</p>
+                  <p className="text-sm text-red-600 mt-2">
+                    {selectedFullError}
+                  </p>
                 )}
               </CardHeader>
               <CardContent>
@@ -1126,28 +886,50 @@ const AMC_notification: React.FC = () => {
                     {/* Key facts */}
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Name</p>
-                        <p className="font-semibold">{String(selectedFull.name)}</p>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Name
+                        </p>
+                        <p className="font-semibold">
+                          {String(selectedFull.name)}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Category</p>
-                        <Badge variant="secondary">{String(selectedFull.category ?? "—")}</Badge>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Category
+                        </p>
+                        <Badge variant="secondary">
+                          {String(selectedFull.category ?? "—")}
+                        </Badge>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Plan</p>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Plan
+                        </p>
                         <Badge>{String(selectedFull.plan ?? "—")}</Badge>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Status</p>
-                        <Badge variant={selectedFull.status === "active" ? "default" : "secondary"}>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Status
+                        </p>
+                        <Badge
+                          variant={
+                            selectedFull.status === "active"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
                           {String(selectedFull.status ?? "Active")}
                         </Badge>
                       </div>
                       {selectedFull.created_at && (
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Created</p>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            Created
+                          </p>
                           <p>
-                            {new Date(String(selectedFull.created_at)).toLocaleDateString("en-US", {
+                            {new Date(
+                              String(selectedFull.created_at)
+                            ).toLocaleDateString("en-US", {
                               year: "numeric",
                               month: "long",
                               day: "numeric",
@@ -1159,42 +941,60 @@ const AMC_notification: React.FC = () => {
 
                     {/* Modules */}
                     <div className="mt-6">
-                      <p className="text-sm font-medium text-muted-foreground mb-2">Modules</p>
+                      <p className="text-sm font-medium text-muted-foreground mb-2">
+                        Modules
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         {selectedFull.modules ? (
                           Array.isArray(selectedFull.modules) ? (
                             selectedFull.modules.length > 0 ? (
                               selectedFull.modules.map((m: any) => (
-                                <Badge key={String(m)} variant="outline" className="text-xs">
+                                <Badge
+                                  key={String(m)}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
                                   {String(m)}
                                 </Badge>
                               ))
                             ) : (
-                              <span className="text-sm text-muted-foreground">None</span>
+                              <span className="text-sm text-muted-foreground">
+                                None
+                              </span>
                             )
                           ) : (
-                            Object.entries(selectedFull.modules as Record<string, boolean>)
+                            Object.entries(
+                              selectedFull.modules as Record<string, boolean>
+                            )
                               .filter(([, on]) => on)
                               .map(([k]) => (
-                                <Badge key={k} variant="outline" className="text-xs capitalize">
+                                <Badge
+                                  key={k}
+                                  variant="outline"
+                                  className="text-xs capitalize"
+                                >
                                   {k}
                                 </Badge>
                               ))
                           )
                         ) : (
-                          <span className="text-sm text-muted-foreground">None</span>
+                          <span className="text-sm text-muted-foreground">
+                            None
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    
-
-                    {/* Technical flat view + JSON */}
-                    <DetailsPanel data={selectedFull} title="Tenant Details (all fields)" />
-                    
+                    {/* Technical flat view */}
+                    <DetailsPanel
+                      data={selectedFull}
+                      title="Tenant Details (all fields)"
+                    />
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No tenant selected.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No tenant selected.
+                  </p>
                 )}
               </CardContent>
             </Card>
