@@ -83,12 +83,13 @@ const TenantDashboard = () => {
 
       // Load inventory
       const inventoryResponse = await inventoryService.getAll();
-      const inventory = inventoryResponse.data?.data || [];
-
+      const inventory = inventoryResponse.data || [];
+      
       // Load purchases for additional stats
       const purchasesResponse = await purchaseService.getAll();
       const purchases = purchasesResponse.data?.data || [];
-
+      
+      console.log("test "+inventoryResponse)
       console.log("Dashboard data loaded:", {
         invoices: invoices.length,
         inventory: inventory.length,

@@ -334,7 +334,7 @@ onChange={(e) => {
           required
           min="1"
           className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-          value={formData.supplier_id || 1}
+          value={formData.supplier_id || 2}
           onChange={(e) => setFormData({...formData, supplier_id: parseInt(e.target.value) || 1})}
         />
       </div>
@@ -1554,13 +1554,13 @@ const handleSubmit = async (e) => {
         break;
     }
   };
-
+console.log("Products data:", products);
   const lowStockItems = products.filter(item => getStockStatus(item.quantity, item.reorderLevel) === 'low').length;
   const totalValue = products.reduce((sum, item) => sum + (item.quantity * item.selling_price), 0);
   const totalRevenue = sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
 
 const stats = [
-  { label: 'Total Products', value: products.length, icon: Package },
+  { label: 'Total Items', value: products.length, icon: Package },
   { label: 'Low Stock Items', value: lowStockItems, icon: AlertTriangle, color: 'text-red-500' },
   { label: 'Total Stock Value', value: `AED ${totalValue.toLocaleString()}`, icon: TrendingUp, color: 'text-green-500' },
   { label: 'Total Sales Today', value: `AED ${totalRevenue.toLocaleString()}`, icon: ShoppingCart, color: 'text-blue-500' },
