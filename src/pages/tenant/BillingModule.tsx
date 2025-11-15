@@ -91,22 +91,23 @@ const SupermarketBilling = () => {
   };
 
   const getMatchingProducts = (term) => {
-    if (!term || term.length < 1) return [];
-    const lower = term.toLowerCase();
-    
-    console.log("Searching for:", term);
-    
-    const matches = products.filter(
+  if (!term || term.length < 1) return [];
+  const lower = term.toLowerCase();
+
+  console.log("Searching for:", term);
+
+  const matches = products
+    .filter(
       (p) =>
         p.name?.toLowerCase().includes(lower) ||
-        p.barcode?.toLowerCase().includes(lower) ||
-        p.sku?.toLowerCase().includes(lower) ||
-        p.id?.toString().includes(lower)
-    ).slice(0, 8);
-    
-    console.log("Found matches:", matches);
-    return matches;
-  };
+        p.barcode?.toLowerCase().includes(lower)
+    )
+    .slice(0, 8);
+
+  console.log("Found matches:", matches);
+  return matches;
+};
+
 
   const handleItemCodeChange = (index, value) => {
     const updated = [...rows];
@@ -131,13 +132,14 @@ const SupermarketBilling = () => {
     }
 
     // ✅ FIXED: Auto-fill when exact match found (barcode, SKU, or name)
-    const exactMatch = products.find(
-      (p) =>
-        p.name?.toLowerCase() === value.toLowerCase() ||
-        p.barcode?.toLowerCase() === value.toLowerCase() ||
-        p.sku?.toLowerCase() === value.toLowerCase() ||
-        p.id?.toString() === value
-    );
+ const exactMatch = products.find(
+  (p) =>
+    p.name?.toLowerCase() === value.toLowerCase() ||
+    p.barcode?.toLowerCase() === value.toLowerCase() ||
+    p.sku?.toLowerCase() === value.toLowerCase() ||
+    p.id?.toString() === value
+);
+
 
     console.log("Exact match search for:", value, "Found:", exactMatch);
 
