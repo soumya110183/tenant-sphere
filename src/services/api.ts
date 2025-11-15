@@ -215,6 +215,14 @@ export const userAPI = {
       lastLogin: "2024-10-22",
     },
   ],
+  // Get a single user by id
+  getUser: async (id) => (await api.get(`/users/${id}`)).data,
+  // Update a user (by id) - backend should accept partial user payload
+  updateUser: async (id, payload) =>
+    (await api.put(`/users/${id}`, payload)).data,
+  // Change password: backend should verify current password then update to new one
+  changePassword: async (id, payload) =>
+    (await api.post(`/settings/${id}/change-password`, payload)).data,
 };
 
 // ===============================
@@ -241,6 +249,65 @@ export const amcAPI = {
   deleteAMC: async (id) => (await api.delete(`/amc/${id}`)).data,
 };
 
+// ===============================
+// PLANS API
+// ===============================
+// ===============================
+// PLANS API
+// ===============================
+export const planAPI = {
+  /**
+   * GET /plans or /plans?name=...
+   * - if `name` provided will call /plans?name=<encoded>
+   * - returns response.data (same pattern as other APIs)
+   *
+   * Example responses your controllers send:
+   *  { plans: [...] }  OR  an array [...]
+   */
+  getPlans: async (name) => {
+    const url = name ? `/plans?name=${encodeURIComponent(name)}` : "/plans";
+    const res = await api.get(url);
+    return res.data;
+  },
+
+  /**
+   * POST /plans
+   * payload example:
+   * {
+   *   name: "Basic",
+   *   amount: 1000,
+   *   billing: true,
+   *   reports: false,
+   *   inventory: false,
+   *   user: 1,
+   *   amc_amount: 100
+   * }
+   */
+  createPlan: async (payload) => {
+    const res = await api.post("/plans", payload);
+    return res.data;
+  },
+
+  /**
+   * PUT /plans/:name
+   * Upsert behaviour in your backend: updates if exists else inserts.
+   * name should be the plan identifier (string).
+   */
+  upsertPlanByName: async (name, payload) => {
+    const res = await api.put(`/plans/${encodeURIComponent(name)}`, payload);
+    return res.data;
+  },
+
+  /**
+   * DELETE /plans/:name
+   * Convenience: remove a plan by name if your backend supports deletion.
+   */
+  deletePlanByName: async (name) => {
+    const res = await api.delete(`/plans/${encodeURIComponent(name)}`);
+    return res.data;
+  },
+};
+export const plansAPI = planAPI;
 // ===============================
 // PRODUCTS API
 // ===============================

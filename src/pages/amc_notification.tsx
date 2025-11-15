@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
 import tenantsData from "@/data/tenants.json";
 import { tenantAPI, amcAPI } from "@/services/api";
 
@@ -568,195 +569,204 @@ const AMC_notification: React.FC = () => {
         </p>
       </div>
 
-      {/* Expiry Overview */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
-        {/* Green */}
-        <Card className="border border-green-500/40 shadow-sm min-h-[450px] max-h-[550px]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-green-700">Active </CardTitle>
-            <CardDescription>Healthy renewals</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge className="bg-green-600">
-                {expiryBuckets.green.length}
-              </Badge>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
-              {expiryBuckets.green.length === 0 && (
-                <p className="text-sm text-muted-foreground">No tenants</p>
-              )}
-              {expiryBuckets.green.map((t) => {
-                const end = getEndDateForTenant(t, allAmcs);
-                const label = end ? `${daysUntil(end)}d` : "No end date";
-                return (
-                  <div
-                    key={String(t.id)}
-                    className="p-2 rounded border border-green-100"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {label}
-                      </Badge>
-                    </div>
-                    {end && (
-                      <p className="text-xs text-muted-foreground">
-                        Expires{" "}
-                        {new Date(end).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Redesigned Expiry Overview - card list layout */}
+      <div className="space-y-6">
+        {[
+          {
+            key: "green",
+            title: "Active & Healthy",
+            description: "Contracts in good standing",
+            icon: CheckCircle2,
+            iconColor: "text-emerald-500",
+            gradientFrom: "from-emerald-50",
+            gradientTo: "to-green-50",
+            borderColor: "border-emerald-200",
+            badgeColor: "bg-gradient-to-r from-emerald-500 to-green-600",
+            itemBorder: "border-emerald-100",
+            itemBg: "bg-gradient-to-br from-white to-emerald-50/30",
+            titleColor: "text-emerald-700",
+            shadowColor: "shadow-emerald-100",
+          },
+          {
+            key: "blue",
+            title: "Upcoming Renewals",
+            description: "11-100 days remaining",
+            icon: Clock,
+            iconColor: "text-blue-500",
+            gradientFrom: "from-blue-50",
+            gradientTo: "to-cyan-50",
+            borderColor: "border-blue-200",
+            badgeColor: "bg-gradient-to-r from-blue-500 to-cyan-600",
+            itemBorder: "border-blue-100",
+            itemBg: "bg-gradient-to-br from-white to-blue-50/30",
+            titleColor: "text-blue-700",
+            shadowColor: "shadow-blue-100",
+          },
+          {
+            key: "orange",
+            title: "Urgent Action",
+            description: "1-10 days remaining",
+            icon: AlertTriangle,
+            iconColor: "text-amber-500",
+            gradientFrom: "from-amber-50",
+            gradientTo: "to-orange-50",
+            borderColor: "border-amber-200",
+            badgeColor: "bg-gradient-to-r from-amber-500 to-orange-600",
+            itemBorder: "border-amber-100",
+            itemBg: "bg-gradient-to-br from-white to-amber-50/30",
+            titleColor: "text-amber-700",
+            shadowColor: "shadow-amber-100",
+          },
+          {
+            key: "red",
+            title: "Expired",
+            description: "Immediate attention required",
+            icon: XCircle,
+            iconColor: "text-red-500",
+            gradientFrom: "from-red-50",
+            gradientTo: "to-rose-50",
+            borderColor: "border-red-200",
+            badgeColor: "bg-gradient-to-r from-red-500 to-rose-600",
+            itemBorder: "border-red-100",
+            itemBg: "bg-gradient-to-br from-white to-red-50/30",
+            titleColor: "text-red-700",
+            shadowColor: "shadow-red-100",
+          },
+        ].map((config) => {
+          const Icon = config.icon as any;
+          const tenants = (expiryBuckets as any)[config.key] || [];
 
-        {/* blue */}
-        <Card className="border border-blue-500/40 shadow-sm min-h-[450px] max-h-[550px]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-blue-700">11 - 100 days</CardTitle>
-            <CardDescription>Upcoming Renewals</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge className="bg-blue-600">{expiryBuckets.blue.length}</Badge>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
-              {expiryBuckets.blue.length === 0 && (
-                <p className="text-sm text-muted-foreground">No tenants</p>
-              )}
-              {expiryBuckets.blue.map((t) => {
-                const end = getEndDateForTenant(t, allAmcs);
-                const label = end ? `${daysUntil(end)}d` : "No end date";
-                return (
-                  <div
-                    key={String(t.id)}
-                    className="p-2 rounded border border-blue-100"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {label}
-                      </Badge>
+          return (
+            <Card
+              key={config.key}
+              className={`border-2 ${config.borderColor} ${config.shadowColor} shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden bg-gradient-to-r ${config.gradientFrom} ${config.gradientTo}`}
+            >
+              <div className="flex flex-col lg:flex-row">
+                <div className="lg:w-64 xl:w-80 p-6 border-r-2 border-white/50">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div
+                      className={`p-3 rounded-xl bg-white shadow-sm ${config.iconColor}`}
+                    >
+                      <Icon className="w-7 h-7" />
                     </div>
-                    {end && (
-                      <p className="text-xs text-muted-foreground">
-                        Expires{" "}
-                        {new Date(end).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    )}
+                    <Badge
+                      className={`${config.badgeColor} text-white px-4 py-1.5 shadow-md text-base`}
+                    >
+                      {tenants.length}{" "}
+                      {tenants.length === 1 ? "Tenant" : "Tenants"}
+                    </Badge>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                  <div>
+                    <CardTitle
+                      className={`text-2xl font-bold ${config.titleColor} mb-2`}
+                    >
+                      {config.title}
+                    </CardTitle>
+                    <CardDescription className="text-sm font-medium text-slate-600">
+                      {config.description}
+                    </CardDescription>
+                  </div>
+                </div>
 
-        {/* Orange */}
-        <Card className="border border-amber-500/40 shadow-sm min-h-[450px] max-h-[550px]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-amber-700">1–10 days</CardTitle>
-            <CardDescription>Urgent reminders</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge className="bg-amber-600">
-                {expiryBuckets.orange.length}
-              </Badge>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
-              {expiryBuckets.orange.length === 0 && (
-                <p className="text-sm text-muted-foreground">No tenants</p>
-              )}
-              {expiryBuckets.orange.map((t) => {
-                const end = getEndDateForTenant(t, allAmcs);
-                const label = end ? `${daysUntil(end)}d` : "No end date";
-                return (
-                  <div
-                    key={String(t.id)}
-                    className="p-2 rounded border border-amber-100"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {label}
-                      </Badge>
-                    </div>
-                    {end && (
-                      <p className="text-xs text-muted-foreground">
-                        Expires{" "}
-                        {new Date(end).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                <div className="flex-1 p-6">
+                  <div className="max-h-48 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
+                    {tenants.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                          <Icon className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <p className="text-sm text-slate-500 font-medium">
+                          No tenants in this category
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+                        {tenants.map((tenant: any) => {
+                          const end = getEndDateForTenant(tenant, allAmcs);
+                          const days = end ? daysUntil(end) : null;
+                          const label =
+                            days != null
+                              ? days >= 0
+                                ? `${days}d left`
+                                : `${Math.abs(days)}d overdue`
+                              : "No end date";
 
-        {/* Red */}
-        <Card className="border border-red-500/40 shadow-sm min-h-[450px] max-h-[550px]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-red-700">Expired</CardTitle>
-            <CardDescription>Action required</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-muted-foreground">Tenants</span>
-              <Badge variant="destructive">{expiryBuckets.red.length}</Badge>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-2 text-left pr-2 mr-1">
-              {expiryBuckets.red.length === 0 && (
-                <p className="text-sm text-muted-foreground">No tenants</p>
-              )}
-              {expiryBuckets.red.map((t) => {
-                const end = getEndDateForTenant(t, allAmcs);
-                const label = end ? `${daysUntil(end)}d` : "Expired";
-                return (
-                  <div
-                    key={String(t.id)}
-                    className="p-2 rounded border border-red-100"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t.name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {label}
-                      </Badge>
-                    </div>
-                    {end && (
-                      <p className="text-xs text-muted-foreground">
-                        Expired{" "}
-                        {new Date(end).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
+                          return (
+                            <div
+                              key={String(tenant.id)}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                // find canonical tenant object from tenants list and select it
+                                const match =
+                                  tenants && tenants.length
+                                    ? tenants.find(
+                                        (t: any) =>
+                                          String(t.id) === String(tenant.id)
+                                      )
+                                    : null;
+                                if (match) {
+                                  setSelected(match as Tenant);
+                                } else {
+                                  setSelected(tenant as Tenant);
+                                }
+                                // scroll details into view when selected
+                                try {
+                                  document
+                                    .getElementById("tenant-details")
+                                    ?.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "start",
+                                    });
+                                } catch {}
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  (e.target as HTMLElement).click();
+                                }
+                              }}
+                              className={`p-3 rounded-lg border-2 ${config.itemBorder} ${config.itemBg} backdrop-blur-sm hover:scale-[1.02] transition-transform duration-200 shadow-sm cursor-pointer`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-slate-800 truncate pr-2">
+                                  {tenant.name}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs font-bold border-slate-300 bg-white/80 shrink-0"
+                                >
+                                  {label}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-slate-600">
+                                <Clock className="w-3 h-3" />
+                                <span>
+                                  {label.includes("overdue")
+                                    ? "Expired"
+                                    : "Expires"}{" "}
+                                  {end
+                                    ? new Date(end).toLocaleDateString(
+                                        "en-US",
+                                        {
+                                          year: "numeric",
+                                          month: "short",
+                                          day: "numeric",
+                                        }
+                                      )
+                                    : "—"}
+                                </span>
+                              </div>
+                            </div>
+                          );
                         })}
-                      </p>
+                      </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {loading && (
@@ -860,7 +870,7 @@ const AMC_notification: React.FC = () => {
 
           {/* All Tenant Details (auto-generated from full record) */}
           {selected && (
-            <Card>
+            <Card id="tenant-details">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>

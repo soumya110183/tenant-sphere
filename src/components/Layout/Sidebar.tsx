@@ -31,8 +31,8 @@ const superAdminNavigation: NavItem[] = [
   { name: "Tenants", href: "/tenants", icon: Building2 },
   { name: "Modules", href: "/modules", icon: Puzzle },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "AMC_report", href: "/amc_report", icon: Package },
-  { name: "amc_notification", href: "/amc_notification", icon: FileText },
+  { name: "AMC Report", href: "/amc_report", icon: Package },
+  { name: "AMC Notification", href: "/amc_notification", icon: FileText },
   { name: "Subscriptions", href: "/subscriptions", icon: CreditCard },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
