@@ -338,9 +338,7 @@ const Subscriptions: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Subscriptions</h1>
-        <p className="text-muted-foreground mt-1">
-          View tenant plans and details
-        </p>
+        <p className="text-muted-foreground mt-1">View tenant plans and details</p>
       </div>
 
       {/* Debug info - remove after fixing */}
@@ -348,17 +346,13 @@ const Subscriptions: React.FC = () => {
         <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">
-              Loading Subscriptions...
-            </p>
+            <p className="mt-4 text-muted-foreground">Loading Subscriptions...</p>
           </div>
         </div>
       )}
 
       {!loading && tenants.length === 0 && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-          No tenants found. Check console for errors.
-        </div>
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">No tenants found. Check console for errors.</div>
       )}
 
       {!loading && tenants.length > 0 && (
@@ -367,9 +361,7 @@ const Subscriptions: React.FC = () => {
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Select Tenant</CardTitle>
-                <CardDescription>
-                  Choose a tenant to view subscription details
-                </CardDescription>
+                <CardDescription>Choose a tenant to view subscription details</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -388,16 +380,11 @@ const Subscriptions: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {tenants.map((tenant: any) => (
-                          <SelectItem
-                            key={tenant.id}
-                            value={tenant.id.toString()}
-                          >
+                          <SelectItem key={tenant.id} value={tenant.id.toString()}>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{tenant.name}</span>
                               <span className="text-muted-foreground">·</span>
-                              <span className="text-sm text-muted-foreground">
-                                {tenant.category}
-                              </span>
+                              <span className="text-sm text-muted-foreground">{tenant.category}</span>
                             </div>
                           </SelectItem>
                         ))}
@@ -408,13 +395,19 @@ const Subscriptions: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Category</p>
-                      <Badge variant="outline" className="mt-1">
+                      <Badge
+                        variant="outline"
+                        className="mt-1 dark:bg-slate-700 dark:text-white"
+                      >
                         {selected?.category}
                       </Badge>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Plan</p>
-                      <Badge variant="outline" className="mt-1">
+                      <Badge
+                        variant="outline"
+                        className="mt-1 dark:bg-slate-700 dark:text-white"
+                      >
                         {selected?.plan}
                       </Badge>
                     </div>
@@ -430,14 +423,9 @@ const Subscriptions: React.FC = () => {
               <CardContent>
                 <div className="space-y-3">
                   {Object.keys(totalByPlan).map((plan) => (
-                    <div
-                      key={plan}
-                      className="flex items-center justify-between"
-                    >
+                    <div key={plan} className="flex items-center justify-between">
                       <div className="font-medium capitalize">{plan}</div>
-                      <div className="text-muted-foreground">
-                        {totalByPlan[plan]}
-                      </div>
+                      <div className="text-muted-foreground">{totalByPlan[plan]}</div>
                     </div>
                   ))}
                 </div>
@@ -451,9 +439,7 @@ const Subscriptions: React.FC = () => {
                 <div>
                   <CardTitle>Subscription Plans</CardTitle>
                   <div className="mt-2">
-                    <CardDescription>
-                      Available plans and included features (loaded from DB)
-                    </CardDescription>
+                    <CardDescription>Available plans and included features (loaded from DB)</CardDescription>
                   </div>
                 </div>
 
@@ -479,8 +465,7 @@ const Subscriptions: React.FC = () => {
                     }
 
                     const selectedPlanData =
-                      effectivePlans.find((p: any) => p.key === selectedPlan) ||
-                      null;
+                      effectivePlans.find((p: any) => p.key === selectedPlan) || null;
                     const planPrice =
                       (selectedPlanData?.amount as number) ??
                       priceMap[selectedPlan ?? ""] ??
@@ -536,10 +521,7 @@ const Subscriptions: React.FC = () => {
                           const list = fresh?.payments ?? fresh ?? [];
                           setPayments(Array.isArray(list) ? list : []);
                         } catch (refetchErr) {
-                          console.error(
-                            "Refetch after createPayment failed:",
-                            refetchErr
-                          );
+                          console.error("Refetch after createPayment failed:", refetchErr);
                         }
 
                         try {
@@ -550,16 +532,11 @@ const Subscriptions: React.FC = () => {
                           setSelected({ ...selected, plan: selectedPlan });
                           setTenants((prev) =>
                             prev.map((t) =>
-                              t.id === selected.id
-                                ? { ...t, plan: selectedPlan }
-                                : t
+                              t.id === selected.id ? { ...t, plan: selectedPlan } : t
                             )
                           );
                         } catch (updateErr) {
-                          console.error(
-                            "Failed to update tenant plan:",
-                            updateErr
-                          );
+                          console.error("Failed to update tenant plan:", updateErr);
                         }
 
                         toast({
@@ -580,16 +557,11 @@ const Subscriptions: React.FC = () => {
                         setSelected({ ...selected, plan: selectedPlan });
                         setTenants((prev) =>
                           prev.map((t) =>
-                            t.id === selected.id
-                              ? { ...t, plan: selectedPlan }
-                              : t
+                            t.id === selected.id ? { ...t, plan: selectedPlan } : t
                           )
                         );
                       } catch (updateErr) {
-                        console.error(
-                          "Failed to update tenant plan:",
-                          updateErr
-                        );
+                        console.error("Failed to update tenant plan:", updateErr);
                       }
 
                       toast({
@@ -647,7 +619,7 @@ const Subscriptions: React.FC = () => {
                       onClick={() => {
                         if (!isEditingThis) setSelectedPlan(plan.key);
                       }}
-                      className={`group relative p-6 border-2 rounded-xl transition-all duration-300 cursor-pointer ${
+                      className={`group relative p-6 border-2 rounded-xl transition-all duration-300 cursor-pointer min-h-[220px] ${
                         isActive
                           ? "border-green-500 bg-green-50 dark:bg-green-950/20 shadow-md"
                           : isSelected
@@ -655,46 +627,37 @@ const Subscriptions: React.FC = () => {
                           : "border-border hover:border-primary/50 hover:shadow-lg"
                       }`}
                     >
+                      {/* TOP-RIGHT BADGES: keep badges aligned consistently */}
+                      <div className="absolute top-4 right-4 flex flex-col items-end gap-2 pointer-events-none">
+                        <div className="flex gap-2 items-center pointer-events-auto">
+                          {isActive && (
+                            <Badge
+                              variant="default"
+                              className="text-xs bg-green-600 dark:bg-green-500/80 dark:text-white"
+                            >
+                              Current
+                            </Badge>
+                          )}
+                          {isSelected && (
+                            <Badge
+                              variant="default"
+                              className="text-xs bg-blue-600 dark:bg-blue-500/80 dark:text-white"
+                            >
+                              Selected
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Plan Header */}
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xl font-bold text-foreground">
-                            {plan.title}
-                          </h3>
-                          <div className="flex gap-2">
-                            {isActive && (
-                              <Badge
-                                variant="default"
-                                className="text-xs bg-green-600"
-                              >
-                                Current
-                              </Badge>
-                            )}
-                            {isSelected && (
-                              <Badge
-                                variant="default"
-                                className="text-xs bg-blue-600"
-                              >
-                                Selected
-                              </Badge>
-                            )}
-
-                            {/* EDIT BUTTON */}
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditPlan(plan);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                          </div>
+                          <h3 className="text-xl font-bold text-foreground">{plan.title}</h3>
+                          {/* an invisible placeholder to keep layout balance */}
+                          <div style={{ width: 80 }} />
                         </div>
                         {plan.note && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {plan.note}
-                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{plan.note}</p>
                         )}
                       </div>
 
@@ -702,22 +665,16 @@ const Subscriptions: React.FC = () => {
                       <div className="mb-6">
                         <div className="flex items-baseline gap-1">
                           <span className="text-3xl font-bold text-foreground">
-                            {planPrice === 0
-                              ? "Free"
-                              : planPrice.toLocaleString()}
+                            {planPrice === 0 ? "Free" : planPrice.toLocaleString()}
                           </span>
                           {planPrice > 0 && (
-                            <span className="text-sm text-muted-foreground">
-                              AED
-                            </span>
+                            <span className="text-sm text-muted-foreground">AED</span>
                           )}
                         </div>
                         {plan.users > 0 && (
                           <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
                             <Users className="h-4 w-4" />
-                            <span>
-                              {plan.users} {plan.users === 1 ? "user" : "users"}
-                            </span>
+                            <span>{plan.users} {plan.users === 1 ? "user" : "users"}</span>
                           </div>
                         )}
                       </div>
@@ -725,22 +682,12 @@ const Subscriptions: React.FC = () => {
                       {/* Features List or Edit Form */}
                       {!isEditingThis && (
                         <div className="mb-6">
-                          <h4 className="text-sm font-semibold text-foreground mb-3">
-                            What's included:
-                          </h4>
+                          <h4 className="text-sm font-semibold text-foreground mb-3">What's included:</h4>
                           <ul className="space-y-2">
                             {/* derive feature list from flags */}
                             {plan.billing && (
                               <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <svg
-                                  className="h-5 w-5 text-primary flex-shrink-0 mt-0.5"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                   <path d="M5 13l4 4L19 7"></path>
                                 </svg>
                                 <span>Billing</span>
@@ -748,15 +695,7 @@ const Subscriptions: React.FC = () => {
                             )}
                             {plan.reports && (
                               <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <svg
-                                  className="h-5 w-5 text-primary flex-shrink-0 mt-0.5"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                   <path d="M5 13l4 4L19 7"></path>
                                 </svg>
                                 <span>Reports</span>
@@ -764,15 +703,7 @@ const Subscriptions: React.FC = () => {
                             )}
                             {plan.inventory && (
                               <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <svg
-                                  className="h-5 w-5 text-primary flex-shrink-0 mt-0.5"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                   <path d="M5 13l4 4L19 7"></path>
                                 </svg>
                                 <span>Inventory</span>
@@ -781,15 +712,7 @@ const Subscriptions: React.FC = () => {
                             {/* AMC feature */}
                             {plan.amc_amount > 0 && (
                               <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <svg
-                                  className="h-5 w-5 text-primary flex-shrink-0 mt-0.5"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                                   <path d="M5 13l4 4L19 7"></path>
                                 </svg>
                                 <span>AMC {plan.amc_amount} AED/month</span>
@@ -800,18 +723,20 @@ const Subscriptions: React.FC = () => {
                       )}
 
                       {isEditingThis && editingPlan && (
-                        <div className="mb-6">
-                          <h4 className="text-sm font-semibold text-foreground mb-3">
-                            Edit plan
-                          </h4>
+                        <div
+                          className="mb-6"
+                          style={{ zIndex: 2 }}
+                        >
+                          <h4 className="text-sm font-semibold text-foreground mb-3">Edit plan</h4>
 
                           <div className="space-y-3">
                             <div>
-                              <label className="block text-xs text-muted-foreground">
-                                Name
-                              </label>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Name</label>
                               <input
-                                className="mt-1 block w-full border px-2 py-1 rounded"
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           placeholder:text-slate-500
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder:text-slate-400"
                                 value={editingPlan.name}
                                 onChange={(e) =>
                                   setEditingPlan({
@@ -823,11 +748,11 @@ const Subscriptions: React.FC = () => {
                             </div>
 
                             <div>
-                              <label className="block text-xs text-muted-foreground">
-                                Amount (AED)
-                              </label>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Amount (AED)</label>
                               <input
-                                className="mt-1 block w-full border px-2 py-1 rounded"
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                 type="number"
                                 value={editingPlan.amount}
                                 onChange={(e) =>
@@ -850,8 +775,10 @@ const Subscriptions: React.FC = () => {
                                       billing: e.target.checked,
                                     })
                                   }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Billing"
                                 />
-                                Billing
+                                <span className="dark:text-slate-200">Billing</span>
                               </label>
 
                               <label className="flex items-center gap-2 text-sm">
@@ -864,8 +791,10 @@ const Subscriptions: React.FC = () => {
                                       reports: e.target.checked,
                                     })
                                   }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Reports"
                                 />
-                                Reports
+                                <span className="dark:text-slate-200">Reports</span>
                               </label>
 
                               <label className="flex items-center gap-2 text-sm">
@@ -878,17 +807,19 @@ const Subscriptions: React.FC = () => {
                                       inventory: e.target.checked,
                                     })
                                   }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Inventory"
                                 />
-                                Inventory
+                                <span className="dark:text-slate-200">Inventory</span>
                               </label>
                             </div>
 
                             <div>
-                              <label className="block text-xs text-muted-foreground">
-                                Users (count)
-                              </label>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Users (count)</label>
                               <input
-                                className="mt-1 block w-full border px-2 py-1 rounded"
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                 type="number"
                                 value={editingPlan.users}
                                 onChange={(e) =>
@@ -901,11 +832,11 @@ const Subscriptions: React.FC = () => {
                             </div>
 
                             <div>
-                              <label className="block text-xs text-muted-foreground">
-                                AMC amount (AED)
-                              </label>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">AMC amount (AED)</label>
                               <input
-                                className="mt-1 block w-full border px-2 py-1 rounded"
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                 type="number"
                                 value={editingPlan.amc_amount}
                                 onChange={(e) =>
@@ -925,6 +856,11 @@ const Subscriptions: React.FC = () => {
                                   await savePlan();
                                 }}
                                 disabled={savingPlan}
+                                className={
+                                  "px-3 py-1.5 rounded " +
+                                  "bg-primary text-white focus:ring-2 focus:ring-offset-1 " +
+                                  "dark:bg-indigo-500 dark:text-white dark:focus:ring-indigo-600"
+                                }
                               >
                                 {savingPlan ? "Saving..." : "Save"}
                               </Button>
@@ -935,6 +871,11 @@ const Subscriptions: React.FC = () => {
                                   ev.stopPropagation();
                                   cancelEdit();
                                 }}
+                                className={
+                                  "px-3 py-1.5 rounded " +
+                                  "bg-transparent text-muted-foreground hover:bg-black/5 " +
+                                  "dark:text-slate-300 dark:hover:bg-white/5"
+                                }
                               >
                                 Cancel
                               </Button>
@@ -942,6 +883,24 @@ const Subscriptions: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* EDIT BUTTON: positioned bottom-right and visible on hover only */}
+                      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto">
+                        <Button
+                          size="sm"
+                          className={
+                            "px-3 py-1.5 rounded shadow-sm " +
+                            "bg-white/5 text-black hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-offset-1 " +
+                            "dark:bg-white/10 dark:text-white dark:hover:bg-white/20 dark:focus:ring-white/20"
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditPlan(plan);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}

@@ -34,6 +34,19 @@ function clampPercent(v: number) {
   return Math.round(v);
 }
 
+function computePercentChange(current: number, previous: number) {
+  // returns signed integer percent e.g. 12 or -5. Handles previous === 0.
+  current = Number(current || 0);
+  previous = Number(previous || 0);
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return 0;
+  if (previous === 0) {
+    if (current === 0) return 0;
+    // previous 0 -> choose a sensible bounded indicator rather than Infinity.
+    return current > 0 ? 100 : -100;
+  }
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
 // Return stable keys like "2025-11"
 function toMonthKey(date: Date) {
   const y = date.getFullYear();
@@ -60,6 +73,9 @@ const Dashboard = () => {
     activeUsers: 0,
     totalRevenue: 0,
     expiringPlans: 0,
+    // optional fields the backend could provide to make trend computation exact
+    prevTotalTenants: undefined as number | undefined,
+    prevActiveTenants: undefined as number | undefined,
   });
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [tenantGrowth, setTenantGrowth] = useState<GrowthPoint[]>([]);
@@ -79,7 +95,7 @@ const Dashboard = () => {
       // Single aggregated call (server should shape this)
       const dashboardData = await reportsAPI.getDashboardStats();
 
-      setStats(dashboardData.stats ?? {});
+      setStats((prev) => ({ ...prev, ...(dashboardData.stats ?? {}) }));
       setTenantGrowth(
         (dashboardData.tenantGrowth ?? []).map((d: any) => ({
           month: d.month,
@@ -154,6 +170,52 @@ const Dashboard = () => {
     }
   };
 
+  // ========== Dynamic trend calculations ==========
+  // We derive trends from available historical series where possible.
+  // - Revenue: derived from the last two points in revenueData (most reliable)
+  // - Tenants (displayed on cards): if backend provides prevTotalTenants / prevActiveTenants we use them;
+  //   otherwise we use tenantGrowth (new tenants per month) as a proxy for month-over-month change.
+
+  const revenueTrend = useMemo(() => {
+    if (!Array.isArray(revenueData) || revenueData.length < 2) return 0;
+    const last = Number(revenueData[revenueData.length - 1].revenue || 0);
+    const prev = Number(revenueData[revenueData.length - 2].revenue || 0);
+    return computePercentChange(last, prev);
+  }, [revenueData]);
+
+  const tenantsNewTrend = useMemo(() => {
+    // percent change of new tenants per month (tenantGrowth array)
+    if (!Array.isArray(tenantGrowth) || tenantGrowth.length < 2) return 0;
+    const last = Number(tenantGrowth[tenantGrowth.length - 1].tenants || 0);
+    const prev = Number(tenantGrowth[tenantGrowth.length - 2].tenants || 0);
+    return computePercentChange(last, prev);
+  }, [tenantGrowth]);
+
+  const totalTenantsTrend = useMemo(() => {
+    const prevTotal = (stats as any).prevTotalTenants;
+    if (typeof prevTotal === "number") {
+      return computePercentChange(Number(stats.totalTenants || 0), prevTotal);
+    }
+    // fallback: use tenantNewTrend as a proxy for total-tenants trend
+    return tenantsNewTrend;
+  }, [stats.totalTenants, (stats as any).prevTotalTenants, tenantsNewTrend]);
+
+  const activeTenantsTrend = useMemo(() => {
+    const prevActive = (stats as any).prevActiveTenants;
+    if (typeof prevActive === "number") {
+      return computePercentChange(Number(stats.activeTenants || 0), prevActive);
+    }
+    // fallback: also use tenantsNewTrend as a proxy
+    return tenantsNewTrend;
+  }, [stats.activeTenants, (stats as any).prevActiveTenants, tenantsNewTrend]);
+
+  // trial tenants trend: if planDistribution has historical series this should be used.
+  // Since we only have a current snapshot, default to 0 (no change).
+  const trialTrend = useMemo(() => {
+    // if backend later supplies planDistributionHistory, compute here.
+    return 0;
+  }, [planDistribution]);
+
   // derive trial plan value from planDistribution if present
   const trialValue = useMemo(() => {
     const p = (planDistribution ?? []).find((pl: any) => {
@@ -163,40 +225,42 @@ const Dashboard = () => {
     return p ? Number(p.value || 0) : Number(stats.expiringPlans || 0);
   }, [planDistribution, stats.expiringPlans]);
 
+  const getTrendDisplay = (signedPct: number) => {
+    const up = signedPct >= 0;
+    const absPct = Math.abs(signedPct);
+    return { text: `${up ? "+" : "-"}${absPct}%`, up };
+  };
+
   const statCards = useMemo(
     () => [
       {
         title: "Total Tenants",
         value: stats.totalTenants ?? 0,
         icon: Building2,
-        trend: "+12%",
-        trendUp: true,
+        trendPct: totalTenantsTrend,
       },
       {
         title: "Active Tenants",
         value: stats.activeTenants ?? 0,
         icon: Building2,
-        trend: "+8%",
-        trendUp: true,
+        trendPct: activeTenantsTrend,
       },
       {
         title: "Total Revenue",
         value: totalRevenue, // computed from payments
         icon: DollarSign,
-        trend: "+0%",
-        trendUp: true,
         isCurrency: true,
         currency: "AED",
+        trendPct: revenueTrend,
       },
       {
         title: "Trial tenants",
         value: trialValue,
         icon: AlertCircle,
-        trend: "-3%",
-        trendUp: false,
+        trendPct: trialTrend,
       },
     ],
-    [stats.totalTenants, stats.activeTenants, totalRevenue, trialValue]
+    [stats.totalTenants, stats.activeTenants, totalRevenue, trialValue, totalTenantsTrend, activeTenantsTrend, revenueTrend, trialTrend]
   );
 
   const getActivityIcon = (type: string) => {
@@ -231,45 +295,42 @@ const Dashboard = () => {
       {/* Header */}
       <div className="min-w-0">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Welcome back. Here is the current tenant and revenue overview.
-        </p>
+        <p className="text-muted-foreground mt-1">Welcome back. Here is the current tenant and revenue overview.</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat) => (
-          <Card key={stat.title} className="hover:shadow-sm transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 min-w-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground truncate">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-primary shrink-0" />
-            </CardHeader>
-            <CardContent className="min-w-0">
-              <div className="text-2xl font-bold truncate">
-                {stat.isCurrency
-                  ? new Intl.NumberFormat("en-AE", {
-                      style: "currency",
-                      currency: stat.currency || "AED",
-                      maximumFractionDigits: 0,
-                    }).format(Number(stat.value) || 0)
-                  : stat.value}
-              </div>
-              <div className="flex items-center gap-1 text-xs mt-1">
-                {stat.trendUp ? (
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3 text-red-600" />
-                )}
-                <span className={stat.trendUp ? "text-green-600" : "text-red-600"}>
-                  {stat.trend}
-                </span>
-                <span className="text-muted-foreground">from last month</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {statCards.map((stat) => {
+          const { text, up } = getTrendDisplay(Number(stat.trendPct || 0));
+          return (
+            <Card key={stat.title} className="hover:shadow-sm transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 min-w-0">
+                <CardTitle className="text-sm font-medium text-muted-foreground truncate">{stat.title}</CardTitle>
+                <stat.icon className="h-4 w-4 text-primary shrink-0" />
+              </CardHeader>
+              <CardContent className="min-w-0">
+                <div className="text-2xl font-bold truncate">
+                  {stat.isCurrency
+                    ? new Intl.NumberFormat("en-AE", {
+                        style: "currency",
+                        currency: stat.currency || "AED",
+                        maximumFractionDigits: 0,
+                      }).format(Number(stat.value) || 0)
+                    : stat.value}
+                </div>
+                <div className="flex items-center gap-1 text-xs mt-1">
+                  {up ? (
+                    <ArrowUpRight className="h-3 w-3 text-green-600" />
+                  ) : (
+                    <ArrowDownRight className="h-3 w-3 text-red-600" />
+                  )}
+                  <span className={up ? "text-green-600" : "text-red-600"}>{text}</span>
+                  <span className="text-muted-foreground">from last month</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Charts */}
@@ -278,9 +339,7 @@ const Dashboard = () => {
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Revenue Trend</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Monthly revenue over the last 6 months
-            </p>
+            <p className="text-sm text-muted-foreground">Monthly revenue over the last 6 months</p>
           </CardHeader>
           <CardContent>
             <div className="w-full h-[260px] sm:h-[300px]">
@@ -302,15 +361,7 @@ const Dashboard = () => {
                       borderRadius: "8px",
                     }}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(var(--primary))"
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                    strokeWidth={2}
-                    name="Revenue"
-                  />
+                  <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} name="Revenue" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -338,13 +389,7 @@ const Dashboard = () => {
                     }}
                   />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="tenants"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    name="New Tenants"
-                  />
+                  <Line type="monotone" dataKey="tenants" stroke="hsl(var(--primary))" strokeWidth={2} name="New Tenants" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -372,8 +417,7 @@ const Dashboard = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{activity?.user ?? "Unknown"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {activity?.action ?? "Action"}{" "}
-                        <span className="font-medium">{activity?.target ?? ""}</span>
+                        {activity?.action ?? "Action"} <span className="font-medium">{activity?.target ?? ""}</span>
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">{activity?.time ?? ""}</p>
                     </div>
@@ -468,7 +512,7 @@ const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={() => navigate("/tenants")}>
+            <Button onClick={() => navigate("/tenants")}> 
               <Building2 className="mr-2 h-4 w-4" />
               View All Tenants
             </Button>

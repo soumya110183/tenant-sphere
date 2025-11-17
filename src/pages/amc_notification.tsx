@@ -569,118 +569,89 @@ const AMC_notification: React.FC = () => {
         </p>
       </div>
 
-      {/* Redesigned Expiry Overview - card list layout */}
-      <div className="space-y-6">
+      {/* Redesigned Expiry Overview - 2x2 grid (two cards per row) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           {
             key: "green",
             title: "Active & Healthy",
             description: "Contracts in good standing",
             icon: CheckCircle2,
-            iconColor: "text-emerald-500",
-            gradientFrom: "from-emerald-50",
-            gradientTo: "to-green-50",
-            borderColor: "border-emerald-200",
-            badgeColor: "bg-gradient-to-r from-emerald-500 to-green-600",
-            itemBorder: "border-emerald-100",
-            itemBg: "bg-gradient-to-br from-white to-emerald-50/30",
             titleColor: "text-emerald-700",
-            shadowColor: "shadow-emerald-100",
+            badgeBg: "bg-green-600",
+            tileBorder: "border-emerald-200",
+            tileBg: "bg-emerald-50",
           },
           {
             key: "blue",
             title: "Upcoming Renewals",
             description: "11-100 days remaining",
             icon: Clock,
-            iconColor: "text-blue-500",
-            gradientFrom: "from-blue-50",
-            gradientTo: "to-cyan-50",
-            borderColor: "border-blue-200",
-            badgeColor: "bg-gradient-to-r from-blue-500 to-cyan-600",
-            itemBorder: "border-blue-100",
-            itemBg: "bg-gradient-to-br from-white to-blue-50/30",
             titleColor: "text-blue-700",
-            shadowColor: "shadow-blue-100",
+            badgeBg: "bg-blue-600",
+            tileBorder: "border-blue-200",
+            tileBg: "bg-blue-50",
           },
           {
             key: "orange",
             title: "Urgent Action",
             description: "1-10 days remaining",
             icon: AlertTriangle,
-            iconColor: "text-amber-500",
-            gradientFrom: "from-amber-50",
-            gradientTo: "to-orange-50",
-            borderColor: "border-amber-200",
-            badgeColor: "bg-gradient-to-r from-amber-500 to-orange-600",
-            itemBorder: "border-amber-100",
-            itemBg: "bg-gradient-to-br from-white to-amber-50/30",
             titleColor: "text-amber-700",
-            shadowColor: "shadow-amber-100",
+            badgeBg: "bg-amber-500",
+            tileBorder: "border-amber-200",
+            tileBg: "bg-amber-50",
           },
           {
             key: "red",
             title: "Expired",
             description: "Immediate attention required",
             icon: XCircle,
-            iconColor: "text-red-500",
-            gradientFrom: "from-red-50",
-            gradientTo: "to-rose-50",
-            borderColor: "border-red-200",
-            badgeColor: "bg-gradient-to-r from-red-500 to-rose-600",
-            itemBorder: "border-red-100",
-            itemBg: "bg-gradient-to-br from-white to-red-50/30",
             titleColor: "text-red-700",
-            shadowColor: "shadow-red-100",
+            badgeBg: "bg-red-600",
+            tileBorder: "border-red-200",
+            tileBg: "bg-red-50",
           },
         ].map((config) => {
           const Icon = config.icon as any;
           const tenants = (expiryBuckets as any)[config.key] || [];
 
           return (
-            <Card
-              key={config.key}
-              className={`border-2 ${config.borderColor} ${config.shadowColor} shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden bg-gradient-to-r ${config.gradientFrom} ${config.gradientTo}`}
-            >
-              <div className="flex flex-col lg:flex-row">
-                <div className="lg:w-64 xl:w-80 p-6 border-r-2 border-white/50">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className={`p-3 rounded-xl bg-white shadow-sm ${config.iconColor}`}
-                    >
-                      <Icon className="w-7 h-7" />
-                    </div>
-                    <Badge
-                      className={`${config.badgeColor} text-white px-4 py-1.5 shadow-md text-base`}
-                    >
-                      {tenants.length}{" "}
-                      {tenants.length === 1 ? "Tenant" : "Tenants"}
-                    </Badge>
-                  </div>
+            <Card key={config.key} className="h-full">
+              <div className="p-5 flex flex-col h-full">
+                <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle
-                      className={`text-2xl font-bold ${config.titleColor} mb-2`}
-                    >
-                      {config.title}
-                    </CardTitle>
-                    <CardDescription className="text-sm font-medium text-slate-600">
-                      {config.description}
-                    </CardDescription>
-                  </div>
-                </div>
-
-                <div className="flex-1 p-6">
-                  <div className="max-h-48 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
-                    {tenants.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                          <Icon className="w-8 h-8 text-slate-400" />
-                        </div>
-                        <p className="text-sm text-slate-500 font-medium">
-                          No tenants in this category
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`p-2 rounded-lg bg-white shadow-sm ${config.titleColor}`}
+                      >
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold">{config.title}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {config.description}
                         </p>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+                    </div>
+                  </div>
+
+                  <Badge
+                    className={`text-white px-3 py-1 text-sm ${config.badgeBg} rounded-md shadow`}
+                  >
+                    {tenants.length} {tenants.length === 1 ? "Tenant" : "Tenants"}
+                  </Badge>
+                </div>
+
+                {/* Tenant tiles - fixed vertical space with own scrollbar */}
+                <div className="mt-4 flex-1">
+                  {tenants.length === 0 ? (
+                    <div className="flex items-center justify-center py-6 border rounded-md border-dashed text-sm text-muted-foreground h-full">
+                      No tenants in this category
+                    </div>
+                  ) : (
+                    <div className="max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="grid grid-cols-1 gap-3">
                         {tenants.map((tenant: any) => {
                           const end = getEndDateForTenant(tenant, allAmcs);
                           const days = end ? daysUntil(end) : null;
@@ -725,34 +696,32 @@ const AMC_notification: React.FC = () => {
                                   (e.target as HTMLElement).click();
                                 }
                               }}
-                              className={`p-3 rounded-lg border-2 ${config.itemBorder} ${config.itemBg} backdrop-blur-sm hover:scale-[1.02] transition-transform duration-200 shadow-sm cursor-pointer`}
+                              className={`group relative p-3 border-2 ${config.tileBorder} rounded-lg transition-all duration-200 cursor-pointer min-h-[90px] ${config.tileBg} hover:shadow-md`}
                             >
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-semibold text-slate-800 truncate pr-2">
+                              <div className="flex items-center justify-between">
+                                <div className="truncate font-medium text-sm text-slate-800">
                                   {tenant.name}
-                                </span>
+                                </div>
                                 <Badge
                                   variant="outline"
-                                  className="text-xs font-bold border-slate-300 bg-white/80 shrink-0"
+                                  className="text-xs font-semibold border-slate-300 bg-white/80 shrink-0"
                                 >
                                   {label}
                                 </Badge>
                               </div>
-                              <div className="flex items-center gap-1 text-xs text-slate-600">
-                                <Clock className="w-3 h-3" />
+
+                              <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+                                <Clock className="w-3.5 h-3.5" />
                                 <span>
                                   {label.includes("overdue")
                                     ? "Expired"
                                     : "Expires"}{" "}
                                   {end
-                                    ? new Date(end).toLocaleDateString(
-                                        "en-US",
-                                        {
-                                          year: "numeric",
-                                          month: "short",
-                                          day: "numeric",
-                                        }
-                                      )
+                                    ? new Date(end).toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })
                                     : "—"}
                                 </span>
                               </div>
@@ -760,8 +729,8 @@ const AMC_notification: React.FC = () => {
                           );
                         })}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

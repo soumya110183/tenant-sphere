@@ -66,16 +66,16 @@ const calculateExpireDate = (startDate: string, frequency: string): string => {
 
   switch (frequency) {
     case "1_year":
-      expireDate.setMonth(expireDate.getMonth() + 12);
+      expireDate.setFullYear(expireDate.getFullYear() + 1);
       break;
     case "3_year":
-      expireDate.setMonth(expireDate.getMonth() + 36);
+      expireDate.setFullYear(expireDate.getFullYear() + 3);
       break;
     case "6_year":
-      expireDate.setMonth(expireDate.getMonth() + 72);
+      expireDate.setFullYear(expireDate.getFullYear() + 6);
       break;
     case "10_year":
-      expireDate.setFullYear(expireDate.getFullYear() + 144);
+      expireDate.setFullYear(expireDate.getFullYear() + 10);
       break;
     default:
       expireDate.setMonth(expireDate.getMonth() + 1);
@@ -110,7 +110,7 @@ const AMC_report: React.FC = () => {
 
   // AMC specific editable fields
   const [amcAmount, setAmcAmount] = useState<string>("");
-  const [billingFrequency, setBillingFrequency] = useState<string>("monthly");
+  const [billingFrequency, setBillingFrequency] = useState<string>("yearly");
   const [amcNumber, setAmcNumber] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
   const [expireDate, setExpireDate] = useState<string>("");
@@ -189,7 +189,7 @@ const AMC_report: React.FC = () => {
   // Populate AMC fields when tenant is selected
   useEffect(() => {
     if (selected) {
-      const frequency = selected.billing_frequency || "monthly";
+      const frequency = selected.billing_frequency || "yearly";
       setBillingFrequency(frequency);
 
       // Auto-calculate AMC amount based on plan and billing frequency
