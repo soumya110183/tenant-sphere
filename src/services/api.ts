@@ -2,8 +2,9 @@ import axios from "axios";
 import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
 
-// Base URLs
-const API_URL = "http://localhost:5000";
+// Base URL: use environment variable in deployed environments
+// Set `VITE_API_URL` in Vercel / Railway to your backend URL (e.g. https://api.example.com)
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
@@ -27,15 +28,15 @@ api.interceptors.request.use((config) => {
 // TENANT API
 // ===============================
 export const tenantAPI = {
-  getTenants: async () => (await api.get("/tenants")).data,
+  getTenants: async () => (await api.get("/api/tenants")).data,
 
-  getTenant: async (id) => (await api.get(`/tenants/${id}`)).data,
+  getTenant: async (id) => (await api.get(`/api/tenants/${id}`)).data,
 
   createTenant: async (tenantData) =>
-    (await api.post("/tenants", tenantData)).data,
+    (await api.post("/api/tenants", tenantData)).data,
 
   updateTenant: async (id, tenantData) =>
-    (await api.put(`/tenants/${id}`, tenantData)).data,
+    (await api.put(`/api/tenants/${id}`, tenantData)).data,
 
   deleteTenant: async (id) => (await api.delete(`/tenants/${id}`)).data,
 };
@@ -46,11 +47,11 @@ export const tenantAPI = {
 export const notificationAPI = {
   // Returns merged preferences (server returns defaults overlaid with DB values)
   getTenantNotifications: async (tenantId) =>
-    (await api.get(`/notification/${tenantId}/notifications`)).data,
+    (await api.get(`/api/notification/${tenantId}/notifications`)).data,
 
   // Partially update preferences (only whitelisted keys accepted server-side)
   updateTenantNotifications: async (tenantId, payload) =>
-    (await api.put(`/notification/${tenantId}/notifications`, payload)).data,
+    (await api.put(`/api/notification/${tenantId}/notifications`, payload)).data,
 };
 
 // ===============================
@@ -108,36 +109,35 @@ export const authAPI = {
 // ===============================
 export const moduleAPI = {
   getTenantModules: async (tenantId) =>
-    (await api.get(`/tenants/${tenantId}/modules`)).data,
+    (await api.get(`/api/tenants/${tenantId}/modules`)).data,
 
   updateTenantModules: async (tenantId, modules) =>
-    (await api.put(`/tenants/${tenantId}`, { modules })).data,
+    (await api.put(`/api/tenants/${tenantId}`, { modules })).data,
 };
 
 // ===============================
 // REPORTS API
 // ===============================
 export const reportsAPI = {
-  getDashboardStats: async () => (await api.get("/reports/dashboard")).data,
+  getDashboardStats: async () => (await api.get("/api/reports/dashboard")).data,
 
   getRevenueTrends: async (period = "monthly", year) => {
     const params = { period, ...(year && { year }) };
-    return (await api.get("/reports/revenue", { params })).data;
+    return (await api.get("/api/reports/revenue", { params })).data;
   },
 
   getTenantGrowth: async (period = "monthly", limit = 12) =>
-    (await api.get("/reports/tenant-growth", { params: { period, limit } }))
+    (await api.get("/api/reports/tenant-growth", { params: { period, limit } }))
       .data,
 
   getCategoryDistribution: async () =>
-    (await api.get("/reports/categories")).data,
-
-  getPlanDistribution: async () => (await api.get("/reports/plans")).data,
+    (await api.get("/api/reports/categories")).data,
+  getPlanDistribution: async () => (await api.get("/api/reports/plans")).data,
 
   exportReport: async (reportType, format, filters) => {
     const params = { type: format, report: reportType, ...filters };
     // axios with responseType 'blob' returns response.data as a Blob
-    const response = await api.get("/reports/export", {
+    const response = await api.get("/api/reports/export", {
       params,
       responseType: "blob",
     });
@@ -219,10 +219,10 @@ export const userAPI = {
   getUser: async (id) => (await api.get(`/users/${id}`)).data,
   // Update a user (by id) - backend should accept partial user payload
   updateUser: async (id, payload) =>
-    (await api.put(`/users/${id}`, payload)).data,
+    (await api.put(`/api/users/${id}`, payload)).data,
   // Change password: backend should verify current password then update to new one
   changePassword: async (id, payload) =>
-    (await api.post(`/settings/${id}/change-password`, payload)).data,
+    (await api.post(`/api/settings/${id}/change-password`, payload)).data,
 };
 
 // ===============================
@@ -230,23 +230,44 @@ export const userAPI = {
 // ===============================
 export const paymentsAPI = {
   getPaymentsByTenant: async (tenantId) =>
-    (await api.get(`/subscriber/${tenantId}/payments`)).data,
+    (await api.get(`/api/subscriber/${tenantId}/payments`)).data,
 
   createPayment: async (payload) =>
-    (await api.post(`/subscriber/payments`, payload)).data,
+    (await api.post(`/api/subscriber/payments`, payload)).data,
 
-  getAllPayments: async () => (await api.get(`/subscriber/payments`)).data,
+  getAllPayments: async () => (await api.get(`/api/subscriber/payments`)).data,
 };
 
 // ===============================
 // AMC API
 // ===============================
 export const amcAPI = {
-  getAllAMCs: async () => (await api.get("/amc")).data,
-  getAMCById: async (id) => (await api.get(`/amc/${id}`)).data,
-  createAMC: async (amcData) => (await api.post("/amc", amcData)).data,
-  updateAMC: async (id, amcData) => (await api.put(`/amc/${id}`, amcData)).data,
-  deleteAMC: async (id) => (await api.delete(`/amc/${id}`)).data,
+  getAllAMCs: async () => (await api.get("/api/amc")).data,
+  getAMCById: async (id) => (await api.get(`/api/amc/${id}`)).data,
+  createAMC: async (amcData) => (await api.post("/api/amc", amcData)).data,
+  updateAMC: async (id, amcData) => (await api.put(`/api/amc/${id}`, amcData)).data,
+  deleteAMC: async (id) => (await api.delete(`/api/amc/${id}`)).data,
+  // Send reminder email for a tenant's AMC
+  // payload: { tenantId, email, subject, body }
+  sendReminder: async (payload) =>
+    (await api.post(`/api/amc/send-reminder`, payload)).data,
+};
+
+// ===============================
+// SUBSCRIPTION AMOUNTS API
+// ===============================
+// This helper attempts to read the `subscription_amount_plan` table which
+// stores AMC values per plan. It falls back to a plural route if needed.
+export const subscriptionAmountsAPI = {
+  // GET /subscription_amount_plan  OR  /subscription_amount_plans
+  getAll: async () => {
+    try {
+      return (await api.get("/api/subscription_amount_plans")).data;
+    } catch (err) {
+      // try plural form before giving up
+      return (await api.get("/api/subscription_amount_plans")).data;
+    }
+  },
 };
 
 // ===============================
@@ -265,7 +286,7 @@ export const planAPI = {
    *  { plans: [...] }  OR  an array [...]
    */
   getPlans: async (name) => {
-    const url = name ? `/plans?name=${encodeURIComponent(name)}` : "/plans";
+    const url = name ? `/api/plans?name=${encodeURIComponent(name)}` : "/api/plans";
     const res = await api.get(url);
     return res.data;
   },
@@ -284,7 +305,7 @@ export const planAPI = {
    * }
    */
   createPlan: async (payload) => {
-    const res = await api.post("/plans", payload);
+    const res = await api.post("/api/plans", payload);
     return res.data;
   },
 
@@ -294,7 +315,7 @@ export const planAPI = {
    * name should be the plan identifier (string).
    */
   upsertPlanByName: async (name, payload) => {
-    const res = await api.put(`/plans/${encodeURIComponent(name)}`, payload);
+    const res = await api.put(`/api/plans/${encodeURIComponent(name)}`, payload);
     return res.data;
   },
 
@@ -303,7 +324,7 @@ export const planAPI = {
    * Convenience: remove a plan by name if your backend supports deletion.
    */
   deletePlanByName: async (name) => {
-    const res = await api.delete(`/plans/${encodeURIComponent(name)}`);
+    const res = await api.delete(`/api/plans/${encodeURIComponent(name)}`);
     return res.data;
   },
 };

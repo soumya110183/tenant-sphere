@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
-import { paymentsAPI, tenantAPI, amcAPI } from "@/services/api";
+import { paymentsAPI, tenantAPI, amcAPI, planAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Users, Loader2 } from "lucide-react";
 
@@ -30,7 +30,7 @@ const priceMap: Record<string, number> = {
   enterprice: 3500,
 };
 
-// Monthly AMC rates per plan
+// Monthly AMC rates per plan (fallback)
 const amcMonthlyRates: Record<string, number> = {
   trial: 0,
   basic: 100,
@@ -38,26 +38,9 @@ const amcMonthlyRates: Record<string, number> = {
   enterprise: 350,
 };
 
-// Calculate AMC amount based on plan and billing frequency
-const calculateAmcAmount = (plan: string, frequency: string): number => {
-  const planKey = plan.toLowerCase().split(/[-_\s]/)[0];
-  const monthlyRate = amcMonthlyRates[planKey] || 0;
+// plan-level AMC defaults loaded from backend
 
-  if (monthlyRate === 0) return 0;
-
-  switch (frequency) {
-    case "1_year":
-      return monthlyRate;
-    case "3_year":
-      return monthlyRate * 3;
-    case "6_year":
-      return monthlyRate * 6;
-    case "10_year":
-      return monthlyRate * 10;
-    default:
-      return monthlyRate;
-  }
-};
+// NOTE: calculateAmcAmount moved inside component so it can use dynamic planMap
 
 // Calculate expire date based on start date and billing frequency
 const calculateExpireDate = (startDate: string, frequency: string): string => {
@@ -107,6 +90,48 @@ const AMC_report: React.FC = () => {
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const { toast } = useToast();
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null);
+
+  // dynamic plan->amc defaults map
+  const [planMap, setPlanMap] = useState<Record<string, number>>({});
+
+  // Load plans from backend to populate planMap (amc defaults)
+  useEffect(() => {
+    const loadPlans = async () => {
+      try {
+        const res: any = await planAPI.getPlans(undefined);
+        const list = Array.isArray(res) ? res : res?.plans ?? [];
+        const map: Record<string, number> = {};
+        for (const p of list) {
+          const key = (p.name || p.key || "").toLowerCase().split(/[-_\s]/)[0];
+          map[key] = Number(p.amc_amount ?? p.amount ?? p.price ?? 0) || 0;
+        }
+        setPlanMap(map);
+      } catch (err) {
+        console.warn("Failed to load plan defaults:", err);
+      }
+    };
+    void loadPlans();
+  }, []);
+
+  // Calculate AMC amount based on plan and billing frequency (uses planMap)
+  const calculateAmcAmount = (plan: string, frequency: string): number => {
+    const planKey = (plan || "").toLowerCase().split(/[-_\s]/)[0];
+    const base = planMap[planKey] ?? amcMonthlyRates[planKey] ?? 0;
+    if (!base) return 0;
+
+    switch (frequency) {
+      case "1_year":
+        return base;
+      case "3_year":
+        return base * 3;
+      case "6_year":
+        return base * 6;
+      case "10_year":
+        return base * 10;
+      default:
+        return base;
+    }
+  };
 
   // AMC specific editable fields
   const [amcAmount, setAmcAmount] = useState<string>("");
@@ -623,7 +648,6 @@ const AMC_report: React.FC = () => {
                         {selected.status || "Active"}
                       </Badge>
                     </div>
-                   
                   </div>
 
                   {/* Modules Information */}

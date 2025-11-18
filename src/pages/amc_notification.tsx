@@ -17,7 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
 import tenantsData from "@/data/tenants.json";
-import { tenantAPI, amcAPI } from "@/services/api";
+import { tenantAPI, amcAPI, planAPI } from "@/services/api";
 
 /* ========= Types ========= */
 type BillingFrequency = "1_year" | "3_year" | "6_year" | "10_year";
@@ -78,27 +78,7 @@ const amcAnnualRates: Record<string, number> = {
   enterprice: 350, // tolerate common alias
 };
 
-function calculateAmcAmount(
-  plan: string | undefined,
-  frequency: BillingFrequency
-): number {
-  const planKey = (plan ?? "").toLowerCase().split(/[-_\s]/)[0];
-  const annualRate = amcAnnualRates[planKey] ?? 0;
-  if (!annualRate) return 0;
-
-  switch (frequency) {
-    case "1_year":
-      return annualRate;
-    case "3_year":
-      return annualRate * 3;
-    case "6_year":
-      return annualRate * 6;
-    case "10_year":
-      return annualRate * 10;
-    default:
-      return annualRate;
-  }
-}
+// calculateAmcAmount will be defined inside the component so it can use dynamic plan defaults
 
 function calculateExpireDate(
   startDate: string,
@@ -422,6 +402,53 @@ const AMC_notification: React.FC = () => {
     null
   );
 
+  // Map of plan key -> plan row (used to get amc_amount defaults)
+  const [planMap, setPlanMap] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    const loadPlans = async () => {
+      try {
+        const res: any = await planAPI.getPlans(undefined);
+        const plans = Array.isArray(res) ? res : res?.plans ?? res?.data ?? [];
+        const map: Record<string, any> = {};
+        for (const p of plans) {
+          const name = String(p.name ?? p.plan ?? p.id ?? "");
+          const key =
+            name.toLowerCase().split(/[-_\s]/)[0] || name.toLowerCase();
+          map[key] = p;
+        }
+        setPlanMap(map);
+      } catch {
+        // ignore
+      }
+    };
+    void loadPlans();
+  }, []);
+
+  function calculateAmcAmount(
+    plan: string | undefined,
+    frequency: BillingFrequency
+  ): number {
+    const planKey = (plan ?? "").toLowerCase().split(/[-_\s]/)[0];
+    const planRow = planMap[planKey];
+    const annualRate =
+      (planRow && Number(planRow.amc_amount)) ?? amcAnnualRates[planKey] ?? 0;
+    if (!annualRate) return 0;
+
+    switch (frequency) {
+      case "1_year":
+        return annualRate;
+      case "3_year":
+        return annualRate * 3;
+      case "6_year":
+        return annualRate * 6;
+      case "10_year":
+        return annualRate * 10;
+      default:
+        return annualRate;
+    }
+  }
+
   // Load tenants on mount
   useEffect(() => {
     const loadTenants = async () => {
@@ -628,7 +655,9 @@ const AMC_notification: React.FC = () => {
                         <Icon className="w-6 h-6" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold">{config.title}</h3>
+                        <h3 className="text-lg font-semibold">
+                          {config.title}
+                        </h3>
                         <p className="text-sm text-muted-foreground">
                           {config.description}
                         </p>
@@ -639,7 +668,8 @@ const AMC_notification: React.FC = () => {
                   <Badge
                     className={`text-white px-3 py-1 text-sm ${config.badgeBg} rounded-md shadow`}
                   >
-                    {tenants.length} {tenants.length === 1 ? "Tenant" : "Tenants"}
+                    {tenants.length}{" "}
+                    {tenants.length === 1 ? "Tenant" : "Tenants"}
                   </Badge>
                 </div>
 
@@ -717,11 +747,14 @@ const AMC_notification: React.FC = () => {
                                     ? "Expired"
                                     : "Expires"}{" "}
                                   {end
-                                    ? new Date(end).toLocaleDateString("en-US", {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric",
-                                      })
+                                    ? new Date(end).toLocaleDateString(
+                                        "en-US",
+                                        {
+                                          year: "numeric",
+                                          month: "short",
+                                          day: "numeric",
+                                        }
+                                      )
                                     : "—"}
                                 </span>
                               </div>
