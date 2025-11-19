@@ -149,7 +149,8 @@ const Reports = () => {
       // Send the user-selected format directly to the backend.
       // If the user selected 'pdf' the backend will receive type=pdf and
       // can generate a PDF (as you observed when opening the direct link).
-      await reportsAPI.exportReport(reportType, exportFormat);
+      // Pass an empty filters/options object as the third parameter to match the API signature.
+      await reportsAPI.exportReport(reportType, exportFormat, {});
 
       toast({
         title: "Export successful",
@@ -340,7 +341,21 @@ const Reports = () => {
           </Select>
 
           {/* Option to export the whole visible report as PDF / PNG */}
-          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => exportChartAsPng(fullReportRef, "full-report.png")}
+            className="ml-2"
+          >
+            Download Page (PNG)
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => exportChartAsPdf(fullReportRef, "full-report.pdf")}
+          >
+            Download Page (PDF)
+          </Button>
         </div>
       </div>
 
@@ -354,7 +369,24 @@ const Reports = () => {
             </div>
             <div className="flex items-center gap-2">
               {/* Client-side chart exports */}
-              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  exportChartAsPng(revenueRef, "revenue-chart.png")
+                }
+              >
+                Download PNG
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  exportChartAsPdf(revenueRef, "revenue-chart.pdf")
+                }
+              >
+                Download PDF
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -433,7 +465,24 @@ const Reports = () => {
                 <CardDescription>New tenants per month</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPng(tenantRef, "tenant-growth.png")
+                  }
+                >
+                  Download PNG
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPdf(tenantRef, "tenant-growth.pdf")
+                  }
+                >
+                  Download PDF
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -487,6 +536,24 @@ const Reports = () => {
                 <CardDescription>Tenants by business category</CardDescription>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPng(categoryRef, "categories.png")
+                  }
+                >
+                  Download PNG
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    exportChartAsPdf(categoryRef, "categories.pdf")
+                  }
+                >
+                  Download PDF
+                </Button>
               </div>
             </div>
           </CardHeader>

@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
-import { paymentsAPI, tenantAPI, amcAPI } from "@/services/api";
+import { paymentsAPI, tenantAPI, amcAPI, planAPI } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Users, Loader2 } from "lucide-react";
 
@@ -30,7 +30,7 @@ const priceMap: Record<string, number> = {
   enterprice: 3500,
 };
 
-// Monthly AMC rates per plan
+// Monthly AMC rates per plan (fallback)
 const amcMonthlyRates: Record<string, number> = {
   trial: 0,
   basic: 100,
@@ -38,26 +38,9 @@ const amcMonthlyRates: Record<string, number> = {
   enterprise: 350,
 };
 
-// Calculate AMC amount based on plan and billing frequency
-const calculateAmcAmount = (plan: string, frequency: string): number => {
-  const planKey = plan.toLowerCase().split(/[-_\s]/)[0];
-  const monthlyRate = amcMonthlyRates[planKey] || 0;
+// plan-level AMC defaults loaded from backend
 
-  if (monthlyRate === 0) return 0;
-
-  switch (frequency) {
-    case "1_year":
-      return monthlyRate;
-    case "3_year":
-      return monthlyRate * 3;
-    case "6_year":
-      return monthlyRate * 6;
-    case "10_year":
-      return monthlyRate * 10;
-    default:
-      return monthlyRate;
-  }
-};
+// NOTE: calculateAmcAmount moved inside component so it can use dynamic planMap
 
 // Calculate expire date based on start date and billing frequency
 const calculateExpireDate = (startDate: string, frequency: string): string => {
@@ -66,16 +49,16 @@ const calculateExpireDate = (startDate: string, frequency: string): string => {
 
   switch (frequency) {
     case "1_year":
-      expireDate.setMonth(expireDate.getMonth() + 12);
+      expireDate.setFullYear(expireDate.getFullYear() + 1);
       break;
     case "3_year":
-      expireDate.setMonth(expireDate.getMonth() + 36);
+      expireDate.setFullYear(expireDate.getFullYear() + 3);
       break;
     case "6_year":
-      expireDate.setMonth(expireDate.getMonth() + 72);
+      expireDate.setFullYear(expireDate.getFullYear() + 6);
       break;
     case "10_year":
-      expireDate.setFullYear(expireDate.getFullYear() + 144);
+      expireDate.setFullYear(expireDate.getFullYear() + 10);
       break;
     default:
       expireDate.setMonth(expireDate.getMonth() + 1);
@@ -108,9 +91,51 @@ const AMC_report: React.FC = () => {
   const { toast } = useToast();
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null);
 
+  // dynamic plan->amc defaults map
+  const [planMap, setPlanMap] = useState<Record<string, number>>({});
+
+  // Load plans from backend to populate planMap (amc defaults)
+  useEffect(() => {
+    const loadPlans = async () => {
+      try {
+        const res: any = await planAPI.getPlans(undefined);
+        const list = Array.isArray(res) ? res : res?.plans ?? [];
+        const map: Record<string, number> = {};
+        for (const p of list) {
+          const key = (p.name || p.key || "").toLowerCase().split(/[-_\s]/)[0];
+          map[key] = Number(p.amc_amount ?? p.amount ?? p.price ?? 0) || 0;
+        }
+        setPlanMap(map);
+      } catch (err) {
+        console.warn("Failed to load plan defaults:", err);
+      }
+    };
+    void loadPlans();
+  }, []);
+
+  // Calculate AMC amount based on plan and billing frequency (uses planMap)
+  const calculateAmcAmount = (plan: string, frequency: string): number => {
+    const planKey = (plan || "").toLowerCase().split(/[-_\s]/)[0];
+    const base = planMap[planKey] ?? amcMonthlyRates[planKey] ?? 0;
+    if (!base) return 0;
+
+    switch (frequency) {
+      case "1_year":
+        return base;
+      case "3_year":
+        return base * 3;
+      case "6_year":
+        return base * 6;
+      case "10_year":
+        return base * 10;
+      default:
+        return base;
+    }
+  };
+
   // AMC specific editable fields
   const [amcAmount, setAmcAmount] = useState<string>("");
-  const [billingFrequency, setBillingFrequency] = useState<string>("monthly");
+  const [billingFrequency, setBillingFrequency] = useState<string>("yearly");
   const [amcNumber, setAmcNumber] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
   const [expireDate, setExpireDate] = useState<string>("");
@@ -189,7 +214,7 @@ const AMC_report: React.FC = () => {
   // Populate AMC fields when tenant is selected
   useEffect(() => {
     if (selected) {
-      const frequency = selected.billing_frequency || "monthly";
+      const frequency = selected.billing_frequency || "yearly";
       setBillingFrequency(frequency);
 
       // Auto-calculate AMC amount based on plan and billing frequency
@@ -378,12 +403,12 @@ const AMC_report: React.FC = () => {
 
       {/* Debug info - remove after fixing */}
       {loading && (
-       <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading amc report...</p>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading amc report...</p>
+          </div>
         </div>
-      </div>
       )}
 
       {!loading && tenants.length === 0 && (
@@ -588,12 +613,6 @@ const AMC_report: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Tenant ID
-                      </p>
-                      <p className="text-base font-semibold">{selected.id}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
                         Tenant Name
                       </p>
                       <p className="text-base font-semibold">{selected.name}</p>
@@ -629,24 +648,6 @@ const AMC_report: React.FC = () => {
                         {selected.status || "Active"}
                       </Badge>
                     </div>
-                    {selected.created_at && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground mb-1">
-                          <Calendar className="h-4 w-4 inline mr-1" />
-                          Created Date
-                        </p>
-                        <p className="text-base">
-                          {new Date(selected.created_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
-                        </p>
-                      </div>
-                    )}
                   </div>
 
                   {/* Modules Information */}
@@ -696,6 +697,26 @@ const AMC_report: React.FC = () => {
                           </p>
                         )}
                       </div>
+
+                      {/* Created Date (full block) - placed below Active Modules */}
+                      {selected.created_at && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium text-muted-foreground mb-1">
+                            <Calendar className="h-4 w-4 inline mr-1" />
+                            Created Date
+                          </p>
+                          <p className="text-base">
+                            {new Date(selected.created_at).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -707,8 +728,6 @@ const AMC_report: React.FC = () => {
                     AMC Billing Details
                   </h4>
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-
-
                     {/* AMC Amount (Auto-calculated based on plan and frequency) */}
                     <div>
                       <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -743,9 +762,7 @@ const AMC_report: React.FC = () => {
                         <SelectContent>
                           <SelectItem value="1_year">1 Year</SelectItem>
                           <SelectItem value="3_year">3 Year</SelectItem>
-                          <SelectItem value="6_year">
-                            6 Year
-                          </SelectItem>
+                          <SelectItem value="6_year">6 Year</SelectItem>
                           <SelectItem value="10_year">10 Year</SelectItem>
                         </SelectContent>
                       </Select>
@@ -971,6 +988,11 @@ const AMC_report: React.FC = () => {
                               {tenant.email && (
                                 <p className="text-xs text-muted-foreground">
                                   Email: {tenant.email}
+                                </p>
+                              )}
+                              {tenant.phone && (
+                                <p className="text-xs text-muted-foreground">
+                                  Phone: {tenant.phone}
                                 </p>
                               )}
                             </div>

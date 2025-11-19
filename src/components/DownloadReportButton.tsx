@@ -1,5 +1,6 @@
 // DownloadReportButton.tsx
 import React, { useState } from "react";
+import { reportsAPI } from "@/services/api";
 
 type Props = {
   report: "all-data" | "tenants" | "users" | "payments" | "revenue";
@@ -22,41 +23,9 @@ export default function DownloadReportButton({
   async function download() {
     try {
       setLoading(true);
-      // Use type=pdf for PDF (or type=csv for CSV)
-      const url = `${base}/reports/export?type=pdf&report=${encodeURIComponent(report)}`;
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch(url, {
-        method: "GET",
-        headers,
-        // if you're using cookie auth:
-        credentials: useCredentials ? "include" : "same-origin",
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`Request failed: ${res.status} ${res.statusText} ${txt}`);
-      }
-
-      // parse filename from Content-Disposition (if present)
-      const cd = res.headers.get("Content-Disposition") || "";
-      let filename = `${report}-${Date.now()}.pdf`;
-      if (cd) {
-        // try filename*=UTF-8''encoded or filename="..."
-        const m = /filename\\*=UTF-8''([^;\\n]+)|filename=\"([^\"\\n]+)\"/i.exec(cd);
-        if (m) filename = decodeURIComponent(m[1] || m[2]);
-      }
-
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(blobUrl);
+      // Use the existing reportsAPI which calls `/api/reports/export` and
+      // handles responseType and auth via the shared axios instance.
+      await reportsAPI.exportReport(report, "pdf", {});
     } catch (err: any) {
       console.error("download error", err);
       alert("Download failed: " + (err?.message || err));
@@ -65,9 +34,33 @@ export default function DownloadReportButton({
     }
   }
 
+  // Render a non-button wrapper so this component can be placed inside
+  // another button (e.g. the UI `Button` component) without nesting
+  // interactive elements. Use a focusable `span` with role="button"
+  // and keyboard handling for accessibility.
   return (
-    <button onClick={download} disabled={loading}>
-      {loading ? "Preparing..." : label || `Download ${report.toUpperCase()} PDF`}
-    </button>
+    <span
+      role="button"
+      tabIndex={loading ? -1 : 0}
+      aria-disabled={loading}
+      onClick={(e) => {
+        if (loading) return;
+        e.stopPropagation();
+        void download();
+      }}
+      onKeyDown={(e) => {
+        if (loading) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          void download();
+        }
+      }}
+      style={{ display: "inline-block" }}
+    >
+      {loading
+        ? "Preparing..."
+        : label || `Download ${report.toUpperCase()} PDF`}
+    </span>
   );
 }

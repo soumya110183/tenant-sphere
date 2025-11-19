@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import tenantsData from "@/data/tenants.json";
-import { paymentsAPI, tenantAPI } from "@/services/api";
+import { paymentsAPI, tenantAPI, plansAPI } from "@/services/api"; // NEW: import plansAPI
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Users, Loader2 } from "lucide-react";
 
@@ -53,7 +53,16 @@ const Subscriptions: React.FC = () => {
   const { toast } = useToast();
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null);
 
-  // Load tenants from backend on mount
+  // NEW: plans state & edit state
+  const [plans, setPlans] = useState<any[] | null>(null);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState<string | null>(null);
+
+  // editing state: store a shallow clone of plan being edited
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [savingPlan, setSavingPlan] = useState<boolean>(false);
+
+  // Load tenants from backend on mount (unchanged)
   useEffect(() => {
     const loadTenants = async () => {
       console.log("Loading tenants...");
@@ -87,7 +96,44 @@ const Subscriptions: React.FC = () => {
     loadTenants();
   }, []);
 
-  // Load payments when selected tenant changes
+  // NEW: Load plans on mount
+  useEffect(() => {
+    const loadPlans = async () => {
+      setPlansLoading(true);
+      setPlansError(null);
+      try {
+        const res = await plansAPI.getPlans();
+        // expected shape: { plans: [...] }
+        const list = res?.plans ?? res ?? [];
+        // Normalize: ensure every plan has expected fields
+        const normalized = Array.isArray(list)
+          ? list.map((p) => ({
+              // fields from your backend: name, amount, billing, reports, inventory, user, amc_amount
+              key: (p.name || "").toLowerCase().split(/\s|[-_]/)[0] || p.name,
+              name: p.name || "Unknown",
+              amount: Number(p.amount || 0),
+              billing: Boolean(p.billing ?? true),
+              reports: Boolean(p.reports ?? false),
+              inventory: Boolean(p.inventory ?? false),
+              users: Number(p.user ?? 0),
+              amc_amount: Number(p.amc_amount ?? 0),
+              raw: p,
+            }))
+          : [];
+        setPlans(normalized);
+      } catch (err: any) {
+        console.error("Failed to load plans:", err);
+        setPlansError(err?.message ?? String(err));
+        setPlans(null);
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+
+    loadPlans();
+  }, []);
+
+  // Load payments when selected tenant changes (unchanged)
   useEffect(() => {
     const loadPayments = async () => {
       if (!selected?.id) {
@@ -123,29 +169,190 @@ const Subscriptions: React.FC = () => {
     return acc;
   }, {});
 
+  // Helper: fallback static plans (previous behaviour). Used when backend has no plans.
+  const fallbackPlans = [
+    {
+      key: "trial",
+      title: "Trial (7 days)",
+      users: 0,
+      features: ["All features"],
+      amount: 0,
+      billing: true,
+      reports: true,
+      inventory: true,
+      amc_amount: 0,
+    },
+    {
+      key: "basic",
+      title: "Basic",
+      note: "",
+      users: 1,
+      features: ["Billing", "Reports", "1 user", "AMC 100 AED/month"],
+      amount: priceMap["basic"] ?? 1000,
+      billing: true,
+      reports: true,
+      inventory: false,
+      amc_amount: 100,
+    },
+    {
+      key: "professional",
+      title: "Professional",
+      note: "",
+      users: 2,
+      features: [
+        "Billing",
+        "Reports",
+        "Inventory",
+        "2 users",
+        "AMC 250 AED/month",
+      ],
+      amount: priceMap["professional"] ?? 2500,
+      billing: true,
+      reports: true,
+      inventory: true,
+      amc_amount: 250,
+    },
+    {
+      key: "enterprise",
+      title: "Enterprise",
+      note: "",
+      users: 10,
+      features: [
+        "Billing",
+        "Reports",
+        "Inventory",
+        "10 users",
+        "AMC 350 AED/month",
+      ],
+      amount: priceMap["enterprise"] ?? 3500,
+      billing: true,
+      reports: true,
+      inventory: true,
+      amc_amount: 350,
+    },
+  ];
+
+  // Compute plan source: prefer backend plans if present, otherwise fallback
+  const effectivePlans =
+    plans && plans.length > 0
+      ? plans.map((p) => ({
+          key: p.key || (p.name || "").toLowerCase(),
+          title: p.name || p.key,
+          users: p.users ?? 0,
+          amount: p.amount ?? 0,
+          billing: p.billing ?? true,
+          reports: p.reports ?? false,
+          inventory: p.inventory ?? false,
+          amc_amount: p.amc_amount ?? 0,
+          raw: p.raw ?? p,
+        }))
+      : fallbackPlans;
+
+  // Handler: start editing a plan
+  const startEditPlan = (plan: any) => {
+    // create a shallow editable copy
+    setEditingPlan({
+      key: plan.key,
+      originalName: plan.title,
+      name: plan.title,
+      amount: plan.amount,
+      billing: !!plan.billing,
+      reports: !!plan.reports,
+      inventory: !!plan.inventory,
+      users: plan.users ?? 0,
+      amc_amount: plan.amc_amount ?? 0,
+    });
+  };
+
+  const cancelEdit = () => setEditingPlan(null);
+
+  // Handler: save edited plan via plansAPI.upsertPlanByName
+  const savePlan = async () => {
+    if (!editingPlan) return;
+    setSavingPlan(true);
+
+    // Prepare payload for backend
+    const payload = {
+      name: editingPlan.name,
+      amount: Number(editingPlan.amount || 0),
+      billing: Boolean(editingPlan.billing),
+      reports: Boolean(editingPlan.reports),
+      inventory: Boolean(editingPlan.inventory),
+      user: Number(editingPlan.users || 0),
+      amc_amount: Number(editingPlan.amc_amount || 0),
+    };
+
+    // Attempt to update by name (upsert)
+    try {
+      // Use originalName as the identifier if editing name; backend route uses :name in URL
+      const identifier = editingPlan.originalName || editingPlan.name;
+      const res = await plansAPI.upsertPlanByName(identifier, payload);
+
+      // response expected { plan: {...} } or similar
+      const updatedPlan = (res && (res.plan || res)) || null;
+      // Update local plans state optimistically
+      setPlans((prev) => {
+        const pList = prev && Array.isArray(prev) ? [...prev] : [];
+        const idx = pList.findIndex(
+          (p) => (p.raw?.name || p.name || p.key) === identifier
+        );
+        const normalized = {
+          key: (updatedPlan?.name || payload.name)
+            .toLowerCase()
+            .split(/\s|[-_]/)[0],
+          name: updatedPlan?.name ?? payload.name,
+          amount: Number(updatedPlan?.amount ?? payload.amount),
+          billing: updatedPlan?.billing ?? payload.billing,
+          reports: updatedPlan?.reports ?? payload.reports,
+          inventory: updatedPlan?.inventory ?? payload.inventory,
+          users: Number(updatedPlan?.user ?? payload.user),
+          amc_amount: Number(updatedPlan?.amc_amount ?? payload.amc_amount),
+          raw: updatedPlan || payload,
+        };
+        if (idx >= 0) {
+          pList[idx] = normalized;
+        } else {
+          pList.push(normalized);
+        }
+        return pList;
+      });
+
+      toast({
+        title: "Plan saved",
+        description: `Plan ${payload.name} updated successfully.`,
+      });
+
+      setEditingPlan(null);
+    } catch (err: any) {
+      console.error("Failed to save plan:", err);
+      toast({
+        title: "Failed to save plan",
+        description: err?.message ?? String(err),
+      });
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Subscriptions</h1>
-        <p className="text-muted-foreground mt-1">
-          View tenant plans and details
-        </p>
+        <p className="text-muted-foreground mt-1">View tenant plans and details</p>
       </div>
 
       {/* Debug info - remove after fixing */}
       {loading && (
         <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading Subscriptions...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading Subscriptions...</p>
+          </div>
         </div>
-      </div>
       )}
 
       {!loading && tenants.length === 0 && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-          No tenants found. Check console for errors.
-        </div>
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">No tenants found. Check console for errors.</div>
       )}
 
       {!loading && tenants.length > 0 && (
@@ -154,9 +361,7 @@ const Subscriptions: React.FC = () => {
             <Card className="col-span-2">
               <CardHeader>
                 <CardTitle>Select Tenant</CardTitle>
-                <CardDescription>
-                  Choose a tenant to view subscription details
-                </CardDescription>
+                <CardDescription>Choose a tenant to view subscription details</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -175,16 +380,11 @@ const Subscriptions: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {tenants.map((tenant: any) => (
-                          <SelectItem
-                            key={tenant.id}
-                            value={tenant.id.toString()}
-                          >
+                          <SelectItem key={tenant.id} value={tenant.id.toString()}>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{tenant.name}</span>
                               <span className="text-muted-foreground">·</span>
-                              <span className="text-sm text-muted-foreground">
-                                {tenant.category}
-                              </span>
+                              <span className="text-sm text-muted-foreground">{tenant.category}</span>
                             </div>
                           </SelectItem>
                         ))}
@@ -195,13 +395,19 @@ const Subscriptions: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Category</p>
-                      <Badge variant="outline" className="mt-1">
+                      <Badge
+                        variant="outline"
+                        className="mt-1 dark:bg-slate-700 dark:text-white"
+                      >
                         {selected?.category}
                       </Badge>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Plan</p>
-                      <Badge variant="outline" className="mt-1">
+                      <Badge
+                        variant="outline"
+                        className="mt-1 dark:bg-slate-700 dark:text-white"
+                      >
                         {selected?.plan}
                       </Badge>
                     </div>
@@ -217,14 +423,9 @@ const Subscriptions: React.FC = () => {
               <CardContent>
                 <div className="space-y-3">
                   {Object.keys(totalByPlan).map((plan) => (
-                    <div
-                      key={plan}
-                      className="flex items-center justify-between"
-                    >
+                    <div key={plan} className="flex items-center justify-between">
                       <div className="font-medium capitalize">{plan}</div>
-                      <div className="text-muted-foreground">
-                        {totalByPlan[plan]}
-                      </div>
+                      <div className="text-muted-foreground">{totalByPlan[plan]}</div>
                     </div>
                   ))}
                 </div>
@@ -238,13 +439,11 @@ const Subscriptions: React.FC = () => {
                 <div>
                   <CardTitle>Subscription Plans</CardTitle>
                   <div className="mt-2">
-                  <CardDescription>
-                    Available plans and included features
-                  </CardDescription>
+                    <CardDescription>Available plans and included features (loaded from DB)</CardDescription>
                   </div>
                 </div>
 
-                {/* Save Changes Button */}
+                {/* Save Changes Button - unchanged functionality */}
                 <Button
                   size="default"
                   disabled={!selected || !selectedPlan || creatingPlan !== null}
@@ -265,10 +464,18 @@ const Subscriptions: React.FC = () => {
                       return;
                     }
 
-                    const planPrice = priceMap[selectedPlan] ?? 0;
+                    const selectedPlanData =
+                      effectivePlans.find((p: any) => p.key === selectedPlan) || null;
+                    const planPrice =
+                      (selectedPlanData?.amount as number) ??
+                      priceMap[selectedPlan ?? ""] ??
+                      0;
                     const planTitle =
-                      selectedPlan.charAt(0).toUpperCase() +
-                      selectedPlan.slice(1);
+                      selectedPlanData?.title ||
+                      (selectedPlan
+                        ? selectedPlan.charAt(0).toUpperCase() +
+                          selectedPlan.slice(1)
+                        : "");
 
                     toast({
                       title: "Processing payment",
@@ -279,8 +486,8 @@ const Subscriptions: React.FC = () => {
                     try {
                       const payload = {
                         tenant_id: String(selected.id),
-                        amount: planPrice,
-                        currency: "USD",
+                        amount: Number(planPrice) || 0,
+                        currency: "AED",
                         plan: selectedPlan,
                         status: "paid",
                         transaction_id: `txn_${Date.now()}_${Math.random()
@@ -314,10 +521,7 @@ const Subscriptions: React.FC = () => {
                           const list = fresh?.payments ?? fresh ?? [];
                           setPayments(Array.isArray(list) ? list : []);
                         } catch (refetchErr) {
-                          console.error(
-                            "Refetch after createPayment failed:",
-                            refetchErr
-                          );
+                          console.error("Refetch after createPayment failed:", refetchErr);
                         }
 
                         try {
@@ -328,21 +532,16 @@ const Subscriptions: React.FC = () => {
                           setSelected({ ...selected, plan: selectedPlan });
                           setTenants((prev) =>
                             prev.map((t) =>
-                              t.id === selected.id
-                                ? { ...t, plan: selectedPlan }
-                                : t
+                              t.id === selected.id ? { ...t, plan: selectedPlan } : t
                             )
                           );
                         } catch (updateErr) {
-                          console.error(
-                            "Failed to update tenant plan:",
-                            updateErr
-                          );
+                          console.error("Failed to update tenant plan:", updateErr);
                         }
 
                         toast({
                           title: "Payment submitted",
-                          description: `${planPrice} USD payment submitted for ${selected.name}. Plan updated to ${planTitle}.`,
+                          description: `${planPrice} AED payment submitted for ${selected.name}. Plan updated to ${planTitle}.`,
                         });
                         setSelectedPlan(null);
                         return;
@@ -358,21 +557,16 @@ const Subscriptions: React.FC = () => {
                         setSelected({ ...selected, plan: selectedPlan });
                         setTenants((prev) =>
                           prev.map((t) =>
-                            t.id === selected.id
-                              ? { ...t, plan: selectedPlan }
-                              : t
+                            t.id === selected.id ? { ...t, plan: selectedPlan } : t
                           )
                         );
                       } catch (updateErr) {
-                        console.error(
-                          "Failed to update tenant plan:",
-                          updateErr
-                        );
+                        console.error("Failed to update tenant plan:", updateErr);
                       }
 
                       toast({
                         title: "Payment recorded",
-                        description: `${planPrice} USD recorded for ${selected.name}. Plan updated to ${planTitle}.`,
+                        description: `${planPrice} AED recorded for ${selected.name}. Plan updated to ${planTitle}.`,
                       });
 
                       setSelectedPlan(null);
@@ -400,53 +594,32 @@ const Subscriptions: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  {
-                    key: "trial",
-                    title: "Trial (7 days)",
-                    
-                    users: 0,
-                    features: ["All features"],
-                  },
-                  {
-                    key: "basic",
-                    title: "Basic",
-                    note: "",
-                    users: 1,
-                    features: ["Billing", "Reports", "1 user", "AMC 100 AED/month"],
-                  },
-                  {
-                    key: "professional",
-                    title: "Professional",
-                    note: "",
-                    users: 2,
-                    features: ["Billing", "Reports", "Inventory", "2 users", "AMC 250 AED/month"],
-                  },
-                  {
-                    key: "enterprise",
-                    title: "Enterprise",
-                    note: "",
-                    users: 10,
-                    features: ["Billing", "Reports", "Inventory", "10 users", "AMC 350 AED/month"],
-                  },
-                ].map((plan) => {
+                {effectivePlans.map((plan) => {
                   const isActive =
                     selected &&
                     selected.plan &&
                     selected.plan.toLowerCase().startsWith(plan.key);
                   const isSelected = selectedPlan === plan.key;
-                  const planPrice = priceMap[plan.key] ?? 0;
+                  const planPrice = plan.amount ?? 0;
                   const formattedPrice = new Intl.NumberFormat("en-AE", {
                     style: "currency",
                     currency: "AED",
                     maximumFractionDigits: 0,
                   }).format(planPrice);
 
+                  const isEditingThis =
+                    editingPlan &&
+                    (editingPlan.key === plan.key ||
+                      editingPlan.originalName === plan.title);
+
                   return (
                     <div
                       key={plan.key}
-                      onClick={() => setSelectedPlan(plan.key)}
-                      className={`group relative p-6 border-2 rounded-xl transition-all duration-300 cursor-pointer ${
+                      // only set selected plan on click if not editing currently
+                      onClick={() => {
+                        if (!isEditingThis) setSelectedPlan(plan.key);
+                      }}
+                      className={`group relative p-6 border-2 rounded-xl transition-all duration-300 cursor-pointer min-h-[220px] ${
                         isActive
                           ? "border-green-500 bg-green-50 dark:bg-green-950/20 shadow-md"
                           : isSelected
@@ -454,35 +627,37 @@ const Subscriptions: React.FC = () => {
                           : "border-border hover:border-primary/50 hover:shadow-lg"
                       }`}
                     >
+                      {/* TOP-RIGHT BADGES: keep badges aligned consistently */}
+                      <div className="absolute top-4 right-4 flex flex-col items-end gap-2 pointer-events-none">
+                        <div className="flex gap-2 items-center pointer-events-auto">
+                          {isActive && (
+                            <Badge
+                              variant="default"
+                              className="text-xs bg-green-600 dark:bg-green-500/80 dark:text-white"
+                            >
+                              Current
+                            </Badge>
+                          )}
+                          {isSelected && (
+                            <Badge
+                              variant="default"
+                              className="text-xs bg-blue-600 dark:bg-blue-500/80 dark:text-white"
+                            >
+                              Selected
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Plan Header */}
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xl font-bold text-foreground">
-                            {plan.title}
-                          </h3>
-                          <div className="flex gap-2">
-                            {isActive && (
-                              <Badge
-                                variant="default"
-                                className="text-xs bg-green-600"
-                              >
-                                Current
-                              </Badge>
-                            )}
-                            {isSelected && (
-                              <Badge
-                                variant="default"
-                                className="text-xs bg-blue-600"
-                              >
-                                Selected
-                              </Badge>
-                            )}
-                          </div>
+                          <h3 className="text-xl font-bold text-foreground">{plan.title}</h3>
+                          {/* an invisible placeholder to keep layout balance */}
+                          <div style={{ width: 80 }} />
                         </div>
                         {plan.note && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {plan.note}
-                          </p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{plan.note}</p>
                         )}
                       </div>
 
@@ -490,52 +665,241 @@ const Subscriptions: React.FC = () => {
                       <div className="mb-6">
                         <div className="flex items-baseline gap-1">
                           <span className="text-3xl font-bold text-foreground">
-                            {planPrice === 0
-                              ? "Free"
-                              : planPrice.toLocaleString()}
+                            {planPrice === 0 ? "Free" : planPrice.toLocaleString()}
                           </span>
                           {planPrice > 0 && (
-                            <span className="text-sm text-muted-foreground">
-                              AED
-                            </span>
+                            <span className="text-sm text-muted-foreground">AED</span>
                           )}
                         </div>
                         {plan.users > 0 && (
                           <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
                             <Users className="h-4 w-4" />
-                            <span>
-                              {plan.users} {plan.users === 1 ? "user" : "users"}
-                            </span>
+                            <span>{plan.users} {plan.users === 1 ? "user" : "users"}</span>
                           </div>
                         )}
                       </div>
 
-                      {/* Features List */}
-                      <div className="mb-6">
-                        <h4 className="text-sm font-semibold text-foreground mb-3">
-                          What's included:
-                        </h4>
-                        <ul className="space-y-2">
-                          {plan.features.map((feature) => (
-                            <li
-                              key={feature}
-                              className="flex items-start gap-2 text-sm text-muted-foreground"
-                            >
-                              <svg
-                                className="h-5 w-5 text-primary flex-shrink-0 mt-0.5"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
+                      {/* Features List or Edit Form */}
+                      {!isEditingThis && (
+                        <div className="mb-6">
+                          <h4 className="text-sm font-semibold text-foreground mb-3">What's included:</h4>
+                          <ul className="space-y-2">
+                            {/* derive feature list from flags */}
+                            {plan.billing && (
+                              <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                                  <path d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span>Billing</span>
+                              </li>
+                            )}
+                            {plan.reports && (
+                              <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                                  <path d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span>Reports</span>
+                              </li>
+                            )}
+                            {plan.inventory && (
+                              <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                                  <path d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span>Inventory</span>
+                              </li>
+                            )}
+                            {/* AMC feature */}
+                            {plan.amc_amount > 0 && (
+                              <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <svg className="h-5 w-5 text-primary dark:text-white flex-shrink-0 mt-0.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                                  <path d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span>AMC {plan.amc_amount} AED/month</span>
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                      {isEditingThis && editingPlan && (
+                        <div
+                          className="mb-6"
+                          style={{ zIndex: 2 }}
+                        >
+                          <h4 className="text-sm font-semibold text-foreground mb-3">Edit plan</h4>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Name</label>
+                              <input
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           placeholder:text-slate-500
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder:text-slate-400"
+                                value={editingPlan.name}
+                                onChange={(e) =>
+                                  setEditingPlan({
+                                    ...editingPlan,
+                                    name: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Amount (AED)</label>
+                              <input
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
+                                type="number"
+                                value={editingPlan.amount}
+                                onChange={(e) =>
+                                  setEditingPlan({
+                                    ...editingPlan,
+                                    amount: Number(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className="flex gap-2">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={editingPlan.billing}
+                                  onChange={(e) =>
+                                    setEditingPlan({
+                                      ...editingPlan,
+                                      billing: e.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Billing"
+                                />
+                                <span className="dark:text-slate-200">Billing</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={editingPlan.reports}
+                                  onChange={(e) =>
+                                    setEditingPlan({
+                                      ...editingPlan,
+                                      reports: e.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Reports"
+                                />
+                                <span className="dark:text-slate-200">Reports</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={editingPlan.inventory}
+                                  onChange={(e) =>
+                                    setEditingPlan({
+                                      ...editingPlan,
+                                      inventory: e.target.checked,
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-border bg-white/95 checked:accent-primary dark:bg-slate-800 dark:border-slate-600"
+                                  aria-label="Inventory"
+                                />
+                                <span className="dark:text-slate-200">Inventory</span>
+                              </label>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">Users (count)</label>
+                              <input
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
+                                type="number"
+                                value={editingPlan.users}
+                                onChange={(e) =>
+                                  setEditingPlan({
+                                    ...editingPlan,
+                                    users: Number(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs text-muted-foreground dark:text-slate-300">AMC amount (AED)</label>
+                              <input
+                                className="mt-1 block w-full border px-2 py-1 rounded
+                                           bg-white/95 text-black border-border
+                                           dark:bg-slate-800 dark:text-white dark:border-slate-700"
+                                type="number"
+                                value={editingPlan.amc_amount}
+                                onChange={(e) =>
+                                  setEditingPlan({
+                                    ...editingPlan,
+                                    amc_amount: Number(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                onClick={async (ev) => {
+                                  ev.stopPropagation();
+                                  await savePlan();
+                                }}
+                                disabled={savingPlan}
+                                className={
+                                  "px-3 py-1.5 rounded " +
+                                  "bg-primary text-white focus:ring-2 focus:ring-offset-1 " +
+                                  "dark:bg-indigo-500 dark:text-white dark:focus:ring-indigo-600"
+                                }
                               >
-                                <path d="M5 13l4 4L19 7"></path>
-                              </svg>
-                              <span>{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
+                                {savingPlan ? "Saving..." : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  cancelEdit();
+                                }}
+                                className={
+                                  "px-3 py-1.5 rounded " +
+                                  "bg-transparent text-muted-foreground hover:bg-black/5 " +
+                                  "dark:text-slate-300 dark:hover:bg-white/5"
+                                }
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EDIT BUTTON: positioned bottom-right and visible on hover only */}
+                      <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto">
+                        <Button
+                          size="sm"
+                          className={
+                            "px-3 py-1.5 rounded shadow-sm " +
+                            "bg-white/5 text-black hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-offset-1 " +
+                            "dark:bg-white/10 dark:text-white dark:hover:bg-white/20 dark:focus:ring-white/20"
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditPlan(plan);
+                          }}
+                        >
+                          Edit
+                        </Button>
                       </div>
                     </div>
                   );
