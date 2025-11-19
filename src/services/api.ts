@@ -3,8 +3,8 @@ import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
 
 // Base URLs
- const API_URL = "https://billingbackend-1vei.onrender.com";
-//const API_URL = "http://localhost:5000";
+//  const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
@@ -207,4 +207,28 @@ export const invoiceService = {
   create: (data) => api.post('api/invoices', data),
   delete: (id) => api.delete(`api/invoices/${id}`),
   getStats: () => api.get('api/invoices/stats'),
+};
+
+// ===============================
+// STAFF API
+// ===============================
+export const staffService = {
+  // Get all staff users belonging to the current tenant
+  getAll: async (search = "") => {
+    const params = {};
+    if (search) params.search = search;
+    return (await api.get("/api/staff", { params })).data;
+  },
+
+  // Get single staff detail
+  getById: async (id) => (await api.get(`/api/staff/${id}`)).data,
+
+  // Create staff user
+  create: async (data) => (await api.post("/api/staff", data)).data,
+
+  // Update staff user
+  update: async (id, data) => (await api.put(`/api/staff/${id}`, data)).data,
+
+  // Delete staff user
+  delete: async (id) => (await api.delete(`/api/staff/${id}`)).data,
 };
