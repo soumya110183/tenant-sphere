@@ -29,7 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();
@@ -84,6 +84,11 @@ const SupermarketBilling = () => {
 
   const inputRefs = useRef<HTMLInputElement[]>([]);
   const suggestionRef = useRef<HTMLDivElement | null>(null);
+
+
+  const [customerSearch, setCustomerSearch] = useState("");
+const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   // 🔄 Fetch inventory products
   useEffect(() => {
@@ -1282,18 +1287,96 @@ const SupermarketBilling = () => {
             {/* Customer & Loyalty */}
             <div className="space-y-2">
               <Label>Customer (for loyalty & coupons)</Label>
-              <select
-                className="w-full border rounded-md px-2 py-2 text-sm"
-                value={selectedCustomerId ?? ""}
-                onChange={(e) => handleCustomerChange(e.target.value)}
-              >
-                <option value="">Walk-in (No customer)</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.phone ? `(${c.phone})` : ""}
-                  </option>
-                ))}
-              </select>
+            <div className="relative">
+  <Input
+    placeholder="Search customer by name or phone"
+    value={customerSearch}
+    onChange={(e) => {
+      const val = e.target.value;
+      setCustomerSearch(val);
+
+      if (!val.trim()) {
+        setCustomerSuggestions([]);
+        setShowCustomerSuggestions(false);
+        setSelectedCustomer(null);
+        setSelectedCustomerId(null);
+        return;
+      }
+
+      const search = val.toLowerCase();
+
+      const filtered = customers.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          (c.phone && c.phone.toLowerCase().includes(search))
+      );
+
+      setCustomerSuggestions(filtered);
+      setShowCustomerSuggestions(true);
+    }}
+    onFocus={() => {
+      if (customerSuggestions.length > 0) setShowCustomerSuggestions(true);
+    }}
+  />
+
+  {showCustomerSuggestions && customerSuggestions.length > 0 && (
+    <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
+      {customerSuggestions.map((c) => (
+        <div
+          key={c.id}
+          className="p-2 cursor-pointer hover:bg-gray-100 border-b"
+          onClick={() => {
+            setSelectedCustomerId(c.id);
+            setSelectedCustomer(c);
+            setCustomerSearch(c.name);
+            setShowCustomerSuggestions(false);
+
+            // reset discounts
+            setRedeemPoints("");
+            setCouponCode("");
+            setPreview(null);
+            setPreviewItems([]);
+          }}
+        >
+          <p className="font-semibold text-sm">{c.name}</p>
+          <p className="text-xs text-gray-500">{c.phone || "No phone"}</p>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+{selectedCustomer && (
+  <div className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200">
+    <div className="flex justify-between">
+      <span className="font-medium">Name:</span>
+      <span>{selectedCustomer.name}</span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Phone:</span>
+      <span>{selectedCustomer.phone || "N/A"}</span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Points:</span>
+      <span className="text-blue-600 font-semibold">
+        {selectedCustomer.loyalty_points || 0}
+      </span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Tier:</span>
+      <span>{selectedCustomer.membership_tier || "Bronze"}</span>
+    </div>
+
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleOpenRedeemPopup}
+      className="w-full mt-2"
+    >
+      Redeem Points
+    </Button>
+  </div>
+)}
+
 
               {selectedCustomer && (
                 <div className="text-xs text-muted-foreground mt-1 space-y-1">

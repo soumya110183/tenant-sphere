@@ -26,13 +26,19 @@ import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
 import Inventory from "./pages/Inventory";
 import Staff from "./pages/Staff";
+import CustomerPage from "./pages/customer.js";
 import Tasks from "./pages/Tasks";
 import NotFound from "./pages/NotFound";
 import BillingModule from "./pages/tenant/BillingModule.js";
 import ReportsModule from "./pages/tenant/ReportsModule";
 import AccountsModule from "./pages/tenant/AccountsModule.js";
 import ProductCatalog from "./pages/Prodcuts.js";
-
+import billing from "./pages/billing.js";
+import SupplierPage from "./pages/suppliers.js";
+import BillingPageUAE_TenantStyle from "./pages/billing.js";
+import LoyaltySettings from "./pages/Loyality.js";
+import Coupons from "./pages/Coupon.js";
+import Discounts from "./pages/Discounts.js";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -140,10 +146,18 @@ const App = () => (
                     }
                   />
                   <Route
-                    path="billing"
+                    path="billings"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <BillingModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="billings"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>  
+                        <BillingPageUAE_TenantStyle />
                       </RoleBasedRoute>
                     }
                   />
@@ -160,6 +174,46 @@ const App = () => (
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <Staff />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="customers"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <CustomerPage />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="suppliers"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <SupplierPage />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="loyalty"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <LoyaltySettings />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="coupons"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Coupons />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="discounts"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Discounts />
                       </RoleBasedRoute>
                     }
                   />

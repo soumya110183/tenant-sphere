@@ -61,7 +61,7 @@ const tenantNavigation = [
     category: 'Core Operations',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Billing', href: '/billing', icon: ShoppingCart },
+      { name: 'Billing', href: '/billings', icon: ShoppingCart },
       { name: 'Inventory', href: '/inventory', icon: Package },
       { name: 'Stocks', href: '/stock', icon: ClipboardList },
     ]
