@@ -3,8 +3,8 @@ import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
 
 // Base URLs
-//  const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "http://localhost:5000";
+ const API_URL = "https://billingbackend-1vei.onrender.com";
+//const API_URL = "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
@@ -51,7 +51,8 @@ export const notificationAPI = {
 
   // Partially update preferences (only whitelisted keys accepted server-side)
   updateTenantNotifications: async (tenantId, payload) =>
-    (await api.put(`/api/notification/${tenantId}/notifications`, payload)).data,
+    (await api.put(`/api/notification/${tenantId}/notifications`, payload))
+      .data,
 };
 
 // ===============================
@@ -245,7 +246,8 @@ export const amcAPI = {
   getAllAMCs: async () => (await api.get("/api/amc")).data,
   getAMCById: async (id) => (await api.get(`/api/amc/${id}`)).data,
   createAMC: async (amcData) => (await api.post("/api/amc", amcData)).data,
-  updateAMC: async (id, amcData) => (await api.put(`/api/amc/${id}`, amcData)).data,
+  updateAMC: async (id, amcData) =>
+    (await api.put(`/api/amc/${id}`, amcData)).data,
   deleteAMC: async (id) => (await api.delete(`/api/amc/${id}`)).data,
   // Send reminder email for a tenant's AMC
   // payload: { tenantId, email, subject, body }
@@ -286,7 +288,9 @@ export const planAPI = {
    *  { plans: [...] }  OR  an array [...]
    */
   getPlans: async (name) => {
-    const url = name ? `/api/plans?name=${encodeURIComponent(name)}` : "/api/plans";
+    const url = name
+      ? `/api/plans?name=${encodeURIComponent(name)}`
+      : "/api/plans";
     const res = await api.get(url);
     return res.data;
   },
@@ -315,7 +319,10 @@ export const planAPI = {
    * name should be the plan identifier (string).
    */
   upsertPlanByName: async (name, payload) => {
-    const res = await api.put(`/api/plans/${encodeURIComponent(name)}`, payload);
+    const res = await api.put(
+      `/api/plans/${encodeURIComponent(name)}`,
+      payload
+    );
     return res.data;
   },
 
@@ -358,22 +365,44 @@ export const inventoryService = {
   delete: async (id) => (await api.delete(`/api/inventory/${id}`)).data,
 };
 
+// ===============================
+// COUPON / REFERRAL / WALLET API
+// ===============================
+export const couponAPI = {
+  validate: async (code, subtotal) => {
+    const params = { code, subtotal };
+    return (await api.get("/api/coupons/validate", { params })).data;
+  },
+};
+
+export const referralAPI = {
+  validate: async (code) => {
+    const params = { code };
+    return (await api.get("/api/referrals/validate", { params })).data;
+  },
+};
+
+export const walletAPI = {
+  getBalance: async (customerId) =>
+    (await api.get(`/api/wallets/${customerId}`)).data,
+};
+
 // In your services/api.js
 export const purchaseService = {
-  getAll: () => api.get('api/purchases'),
+  getAll: () => api.get("api/purchases"),
   getById: (id) => api.get(`api/purchases/${id}`),
-  create: (data) => api.post('api/purchases', data),
+  create: (data) => api.post("api/purchases", data),
   update: (id, data) => api.put(`api/purchases/${id}`, data),
   delete: (id) => api.delete(`api/purchases/${id}`),
 };
 
 // services/api.js - Add invoice service
 export const invoiceService = {
-  getAll: () => api.get('api/invoices'),
+  getAll: () => api.get("api/invoices"),
   getById: (id) => api.get(`api/invoices/${id}`),
-  create: (data) => api.post('api/invoices', data),
+  create: (data) => api.post("api/invoices", data),
   delete: (id) => api.delete(`api/invoices/${id}`),
-  getStats: () => api.get('api/invoices/stats'),
+  getStats: () => api.get("api/invoices/stats"),
 };
 
 // ===============================

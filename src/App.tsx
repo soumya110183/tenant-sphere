@@ -26,13 +26,16 @@ import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
 import Inventory from "./pages/Inventory";
 import Staff from "./pages/Staff";
+import CustomerPage from "./pages/customer.js";
 import Tasks from "./pages/Tasks";
 import NotFound from "./pages/NotFound";
 import BillingModule from "./pages/tenant/BillingModule.js";
 import ReportsModule from "./pages/tenant/ReportsModule";
 import AccountsModule from "./pages/tenant/AccountsModule.js";
 import ProductCatalog from "./pages/Prodcuts.js";
-
+import billing from "./pages/billing.js";
+import SupplierPage from "./pages/suppliers.js";
+import BillingPageUAE_TenantStyle from "./pages/billing.js";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -148,6 +151,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="billings"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>  
+                        <BillingPageUAE_TenantStyle />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
                     path="stock"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
@@ -160,6 +171,22 @@ const App = () => (
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <Staff />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="customers"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <CustomerPage />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="suppliers"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <SupplierPage />
                       </RoleBasedRoute>
                     }
                   />

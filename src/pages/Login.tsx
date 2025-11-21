@@ -90,7 +90,7 @@ const Login = () => {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@tenantsphere.com"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
