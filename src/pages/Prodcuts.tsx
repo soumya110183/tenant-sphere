@@ -643,7 +643,7 @@ const ProductCatalog = () => {
     const matchesCategory = filterCategory === 'All' || product.category === filterCategory;
     return matchesCategory;
   });
-
+console.log(products);
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">

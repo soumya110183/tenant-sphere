@@ -1,10 +1,13 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { 
-  BookOpen, 
+import {
+  BookOpen,
   Download,
   DollarSign,
   Scale,
@@ -12,34 +15,66 @@ import {
   Receipt
 } from 'lucide-react';
 
+// API BASE
+const API = "http://localhost:5000/api/accounts";
+
 const AccountsModule = () => {
-  // Dummy data
-  const daybookEntries = [
-    { id: 1, date: '2025-01-20', type: 'Sale', description: 'Invoice #INV-001', debit: 0, credit: 500 },
-    { id: 2, date: '2025-01-20', type: 'Purchase', description: 'Bill #BILL-001', debit: 300, credit: 0 },
-    { id: 3, date: '2025-01-20', type: 'Expense', description: 'Rent Payment', debit: 1000, credit: 0 },
-  ];
 
-  const ledgerEntries = [
-    { id: 1, account: 'Supplier A', type: 'Payable', balance: -5000, status: 'Pending' },
-    { id: 2, account: 'Customer John', type: 'Receivable', balance: 1200, status: 'Pending' },
-    { id: 3, account: 'Supplier B', type: 'Payable', balance: -3000, status: 'Pending' },
-  ];
+  const [loading, setLoading] = useState(true);
 
-  const trialBalance = [
-    { account: 'Cash', debit: 15000, credit: 0 },
-    { account: 'Stock', debit: 47995, credit: 0 },
-    { account: 'Accounts Payable', debit: 0, credit: 8000 },
-    { account: 'Sales', debit: 0, credit: 13500 },
-    { account: 'Purchases', debit: 8000, credit: 0 },
-  ];
+  const [daybook, setDaybook] = useState([]);
+  const [ledger, setLedger] = useState([]);
+  const [trial, setTrial] = useState([]);
+  const [vat, setVat] = useState([]);
+  const [balanceSheet, setBalanceSheet] = useState({
+    assets: 0,
+    liabilities: 0,
+    equity: 0
+  });
 
-  const vatReport = [
-    { period: 'January 2025', sales: 13500, purchaseVAT: 1440, salesVAT: 2430, payable: 990 },
-  ];
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+
+      const [d, l, t, b, v] = await Promise.all([
+        fetch(`${API}/daybook`, { headers }).then(r => r.json()),
+        fetch(`${API}/ledger`, { headers }).then(r => r.json()),
+        fetch(`${API}/trial-balance`, { headers }).then(r => r.json()),
+        fetch(`${API}/balance-sheet`, { headers }).then(r => r.json()),
+        fetch(`${API}/vat`, { headers }).then(r => r.json()),
+      ]);
+
+      setDaybook(d.data || []);
+      setLedger(l.data || []);
+      setTrial(t.data || []);
+      setVat(v.data || []);
+      setBalanceSheet({
+        assets: b.assets || 0,
+        liabilities: b.liabilities || 0,
+        equity: b.equity || 0
+      });
+    } catch (err) {
+      console.error("Error loading accounts:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) return <div className="p-8 text-center text-xl">Loading Accounts…</div>;
 
   return (
     <div className="space-y-6">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Accounts & Finance</h1>
@@ -51,54 +86,54 @@ const AccountsModule = () => {
         </Button>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary */}
       <div className="grid gap-4 md:grid-cols-4">
+      
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Assets</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Total Assets</CardTitle>
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">AED 62,995</div>
-            <p className="text-xs text-muted-foreground mt-1">Cash + Stock</p>
+            <div className="text-2xl font-bold">AED {balanceSheet.assets}</div>
           </CardContent>
         </Card>
-
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Liabilities</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Liabilities</CardTitle>
             <DollarSign className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">AED 8,000</div>
-            <p className="text-xs text-muted-foreground mt-1">Accounts Payable</p>
+            <div className="text-2xl font-bold">AED {balanceSheet.liabilities}</div>
           </CardContent>
         </Card>
-
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Profit</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Equity</CardTitle>
             <DollarSign className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">AED 5,500</div>
-            <p className="text-xs text-success mt-1">This month</p>
+            <div className="text-2xl font-bold">AED {balanceSheet.equity}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">VAT Payable</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">VAT Payable</CardTitle>
             <Receipt className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">AED 990</div>
-            <p className="text-xs text-muted-foreground mt-1">This month</p>
+            <div className="text-2xl font-bold">
+              AED {vat[0]?.vat_payable || 0}
+            </div>
           </CardContent>
         </Card>
+
       </div>
 
-      {/* Tabs */}
+      {/* TABS */}
       <Tabs defaultValue="daybook" className="space-y-4">
         <TabsList>
           <TabsTrigger value="daybook">Daybook</TabsTrigger>
@@ -108,21 +143,18 @@ const AccountsModule = () => {
           <TabsTrigger value="vat">VAT Report</TabsTrigger>
         </TabsList>
 
-        {/* Daybook */}
-        <TabsContent value="daybook" className="space-y-4">
+        {/* DAYBOOK */}
+        <TabsContent value="daybook">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  Daily Transaction Book
+                  <BookOpen className="w-5 h-5" />
+                  Daybook
                 </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
               </div>
             </CardHeader>
+
             <CardContent>
               <Table>
                 <TableHeader>
@@ -134,132 +166,104 @@ const AccountsModule = () => {
                     <TableHead>Credit</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
-                  {daybookEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{entry.date}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{entry.type}</Badge>
-                      </TableCell>
-                      <TableCell>{entry.description}</TableCell>
+                  {daybook.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell>{d.date}</TableCell>
+                      <TableCell><Badge>{d.entry_type}</Badge></TableCell>
+                      <TableCell>{d.description}</TableCell>
                       <TableCell className="text-destructive">
-                        {entry.debit ? `AED ${entry.debit}` : '-'}
+                        {d.debit > 0 ? `AED ${d.debit}` : "-"}
                       </TableCell>
                       <TableCell className="text-success">
-                        {entry.credit ? `AED ${entry.credit}` : '-'}
+                        {d.credit > 0 ? `AED ${d.credit}` : "-"}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </CardContent>
+
           </Card>
         </TabsContent>
 
-        {/* Ledger */}
-        <TabsContent value="ledger" className="space-y-4">
+        {/* LEDGER */}
+        <TabsContent value="ledger">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Account Ledger
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Ledger
+              </CardTitle>
             </CardHeader>
+
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Account</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Debit</TableHead>
+                    <TableHead>Credit</TableHead>
                     <TableHead>Balance</TableHead>
-                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
-                  {ledgerEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-medium">{entry.account}</TableCell>
-                      <TableCell>{entry.type}</TableCell>
-                      <TableCell className={entry.balance < 0 ? 'text-destructive' : 'text-success'}>
-                        AED {Math.abs(entry.balance)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{entry.status}</Badge>
+                  {ledger.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell>{l.account_type}</TableCell>
+                      <TableCell>{l.entry_type}</TableCell>
+                      <TableCell>{l.debit}</TableCell>
+                      <TableCell>{l.credit}</TableCell>
+                      <TableCell className={l.balance < 0 ? "text-destructive" : "text-success"}>
+                        AED {l.balance}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
+
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Balance Sheet */}
-        <TabsContent value="balance-sheet" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Assets</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between p-3 bg-muted rounded-lg">
-                  <span>Cash in Hand</span>
-                  <span className="font-bold">AED 15,000</span>
-                </div>
-                <div className="flex justify-between p-3 bg-muted rounded-lg">
-                  <span>Stock</span>
-                  <span className="font-bold">AED 47,995</span>
-                </div>
-                <div className="flex justify-between p-3 bg-primary/10 rounded-lg">
-                  <span className="font-bold">Total Assets</span>
-                  <span className="font-bold text-lg">AED 62,995</span>
-                </div>
-              </CardContent>
-            </Card>
+        {/* BALANCE SHEET */}
+        <TabsContent value="balance-sheet">
+          <Card>
+            <CardHeader><CardTitle>Balance Sheet</CardTitle></CardHeader>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Liabilities & Equity</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between p-3 bg-muted rounded-lg">
-                  <span>Accounts Payable</span>
-                  <span className="font-bold">AED 8,000</span>
-                </div>
-                <div className="flex justify-between p-3 bg-muted rounded-lg">
-                  <span>Owner's Equity</span>
-                  <span className="font-bold">AED 54,995</span>
-                </div>
-                <div className="flex justify-between p-3 bg-primary/10 rounded-lg">
-                  <span className="font-bold">Total Liabilities</span>
-                  <span className="font-bold text-lg">AED 62,995</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between p-3 bg-muted rounded-lg">
+                <span>Assets</span>
+                <span className="font-bold">AED {balanceSheet.assets}</span>
+              </div>
+
+              <div className="flex justify-between p-3 bg-muted rounded-lg">
+                <span>Liabilities</span>
+                <span className="font-bold">AED {balanceSheet.liabilities}</span>
+              </div>
+
+              <div className="flex justify-between p-3 bg-primary/10 rounded-lg">
+                <span className="font-bold">Equity</span>
+                <span className="font-bold text-lg">AED {balanceSheet.equity}</span>
+              </div>
+            </CardContent>
+
+          </Card>
         </TabsContent>
 
-        {/* Trial Balance */}
-        <TabsContent value="trial-balance" className="space-y-4">
+        {/* TRIAL BALANCE */}
+        <TabsContent value="trial-balance">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Scale className="h-5 w-5" />
-                  Trial Balance
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="w-5 h-5" />
+                Trial Balance
+              </CardTitle>
             </CardHeader>
+
             <CardContent>
               <Table>
                 <TableHeader>
@@ -269,67 +273,56 @@ const AccountsModule = () => {
                     <TableHead>Credit</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
-                  {trialBalance.map((entry, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{entry.account}</TableCell>
-                      <TableCell className="text-destructive">
-                        AED {entry.debit || '-'}
-                      </TableCell>
-                      <TableCell className="text-success">
-                        AED {entry.credit || '-'}
-                      </TableCell>
+                  {trial.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>{t.account}</TableCell>
+                      <TableCell>{t.debit}</TableCell>
+                      <TableCell>{t.credit}</TableCell>
                     </TableRow>
                   ))}
-                  <TableRow className="font-bold bg-muted">
-                    <TableCell>Total</TableCell>
-                    <TableCell className="text-destructive">AED 70,995</TableCell>
-                    <TableCell className="text-success">AED 21,500</TableCell>
-                  </TableRow>
                 </TableBody>
+
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* VAT Report */}
-        <TabsContent value="vat" className="space-y-4">
+        {/* VAT REPORT */}
+        <TabsContent value="vat">
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>VAT/Tax Report</CardTitle>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
-              </div>
-            </CardHeader>
+            <CardHeader><CardTitle>VAT Report</CardTitle></CardHeader>
+
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Period</TableHead>
                     <TableHead>Total Sales</TableHead>
-                    <TableHead>Purchase VAT</TableHead>
                     <TableHead>Sales VAT</TableHead>
-                    <TableHead>Net Payable</TableHead>
+                    <TableHead>Purchase VAT</TableHead>
+                    <TableHead>VAT Payable</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
-                  {vatReport.map((entry, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{entry.period}</TableCell>
-                      <TableCell>AED {entry.sales}</TableCell>
-                      <TableCell className="text-success">AED {entry.purchaseVAT}</TableCell>
-                      <TableCell className="text-destructive">AED {entry.salesVAT}</TableCell>
-                      <TableCell className="font-bold">AED {entry.payable}</TableCell>
+                  {vat.map((v) => (
+                    <TableRow key={v.id}>
+                      <TableCell>{v.period}</TableCell>
+                      <TableCell>{v.total_sales}</TableCell>
+                      <TableCell>{v.sales_vat}</TableCell>
+                      <TableCell>{v.purchase_vat}</TableCell>
+                      <TableCell className="font-bold">{v.vat_payable}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
+
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );

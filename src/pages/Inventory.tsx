@@ -1018,6 +1018,7 @@ const StockTableRow = ({
   const percentage = getStockPercentage(item.quantity, item.maxStock);
   const margin = item.selling_price - item.cost_price;
   const marginPercent = ((margin / item.cost_price) * 100).toFixed(1);
+  console.log(item)
 
   return (
     <tr className="border-b hover:bg-muted/50">
