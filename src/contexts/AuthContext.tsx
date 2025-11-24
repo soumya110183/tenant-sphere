@@ -1,15 +1,22 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { authAPI } from '@/services/api';
-import { jwtDecode } from 'jwt-decode';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
+import { authAPI } from "@/services/api";
+import { jwtDecode } from "jwt-decode";
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
 
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'superadmin' | 'tenant' | 'staff';
+  role: "superadmin" | "tenant" | "staff";
   avatar: string;
+  tenant_id?: number;
   tenantId?: number;
   tenantName?: string;
 }
@@ -33,7 +40,9 @@ interface DecodedToken {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const logoutTimer = useRef<NodeJS.Timeout | null>(null);
@@ -56,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await authAPI.login(email, password);
-    
+
     if (response.success) {
       const token = response.token;
       const userData = response.user;
@@ -65,9 +74,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const decoded = jwtDecode<DecodedToken>(token);
       const expiryTime = decoded.exp * 1000; // convert seconds → ms
 
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('token_expiry', expiryTime.toString());
-      localStorage.setItem('user_data', JSON.stringify(userData));
+      localStorage.setItem("auth_token", token);
+      localStorage.setItem("token_expiry", expiryTime.toString());
+      localStorage.setItem("user_data", JSON.stringify(userData));
 
       setUser(userData);
       scheduleAutoLogout(expiryTime);
@@ -81,24 +90,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Ignore if logout API fails (like session already invalidated)
     }
 
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('token_expiry');
-    localStorage.removeItem('user_data');
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("token_expiry");
+    localStorage.removeItem("user_data");
+    localStorage.removeItem("tenant_id");
     setUser(null);
 
     if (logoutTimer.current) clearTimeout(logoutTimer.current);
 
     if (auto) {
-      alert('⚠️ Session expired. Please log in again.');
+      alert("⚠️ Session expired. Please log in again.");
     }
 
-    navigate('/');
+    navigate("/");
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    const userData = localStorage.getItem('user_data');
-    const expiry = localStorage.getItem('token_expiry');
+    const token = localStorage.getItem("auth_token");
+    const userData = localStorage.getItem("user_data");
+    const expiry = localStorage.getItem("token_expiry");
 
     if (token && userData && expiry) {
       const now = Date.now();
@@ -119,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         isAuthenticated: !!user,
-        isLoading
+        isLoading,
       }}
     >
       {children}
@@ -129,6 +139,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 };
