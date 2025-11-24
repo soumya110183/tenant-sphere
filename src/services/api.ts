@@ -4,7 +4,8 @@ import reportsData from "@/data/reports.json";
 
 // Base URLs
 //  const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "http://localhost:5000";
+const API_URL = "https://billingbackend-1vei.onrender.com";
+// const API_URL = "http://localhost:5000";
 
 // Create an Axios instance
 const api = axios.create({
@@ -64,11 +65,18 @@ export const authAPI = {
     // persist token and user info so other calls/refreshes work automatically
     try {
       localStorage.setItem("auth_token", data.token);
+
+      // Store tenant_id separately for easy access
+      if (data.user?.tenant_id) {
+        localStorage.setItem("tenant_id", data.user.tenant_id.toString());
+      }
+
       const userPayload = {
         id: data.user?.id,
         name: data.user?.full_name ?? data.user?.name,
         email: data.user?.email,
         role: data.user?.role,
+        tenant_id: data.user?.tenant_id,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
           data.user?.full_name ?? data.user?.name
         }`,
@@ -86,6 +94,7 @@ export const authAPI = {
         name: data.user?.full_name ?? data.user?.name,
         email: data.user?.email,
         role: data.user?.role,
+        tenant_id: data.user?.tenant_id,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
           data.user?.full_name ?? data.user?.name
         }`,
@@ -96,6 +105,7 @@ export const authAPI = {
   logout: async () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user_data");
+    localStorage.removeItem("tenant_id");
     return { success: true };
   },
 
@@ -403,6 +413,26 @@ export const invoiceService = {
   create: (data) => api.post("api/invoices", data),
   delete: (id) => api.delete(`api/invoices/${id}`),
   getStats: () => api.get("api/invoices/stats"),
+};
+
+// services/api.js - Add sales return service
+export const salesReturnService = {
+  getAll: () => api.get("/api/sales_returns"),
+  getById: (id) => api.get(`/api/sales_returns/${id}`),
+  create: (data) => api.post("/api/sales_returns", data),
+  update: (id, data) => api.put(`/api/sales_returns/${id}`, data),
+  delete: (id) => api.delete(`/api/sales_returns/${id}`),
+};
+
+// ===============================
+// PURCHASE RETURNS API
+// ===============================
+export const purchaseReturnService = {
+  getAll: (params = {}) => api.get("/api/purchase_returns", { params }),
+  getById: (id) => api.get(`/api/purchase_returns/${id}`),
+  create: (data) => api.post("/api/purchase_returns", data),
+  update: (id, data) => api.put(`/api/purchase_returns/${id}`, data),
+  delete: (id) => api.delete(`/api/purchase_returns/${id}`),
 };
 
 // ===============================

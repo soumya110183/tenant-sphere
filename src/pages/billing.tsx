@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,431 +20,359 @@ import {
   Receipt,
   MinusCircle,
   Tag,
-  List,
   X,
-  Plus,
-  ShoppingCart,
+  Coins,
+  Save,
+  Clock,
+  Play,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 
-type RowType = {
-  code: string;
-  name: string;
-  qty: number | string;
-  price: number;
-  tax: number;
-  total: number;
-  product_id: any | null;
-  sku?: string;
-};
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
-type ProductType = any;
-
-const SupermarketBilling: React.FC = () => {
+const SupermarketBilling = () => {
   const { toast } = useToast();
 
-  const [customer, setCustomer] = useState<{
-    name: string;
-    phone: string;
-    loyalityPoints: number;
-  }>({
-    name: "",
-    phone: "",
-    loyalityPoints: 0,
-  });
+  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    null
+  );
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
 
-  const [vatEnabled, setVatEnabled] = useState(true);
-  const [vatPercent, setVatPercent] = useState<number>(5);
-  const [vatRegistrationNumber, setVatRegistrationNumber] =
-    useState<string>("");
-
-  const [products, setProducts] = useState<ProductType[]>([]);
-  const [rows, setRows] = useState<RowType[]>([
+  const [rows, setRows] = useState<
     {
-      code: "",
-      name: "",
-      qty: 1,
-      price: 0,
-      tax: 0,
-      total: 0,
-      product_id: null,
-    },
-  ]);
+      code: string;
+      name: string;
+      qty: number | "";
+      price: number;
+      tax: number;
+      total: number;
+      product_id?: number | null;
+    }[]
+  >([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
 
-  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
-  const [suggestions, setSuggestions] = useState<ProductType[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+
+  // suggestions
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentInputIndex, setCurrentInputIndex] = useState<number | null>(
     null
   );
+
+  // discounts / preview state
+  const [couponCode, setCouponCode] = useState("");
+  const [redeemPoints, setRedeemPoints] = useState<number | "">("");
+  const [preview, setPreview] = useState<any | null>(null);
+  const [previewItems, setPreviewItems] = useState<any[]>([]);
+  const [isApplyingDiscounts, setIsApplyingDiscounts] = useState(false);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
 
-  const inputRefs = useRef<any[]>([]);
+  // Popup states
+  const [showCouponPopup, setShowCouponPopup] = useState(false);
+  const [showRedeemPopup, setShowRedeemPopup] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
+
+  // Hold bill state
+  const [heldBills, setHeldBills] = useState<any[]>([]);
+  const [showHeldBills, setShowHeldBills] = useState(false);
+  const [billName, setBillName] = useState("");
+
+  const inputRefs = useRef<HTMLInputElement[]>([]);
   const suggestionRef = useRef<HTMLDivElement | null>(null);
 
-  const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
-  const [showCustomerSuggestions, setShowCustomerSuggestions] =
-    useState<boolean>(false);
-  const customerInputRef = useRef<HTMLInputElement | null>(null);
-  const customerSuggestionRef = useRef<HTMLDivElement | null>(null);
 
-  const [autoApplyBestCoupon, setAutoApplyBestCoupon] = useState(true);
-  const [showPromotionsModal, setShowPromotionsModal] = useState(false);
-  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
-  const [loyaltyPoints, setLoyaltyPoints] = useState<number>(120);
+  const [customerSearch, setCustomerSearch] = useState("");
+const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
-  const [walletBalance, setWalletBalance] = useState(50);
-  const [applyWallet, setApplyWallet] = useState(false);
-  const [walletUseAmount, setWalletUseAmount] = useState<number | "">("");
-
-  const [couponCode, setCouponCode] = useState<string>("");
-  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
-  // Dynamic discount rules fetched from backend /api/discounts/active
-  const [discountRules, setDiscountRules] = useState<any[]>([]);
-  const [loadingCoupons, setLoadingCoupons] = useState(false);
-  const [allDiscountRules, setAllDiscountRules] = useState<any[]>([]);
-  const [showAllDiscounts, setShowAllDiscounts] = useState(false);
-
-  const [referralCode, setReferralCode] = useState<string>("");
-  const [appliedReferral, setAppliedReferral] = useState<any>(null);
-
-  const sampleCustomers = [
-    { id: "C1", name: "Rahul Varma", phone: "9447123456" },
-    { id: "C2", name: "Anita Menon", phone: "9498123456" },
-    { id: "C3", name: "Suresh Kumar", phone: "9846123456" },
-    { id: "C4", name: "Store Walk-in", phone: "" },
-  ];
-
-  // const sampleCoupons = [
-  //   {
-  //     id: "C-UAE-10",
-  //     code: "UAE10",
-  //     type: "percent",
-  //     scope: "order",
-  //     value: 10,
-  //     max_value: 200,
-  //     min_order_value: 0,
-  //     stackable: false,
-  //     start_at: null,
-  //     end_at: null,
-  //     description: "10% off on order, max AED 200",
-  //     active: true,
-  //   },
-  //   {
-  //     id: "C-FLAT50",
-  //     code: "FLAT50",
-  //     type: "flat",
-  //     scope: "order",
-  //     value: 50,
-  //     max_value: 50,
-  //     min_order_value: 200,
-  //     stackable: false,
-  //     start_at: null,
-  //     end_at: null,
-  //     description: "AED 50 off on orders over AED 200",
-  //     active: true,
-  //   },
-  // ];
-
-  // Fetch active discount rules from backend and map to internal coupon shape
-  const fetchActiveDiscountRules = async () => {
-    if (loadingCoupons) return;
-    setLoadingCoupons(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(
-        "https://billingbackend-1vei.onrender.com/api/discounts/active",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const json = await res.json();
-      if (res.ok) {
-        const mapped = (json.data || []).map((r: any) => ({
-          id: r.id || r._id,
-          code: r.code || r.coupon_code || r.name || r.discount_code || "RULE",
-          type: r.type || r.discount_type || "percent",
-          scope: r.scope || r.discount_scope || "order",
-          value: Number(
-            r.value ?? r.amount ?? r.percent ?? r.discount_value ?? 0
-          ),
-          max_value: Number(
-            r.max_value ?? r.max_discount ?? r.maximum_value ?? 0
-          ),
-          min_order_value: Number(
-            r.min_order_value ?? r.min_order_amount ?? r.minimum_value ?? 0
-          ),
-          stackable: !!(r.stackable ?? r.is_stackable),
-          start_at:
-            r.start_at || r.startDate || r.valid_from || r.starts_at || null,
-          end_at: r.end_at || r.endDate || r.valid_until || r.ends_at || null,
-          description: r.description || r.title || r.name || "Discount rule",
-          active: (r.active ?? r.is_active ?? r.status === "active") !== false,
-        }));
-        setDiscountRules(mapped);
-      } else {
-        toast({
-          title: "Discount rules unavailable",
-          description: json.error || "Using local sample coupons",
-          variant: "destructive",
-        });
-      }
-    } catch (e) {
-      toast({
-        title: "Discount fetch failed",
-        description: "Network error – using local sample coupons",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingCoupons(false);
-    }
-  };
-
-  const fetchAllDiscountRules = async () => {
-    if (loadingCoupons) return;
-    setLoadingCoupons(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(
-        "https://billingbackend-1vei.onrender.com/api/discounts",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const json = await res.json();
-      if (res.ok) {
-        const mapped = (json.data || []).map((r: any) => ({
-          id: r.id || r._id,
-          code: r.code || r.coupon_code || r.name || r.discount_code || "RULE",
-          type: r.type || r.discount_type || "percent",
-          scope: r.scope || r.discount_scope || "order",
-          value: Number(
-            r.value ?? r.amount ?? r.percent ?? r.discount_value ?? 0
-          ),
-          max_value: Number(
-            r.max_value ?? r.max_discount ?? r.maximum_value ?? 0
-          ),
-          min_order_value: Number(
-            r.min_order_value ?? r.min_order_amount ?? r.minimum_value ?? 0
-          ),
-          stackable: !!(r.stackable ?? r.is_stackable),
-          start_at:
-            r.start_at || r.startDate || r.valid_from || r.starts_at || null,
-          end_at: r.end_at || r.endDate || r.valid_until || r.ends_at || null,
-          description: r.description || r.title || r.name || "Discount rule",
-          active: (r.active ?? r.is_active ?? r.status === "active") !== false,
-        }));
-        setAllDiscountRules(mapped);
-      } else {
-        toast({
-          title: "Load all discounts failed",
-          description: json.error || "Server returned error",
-          variant: "destructive",
-        });
-      }
-    } catch (e) {
-      toast({
-        title: "Network error",
-        description: "Could not load all discount rules",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingCoupons(false);
-    }
-  };
-
-  const toggleRuleActive = async (rule: any) => {
-    const token = localStorage.getItem("auth_token");
-    try {
-      let endpoint = `https://billingbackend-1vei.onrender.com/api/discounts/${rule.id}`;
-      let options: any = {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ active: !rule.active }),
-      };
-
-      // If deactivating, use dedicated deactivate route
-      if (rule.active) {
-        endpoint = `https://billingbackend-1vei.onrender.com/api/discounts/${rule.id}/deactivate`;
-        options = {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        };
-      }
-
-      const res = await fetch(endpoint, options);
-      if (!res.ok) {
-        throw new Error("Status change failed");
-      }
-
-      toast({
-        title: rule.active ? "Rule deactivated" : "Rule activated",
-        description: rule.code,
-      });
-
-      // Refresh both lists
-      await fetchActiveDiscountRules();
-      if (showAllDiscounts) {
-        await fetchAllDiscountRules();
-      }
-    } catch (e) {
-      toast({
-        title: "Update failed",
-        description: (e as any).message || "Could not change rule status",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const sampleReferrals = [
-    {
-      id: "R-NEW-10",
-      code: "REF10",
-      type: "flat",
-      applied_amount: 10,
-      description: "AED 10 off for referred customer (demo)",
-      active: true,
-    },
-  ];
-
+  // 🔄 Fetch inventory products
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const token = localStorage.getItem("auth_token");
-        const res = await fetch(
-          "https://billingbackend-1vei.onrender.com/api/inventory",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
+        const res = await fetch(`${API_BASE}/api/inventory`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
         const json = await res.json();
-        if (res.ok) {
-          setProducts(json.data || []);
-        } else {
+        console.log("Fetched products:", json.data);
+        if (res.ok) setProducts(json.data || []);
+        else
           toast({
             title: "Failed to load products",
-            description:
-              json.error || "Server unreachable — using client demo mode",
+            description: json.error || "Please check your token or server",
+            variant: "destructive",
+          });
+      } catch (err: any) {
+        console.error("Error fetching products:", err);
+        toast({
+          title: "Error fetching products",
+          description: err.message,
+          variant: "destructive",
+        });
+      }
+    };
+    fetchProducts();
+  }, [toast]);
+
+  // 🔄 Fetch customers
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const token = localStorage.getItem("auth_token");
+        const res = await fetch(`${API_BASE}/api/customers`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const json = await res.json();
+        console.log("Fetched customers:", json);
+
+        if (res.ok && json.success) {
+          setCustomers(json.data || []);
+        } else {
+          toast({
+            title: "Failed to load customers",
+            description: json.error || "Please check your token or server",
             variant: "destructive",
           });
         }
-      } catch (err) {
-        console.error("Error fetching products:", err);
+      } catch (err: any) {
+        console.error("Error fetching customers:", err);
         toast({
-          title: "Product load error",
-          description: "Network failed — running in offline demo mode",
+          title: "Error fetching customers",
+          description: err.message,
           variant: "destructive",
         });
       }
     };
 
-    const fetchCustomers = async () => {
-      try {
-        const token = localStorage.getItem("auth_token");
-        const res = await fetch(
-          "https://billingbackend-1vei.onrender.com/api/customers",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+    fetchCustomers();
+  }, [toast]);
 
-        const json = await res.json();
-        if (res.ok) {
-          setCustomerSuggestions(json.data || sampleCustomers);
-        } else {
-          setCustomerSuggestions(sampleCustomers);
-        }
-      } catch (err) {
-        console.error("Error fetching customers:", err);
-        setCustomerSuggestions(sampleCustomers);
+  // 🔄 Fetch available coupons
+  const fetchAvailableCoupons = async () => {
+    setIsLoadingCoupons(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/discounts/active`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        console.log("Failed coupon fetch:", json);
+        setAvailableCoupons([]);
+        return;
       }
+
+      // Filter only COUPON rules
+      const coupons = (json.data || []).filter(
+        (r: any) => r.type === "coupon" && r.is_active
+      );
+
+      setAvailableCoupons(coupons);
+    } catch (err) {
+      console.error("Coupon fetch error:", err);
+      toast({
+        title: "Error loading coupons",
+        description: "Failed to fetch available coupons",
+        variant: "destructive",
+      });
+      setAvailableCoupons([]);
+    } finally {
+      setIsLoadingCoupons(false);
+    }
+  };
+
+  // Open coupon popup and fetch coupons
+  const handleOpenCouponPopup = async () => {
+    setShowCouponPopup(true);
+    await fetchAvailableCoupons();
+  };
+
+  // Open redeem points popup
+  const handleOpenRedeemPopup = () => {
+    if (!selectedCustomer) {
+      toast({
+        title: "No Customer Selected",
+        description: "Please select a customer to redeem points",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowRedeemPopup(true);
+  };
+
+  // Select coupon from popup
+  const handleSelectCoupon = (coupon: any) => {
+    setCouponCode(coupon.code);
+    setShowCouponPopup(false);
+    toast({
+      title: "Coupon Applied",
+      description: `${coupon.code} - ${coupon.description || "Coupon applied"}`,
+    });
+  };
+
+  // Apply redeem points
+  const handleApplyRedeem = (points: number) => {
+    const maxPoints = selectedCustomer?.loyalty_points || 0;
+    const pointsToUse = Math.min(points, maxPoints);
+    setRedeemPoints(pointsToUse);
+    setShowRedeemPopup(false);
+    
+    toast({
+      title: "Points Redeemed",
+      description: `Redeemed ${pointsToUse} points for AED ${pointsToUse}.00 discount`,
+    });
+  };
+
+  // Hold current bill
+  const handleHoldBill = () => {
+    if (rows.length === 0 || !rows.some(row => row.name && row.qty)) {
+      toast({
+        title: "Cannot Hold Bill",
+        description: "Add at least one item to hold the bill",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const billData = {
+      id: Date.now().toString(),
+      name: billName || `Bill ${new Date().toLocaleTimeString()}`,
+      timestamp: new Date().toISOString(),
+      customer: selectedCustomer,
+      rows: [...rows],
+      couponCode,
+      redeemPoints,
+      preview,
+      previewItems,
+      subtotal: calculateSubtotal(),
+      total: calculateTotal()
     };
 
-    fetchProducts();
-    fetchCustomers();
-    fetchActiveDiscountRules();
-  }, []);
+    setHeldBills(prev => [billData, ...prev]);
+    setBillName("");
+    
+    toast({
+      title: "Bill Held",
+      description: `Bill "${billData.name}" has been saved`,
+    });
 
-  function round2(v: number) {
-    return Math.round((Number(v) + Number.EPSILON) * 100) / 100;
-  }
-
-  const getMatchingProducts = (term: string) => {
-    if (!term || term.length < 1) return [];
-    const lower = term.toLowerCase();
-    if (!products || products.length === 0) return [];
-
-    return products
-      .filter(
-        (p: any) =>
-          p.name?.toLowerCase().includes(lower) ||
-          p.barcode?.toLowerCase().includes(lower) ||
-          p.sku?.toLowerCase().includes(lower)
-      )
-      .slice(0, 8);
+    // Clear current bill
+    setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
+    setCouponCode("");
+    setRedeemPoints("");
+    setPreview(null);
+    setPreviewItems([]);
+    setSelectedCustomerId(null);
+    setSelectedCustomer(null);
   };
 
-  const getMatchingCustomers = (term: string) => {
-    if (!term || term.length < 1) return [];
-    const lower = term.toLowerCase();
-    if (!customerSuggestions || customerSuggestions.length === 0) return [];
-
-    return customerSuggestions
-      .filter(
-        (c: any) =>
-          (c.name && c.name.toLowerCase().includes(lower)) ||
-          (c.phone && String(c.phone).toLowerCase().includes(lower))
-      )
-      .slice(0, 8);
+  // Restore held bill
+  const handleRestoreBill = (bill: any) => {
+    setRows(bill.rows);
+    setCouponCode(bill.couponCode);
+    setRedeemPoints(bill.redeemPoints);
+    setPreview(bill.preview);
+    setPreviewItems(bill.previewItems);
+    setSelectedCustomerId(bill.customer?.id || null);
+    setSelectedCustomer(bill.customer);
+    
+    // Remove from held bills
+    setHeldBills(prev => prev.filter(b => b.id !== bill.id));
+    setShowHeldBills(false);
+    
+    toast({
+      title: "Bill Restored",
+      description: `Bill "${bill.name}" has been restored`,
+    });
   };
+
+  // Delete held bill
+  const handleDeleteHeldBill = (billId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHeldBills(prev => prev.filter(bill => bill.id !== billId));
+    toast({
+      title: "Bill Deleted",
+      description: "Held bill has been removed",
+    });
+  };
+
+  // Debug: Log products when they change
+  useEffect(() => {
+    if (products.length > 0) {
+      console.log("Products available for search:", products);
+      console.log(
+        "Sample SKUs:",
+        products.map((p) => ({
+          name: p.name,
+          sku: p.sku,
+          barcode: p.barcode,
+        }))
+      );
+    }
+  }, [products]);
 
   const addNewRow = () => {
     setRows((prev) => [
       ...prev,
-      {
-        code: "",
-        name: "",
-        qty: 1,
-        price: 0,
-        tax: 0,
-        total: 0,
-        product_id: null,
-      },
+      { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 },
     ]);
   };
 
   const deleteRow = (index: number) => {
     if (rows.length === 1) return;
-    setRows((prev) => prev.filter((_, i) => i !== index));
+    setRows(rows.filter((_, i) => i !== index));
+  };
+
+  const getMatchingProducts = (term: string) => {
+    if (!term || term.length < 1) return [];
+    const lower = term.toLowerCase();
+
+    console.log("Searching for:", term);
+
+    const matches = products
+      .filter(
+        (p) =>
+          p.name?.toLowerCase().includes(lower) ||
+          p.barcode?.toLowerCase().includes(lower) ||
+          p.sku?.toLowerCase().includes(lower)
+      )
+      .slice(0, 8);
+
+    console.log("Found matches:", matches);
+    return matches;
   };
 
   const handleItemCodeChange = (index: number, value: string) => {
     const updated = [...rows];
     updated[index].code = value;
-    setRows(updated);
-    setCurrentInputIndex(index);
 
-    if (!value || !value.trim()) {
+    // Reset preview whenever items change (so it's not stale)
+    setPreview(null);
+    setPreviewItems([]);
+
+    const matches = getMatchingProducts(value);
+    setSuggestions(matches);
+    setCurrentInputIndex(index);
+    setShowSuggestions(matches.length > 0);
+
+    // Clear row if empty
+    if (!value.trim()) {
       updated[index].name = "";
       updated[index].price = 0;
       updated[index].tax = 0;
@@ -455,81 +383,87 @@ const SupermarketBilling: React.FC = () => {
       return;
     }
 
-    const matches = getMatchingProducts(value);
-    setSuggestions(matches);
-    setShowSuggestions(matches.length > 0);
-
     const exactMatch = products.find(
-      (p: any) =>
+      (p) =>
         p.name?.toLowerCase() === value.toLowerCase() ||
         p.barcode?.toLowerCase() === value.toLowerCase() ||
         p.sku?.toLowerCase() === value.toLowerCase() ||
-        String(p.id) === value
+        p.id?.toString() === value // sometimes id typed
     );
+
+    console.log("Exact match search for:", value, "Found:", exactMatch);
 
     if (exactMatch) {
       updated[index].code = exactMatch.name;
       updated[index].name = exactMatch.name;
       updated[index].price = Number(exactMatch.selling_price || 0);
-      updated[index].tax =
-        typeof exactMatch.tax_percent !== "undefined" &&
-        exactMatch.tax_percent !== null
-          ? Number(exactMatch.tax_percent)
-          : 0;
+      updated[index].tax = Number(exactMatch.tax_percent || 0);
       updated[index].product_id = exactMatch.product_id || exactMatch.id;
       updated[index].total =
-        Number(updated[index].qty || 1) * Number(updated[index].price || 0);
-      setRows(updated);
+        (updated[index].qty || 0) * updated[index].price;
       setShowSuggestions(false);
+      console.log("Auto-filled row with:", exactMatch.name);
+    } else {
+      updated[index].name = "";
+      updated[index].price = 0;
+      updated[index].tax = 0;
+      updated[index].total = 0;
+      updated[index].product_id = null;
     }
+
+    setRows(updated);
   };
 
   const handleSuggestionClick = (product: any) => {
     if (currentInputIndex === null) return;
-    const updated = [...rows];
-    const idx = currentInputIndex;
 
+    const updated = [...rows];
     const existingIndex = updated.findIndex(
-      (r, i) =>
-        i !== idx && r.name?.toLowerCase() === product.name.toLowerCase()
+      (r) => r.name.toLowerCase() === product.name.toLowerCase()
     );
 
-    if (existingIndex !== -1) {
-      updated[existingIndex].qty = Number(updated[existingIndex].qty || 0) + 1;
-      updated[existingIndex].total =
-        updated[existingIndex].qty * updated[existingIndex].price;
-      updated.splice(idx, 1);
-      setRows(updated);
-      setShowSuggestions(false);
-      setCurrentInputIndex(null);
-      return;
-    }
+    if (existingIndex !== -1 && existingIndex !== currentInputIndex) {
+      // Item already exists → just bump quantity
+      const existing = updated[existingIndex];
+      const newQty = Number(existing.qty || 0) + 1;
+      existing.qty = newQty;
+      existing.total = newQty * existing.price;
 
-    updated[idx].code = product.name;
-    updated[idx].name = product.name;
-    updated[idx].price = Number(product.selling_price || 0);
-    updated[idx].tax =
-      typeof product.tax_percent !== "undefined" && product.tax_percent !== null
-        ? Number(product.tax_percent)
-        : 0;
-    updated[idx].product_id = product.product_id || product.id;
-    updated[idx].total = updated[idx].qty
-      ? round2((updated[idx].qty as number) * updated[idx].price)
-      : 0;
+      // remove current row
+      updated.splice(currentInputIndex, 1);
+    } else {
+      updated[currentInputIndex].code = product.name;
+      updated[currentInputIndex].name = product.name;
+      updated[currentInputIndex].price = Number(product.selling_price || 0);
+      updated[currentInputIndex].tax = Number(product.tax_percent || 0);
+      updated[currentInputIndex].product_id =
+        product.product_id || product.id;
+      updated[currentInputIndex].total =
+        Number(product.selling_price || 0) *
+        Number(updated[currentInputIndex].qty || 0);
+    }
 
     setRows(updated);
     setShowSuggestions(false);
     setCurrentInputIndex(null);
 
-    if (idx === updated.length - 1) {
+    // add a new row if we were on the last one
+    if (currentInputIndex === updated.length - 1) {
       addNewRow();
-      setTimeout(() => inputRefs.current[idx + 1]?.focus(), 100);
+      setTimeout(
+        () => inputRefs.current[currentInputIndex + 1]?.focus(),
+        100
+      );
     } else {
-      inputRefs.current[idx + 1]?.focus();
+      inputRefs.current[currentInputIndex + 1]?.focus();
     }
+
+    // Reset preview when items change
+    setPreview(null);
+    setPreviewItems([]);
   };
 
-  const handleQtyChange = (index: number, value: string | number) => {
+  const handleQtyChange = (index: number, value: string) => {
     const updated = [...rows];
     if (value === "" || value === null) {
       updated[index].qty = "";
@@ -537,432 +471,229 @@ const SupermarketBilling: React.FC = () => {
     } else {
       const qty = Number(value);
       updated[index].qty = qty;
-      updated[index].total = round2((updated[index].price || 0) * qty);
+      updated[index].total = qty * updated[index].price;
     }
     setRows(updated);
+    setPreview(null);
+    setPreviewItems([]);
   };
 
   const calculateSubtotal = () =>
-    round2(rows.reduce((sum, r) => sum + (Number(r.total) || 0), 0));
+    rows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
 
   const calculateIncludedTax = () =>
-    round2(
-      rows.reduce((s, r) => {
-        const price = Number(r.price) || 0;
-        const qty = Number(r.qty) || 0;
-        const lineTaxPercent =
-          typeof r.tax !== "undefined" && r.tax !== null && Number(r.tax) > 0
-            ? Number(r.tax)
-            : 0;
-        const effectiveTaxPercent =
-          lineTaxPercent > 0
-            ? lineTaxPercent
-            : vatEnabled
-            ? Number(vatPercent || 0)
-            : 0;
-        return s + price * qty * (effectiveTaxPercent / 100);
-      }, 0)
+    rows.reduce(
+      (s, r) =>
+        s +
+        (Number(r.price) * (Number(r.tax) / 100)) * Number(r.qty || 0),
+      0
     );
 
-  const couponAmount = appliedCoupon?.applied_amount
-    ? Number(appliedCoupon.applied_amount)
-    : 0;
-  const referralAmount = appliedReferral?.applied_amount
-    ? Number(appliedReferral.applied_amount)
-    : 0;
-  const walletApplied = applyWallet
-    ? Math.min(Number(walletUseAmount || 0), Number(walletBalance || 0))
-    : 0;
+  const calculateTotal = () => calculateSubtotal();
 
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    const tax = calculateIncludedTax();
-    const afterDiscounts = Math.max(
-      0,
-      subtotal - couponAmount - referralAmount
-    );
-    const afterWallet = Math.max(0, afterDiscounts - walletApplied);
-    const grand = round2(afterWallet + tax);
-    return grand;
+  // 👤 Handle customer selection
+  const handleCustomerChange = (value: string) => {
+    if (!value) {
+      setSelectedCustomerId(null);
+      setSelectedCustomer(null);
+      setRedeemPoints("");
+      setPreview(null);
+      setPreviewItems([]);
+      return;
+    }
+    const id = Number(value);
+    setSelectedCustomerId(id);
+    const cust = customers.find((c) => c.id === id) || null;
+    setSelectedCustomer(cust || null);
+    setRedeemPoints(""); // reset
+    setPreview(null);
+    setPreviewItems([]);
   };
 
-  function evaluateCouponOnCart(coupon: any, cartRows: any[]) {
-    const subtotal = round2(
-      cartRows.reduce((s, r) => s + (Number(r.total) || 0), 0)
-    );
-
-    if (!coupon || !coupon.active) {
-      return { valid: false, applied_amount: 0, reason: "inactive" };
-    }
-
-    if (coupon.min_order_value && subtotal < coupon.min_order_value) {
-      return { valid: false, applied_amount: 0, reason: "min_order_not_met" };
-    }
-
-    const now = Date.now();
-    if (coupon.start_at && new Date(coupon.start_at).getTime() > now) {
-      return { valid: false, applied_amount: 0, reason: "not_started" };
-    }
-    if (coupon.end_at && new Date(coupon.end_at).getTime() < now) {
-      return { valid: false, applied_amount: 0, reason: "expired" };
-    }
-
-    let applied = 0;
-
-    if (coupon.scope === "order") {
-      if (coupon.type === "percent")
-        applied = (subtotal * (coupon.value || 0)) / 100;
-      else if (coupon.type === "flat") applied = coupon.value || 0;
-      if (coupon.max_value) applied = Math.min(applied, coupon.max_value);
-    } else if (coupon.scope === "item") {
-      let matchAmount = 0;
-      cartRows.forEach((r) => {
-        const name = (r.name || "").toLowerCase();
-        const priceQty = (Number(r.price) || 0) * (Number(r.qty) || 0);
-        let matches = false;
-
-        if (coupon.appliesTo && coupon.appliesTo.nameContains) {
-          for (const token of coupon.appliesTo.nameContains) {
-            if (name.includes(token.toLowerCase())) {
-              matches = true;
-              break;
-            }
-          }
-        }
-
-        if (coupon.sku && r.sku && coupon.sku === r.sku) matches = true;
-
-        if (matches) {
-          if (coupon.type === "percent")
-            matchAmount += (priceQty * (coupon.value || 0)) / 100;
-          else if (coupon.type === "flat") matchAmount += coupon.value || 0;
-        }
-      });
-
-      applied = matchAmount;
-      if (coupon.max_value) applied = Math.min(applied, coupon.max_value);
-    } else {
-      applied = 0;
-    }
-
-    applied = round2(Math.max(0, applied));
-    const valid = applied > 0;
-    return {
-      valid,
-      applied_amount: applied,
-      reason: valid ? null : "no_match",
-    };
-  }
-
-  const validateCouponLocal = (code: string) => {
-    if (!code || !code.trim()) return { valid: false, reason: "empty" };
-    const c = discountRules.find(
-      (x) => x.code.toLowerCase() === code.trim().toLowerCase()
-    );
-    if (!c) return { valid: false, reason: "not_found" };
-    const evalResult = evaluateCouponOnCart(c, rows);
-    if (!evalResult.valid) return { valid: false, reason: evalResult.reason };
-    return {
-      valid: true,
-      applied_amount: evalResult.applied_amount,
-      details: c,
-    };
+  // 🔁 Build items payload for preview / invoice
+  const buildItemsPayload = () => {
+    const validItems = rows.filter((r) => r.name && r.product_id);
+    return validItems.map((r) => ({
+      product_id: r.product_id,
+      qty: Number(r.qty || 0),
+      price: Number(r.price || 0),
+      tax: Number(r.tax || 0),
+    }));
   };
 
-  const applyCouponLocal = () => {
-    const res = validateCouponLocal(couponCode);
-    if (!res.valid) {
-      setAppliedCoupon(null);
+  // 🎟️ Apply / Refresh Discounts (preview API)
+  const handleApplyDiscounts = async () => {
+    const itemsPayload = buildItemsPayload();
+    if (!itemsPayload.length) {
       toast({
-        title: "Coupon invalid",
-        description: `Reason: ${res.reason || "not applicable"}`,
+        title: "No items",
+        description: "Add some items before applying discounts",
         variant: "destructive",
       });
       return;
     }
-    setAppliedCoupon({
-      code: couponCode.trim().toUpperCase(),
-      applied_amount: res.applied_amount,
-      details: res.details,
-    });
-    toast({
-      title: "Coupon applied",
-      description: `Discount AED ${res.applied_amount.toFixed(2)}`,
-    });
+
+    setIsApplyingDiscounts(true);
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/invoices/preview`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: itemsPayload,
+          customer_id: selectedCustomerId,
+          coupon_code: couponCode || null,
+        }),
+      });
+
+      const json = await res.json();
+      console.log("Preview response:", json);
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to apply discounts");
+      }
+
+      setPreview(json.preview || null);
+      setPreviewItems(json.items || []);
+
+      toast({
+        title: "Discounts applied",
+        description: "Preview updated with active discounts & coupon",
+      });
+    } catch (err: any) {
+      console.error("Preview error:", err);
+      toast({
+        title: "Discount preview failed",
+        description: err.message,
+        variant: "destructive",
+      });
+      setPreview(null);
+      setPreviewItems([]);
+    } finally {
+      setIsApplyingDiscounts(false);
+    }
   };
 
-  useEffect(() => {
-    if (!autoApplyBestCoupon) return;
-    if (!discountRules.length) return;
+  // Compute final total for UI (after redeem preview)
+  const uiSubtotal = preview?.subtotal ?? calculateSubtotal();
+  const uiBaseTotal = preview?.total ?? calculateTotal();
+  const uiItemDiscountTotal = preview?.item_discount_total ?? 0;
+  const uiBillDiscountTotal = preview?.bill_discount_total ?? 0;
+  const uiCouponDiscountTotal = preview?.coupon_discount_total ?? 0;
+  const uiMembershipDiscountTotal = preview?.membership_discount_total ?? 0;
 
-    const active = discountRules.filter((c) => c.active);
+  const numericRedeem =
+    redeemPoints === "" ? 0 : Math.max(0, Number(redeemPoints || 0));
 
-    const evaluateCombo = (couponsCombo: any[]) => {
-      const anyNonStackable = couponsCombo.some((c) => !c.stackable);
-      if (anyNonStackable && couponsCombo.length > 1) return { valid: false };
+  const maxRedeemAllowed =
+    selectedCustomer?.loyalty_points != null
+      ? Number(selectedCustomer.loyalty_points)
+      : 0;
 
-      let tempRows = JSON.parse(JSON.stringify(rows));
-      let totalApplied = 0;
+  const clampedRedeem =
+    numericRedeem > maxRedeemAllowed ? maxRedeemAllowed : numericRedeem;
 
-      const itemCoupons = couponsCombo.filter((c) => c.scope === "item");
-      const orderCoupons = couponsCombo.filter((c) => c.scope === "order");
-      const seq = [...itemCoupons, ...orderCoupons];
+  const payableAfterRedeem = Math.max(uiBaseTotal - clampedRedeem, 0);
 
-      for (const cup of seq) {
-        const res = evaluateCouponOnCart(cup, tempRows);
-        if (!res.valid) continue;
-
-        totalApplied += res.applied_amount;
-
-        if (cup.scope === "order" && res.applied_amount > 0) {
-          const subtotalNow = tempRows.reduce((s, r) => s + (r.total || 0), 0);
-          if (subtotalNow <= 0) continue;
-          const ratio = res.applied_amount / subtotalNow;
-
-          tempRows = tempRows.map((r) => {
-            const reduction = round2((r.total || 0) * ratio);
-            const newTotal = Math.max(0, round2((r.total || 0) - reduction));
-            const newPrice = r.qty ? round2(newTotal / r.qty) : r.price;
-            return { ...r, total: newTotal, price: newPrice };
-          });
-        } else if (cup.scope === "item") {
-          tempRows = tempRows.map((r) => {
-            let matches = false;
-            if (cup.appliesTo && cup.appliesTo.nameContains) {
-              for (const token of cup.appliesTo.nameContains) {
-                if (
-                  (r.name || "").toLowerCase().includes(token.toLowerCase())
-                ) {
-                  matches = true;
-                  break;
-                }
-              }
-            }
-
-            if (matches) {
-              let reduction = 0;
-              if (cup.type === "percent")
-                reduction = round2((r.price * r.qty * (cup.value || 0)) / 100);
-              else if (cup.type === "flat") reduction = cup.value || 0;
-
-              const newTotal = Math.max(0, round2(r.total - reduction));
-              const newPrice = r.qty ? round2(newTotal / r.qty) : r.price;
-              return { ...r, total: newTotal, price: newPrice };
-            }
-
-            return r;
-          });
-        }
-      }
-
-      return { valid: true, applied_amount: round2(totalApplied) };
-    };
-
-    let best = { combo: [], applied_amount: 0 };
-    const combos: any[] = [[]];
-
-    for (let i = 0; i < active.length; i++) combos.push([active[i]]);
-    for (let i = 0; i < active.length; i++)
-      for (let j = i + 1; j < active.length; j++)
-        combos.push([active[i], active[j]]);
-    for (let i = 0; i < active.length; i++)
-      for (let j = i + 1; j < active.length; j++)
-        for (let k = j + 1; k < active.length; k++)
-          combos.push([active[i], active[j], active[k]]);
-
-    combos.forEach((cset) => {
-      if (cset.length === 0) return;
-      const evalRes = evaluateCombo(cset);
-      if (!evalRes.valid) return;
-      if (evalRes.applied_amount > best.applied_amount)
-        best = { combo: cset, applied_amount: evalRes.applied_amount };
-    });
-
-    if (best.applied_amount > 0) {
-      if (best.combo.length === 1) {
-        setAppliedCoupon({
-          code: best.combo[0].code,
-          applied_amount: best.applied_amount,
-          details: best.combo[0],
-        });
-      } else {
-        setAppliedCoupon({
-          code: best.combo.map((c) => c.code).join("+"),
-          applied_amount: best.applied_amount,
-          details: { combined: true, coupons: best.combo },
-        });
-      }
-    } else {
-      setAppliedCoupon(null);
-    }
-  }, [rows, autoApplyBestCoupon, vatEnabled, vatPercent]);
-
+  // 🧾 Generate and Save Invoice (final)
   const handleGenerateInvoice = async () => {
     setIsGeneratingInvoice(true);
 
-    try {
-      const validItems = rows.filter((r) => r.name && Number(r.qty) > 0);
-      if (validItems.length === 0) {
+    const validItems = rows.filter((r) => r.name && r.product_id);
+    if (validItems.length === 0) {
+      toast({
+        title: "No items",
+        description: "Please add at least one product",
+        variant: "destructive",
+      });
+      setIsGeneratingInvoice(false);
+      return;
+    }
+
+    // STOCK VALIDATION
+    for (const item of validItems) {
+      const product = products.find((p) => p.name === item.name);
+      if (product && item.qty > product.quantity) {
         toast({
-          title: "No items",
-          description: "Please add at least one product",
+          title: "Insufficient Stock",
+          description: `${product.name} has only ${product.quantity} left.`,
           variant: "destructive",
         });
         setIsGeneratingInvoice(false);
         return;
       }
+    }
 
-      for (const item of validItems) {
-        const product = products.find(
-          (p: any) => p.name === item.name || p.product_id === item.product_id
-        );
-        if (product && Number(item.qty) > Number(product.quantity || 0)) {
-          toast({
-            title: "Insufficient stock",
-            description: `${product.name} has only ${product.quantity} left.`,
-            variant: "destructive",
-          });
-          setIsGeneratingInvoice(false);
-          return;
-        }
-      }
+    // Redeem validation
+    if (selectedCustomer && numericRedeem > maxRedeemAllowed) {
+      toast({
+        title: "Invalid redeem",
+        description: `Customer has only ${maxRedeemAllowed} points`,
+        variant: "destructive",
+      });
+      setIsGeneratingInvoice(false);
+      return;
+    }
 
-      const payload = {
-        invoice_number: `D-${Date.now()}`,
-        payment_method: paymentMethod,
-        customer: {
-          name: customer.name,
-          phone: customer.phone,
-          // include multiple spellings for backend compatibility
-          loyaltyPoints: loyaltyPoints,
-          loyalty_points: loyaltyPoints,
-          loyality_points: loyaltyPoints,
-        },
-        vat: {
-          enabled: vatEnabled,
-          percent: Number(vatPercent || 0),
-          trn: vatRegistrationNumber,
-        },
-        items: validItems.map((r) => ({
-          product_id: r.product_id,
-          name: r.name,
-          qty: r.qty,
-          price: r.price,
-          tax_percent:
-            typeof r.tax !== "undefined" && r.tax !== null && Number(r.tax) > 0
-              ? Number(r.tax)
-              : vatEnabled
-              ? Number(vatPercent || 0)
-              : 0,
-          total: r.total,
-        })),
-        applied_coupon: appliedCoupon,
-        referral: appliedReferral,
-        wallet_applied: applyWallet ? walletApplied : 0,
-        totals: {
-          subtotal: calculateSubtotal(),
-          tax: calculateIncludedTax(),
-          coupon: couponAmount,
-          referral: referralAmount,
-          wallet: walletApplied,
-          grand_total: calculateTotal(),
-        },
-      };
+    const token = localStorage.getItem("auth_token");
+    console.log("Generating invoice with items:", validItems);
 
-      // Try to POST invoice to backend; fall back to local PDF generation on failure
-      try {
-        const token = localStorage.getItem("auth_token");
-        const res = await fetch(
-          "https://billingbackend-1vei.onrender.com/api/invoices",
-          //"https://billingbackend-1vei.onrender.com/api/invoices",
-          {
-            method: "POST",
-            headers: {
-              Authorization: token ? `Bearer ${token}` : "",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-        const json = await res.json().catch(() => null);
-        if (res.ok) {
-          const serverInvoiceNo =
-            json?.data?.invoice_number ??
-            json?.invoice_number ??
-            payload.invoice_number;
-          toast({
-            title: "Invoice created",
-            description: `Invoice ${serverInvoiceNo}`,
-          });
-          // Broadcast invoice-created event for other pages (e.g., Inventory) to react
-          window.dispatchEvent(
-            new CustomEvent("invoice-created", {
-              detail: { invoice: json?.data ?? payload },
-            })
-          );
-          // Optimistically reduce local stock quantities
-          setProducts((prev: any[]) =>
-            prev.map((p: any) => {
-              const match = payload.items.find(
-                (i: any) =>
-                  i.product_id === p.product_id ||
-                  i.product_id === p.id ||
-                  (p.name && i.name && p.name === i.name)
-              );
-              if (!match) return p;
-              const used = Number(match.qty) || 0;
-              const currentQty = Number(p.quantity ?? p.qty ?? 0);
-              return { ...p, quantity: Math.max(0, currentQty - used) };
-            })
-          );
-          generatePDFBill(serverInvoiceNo, json?.data ?? payload);
-        } else {
-          console.warn("Invoice POST failed", json);
-          toast({
-            title: "Invoice saved locally",
-            description: `Could not save to server — created local invoice ${payload.invoice_number}`,
-            variant: "destructive",
-          });
-          window.dispatchEvent(
-            new CustomEvent("invoice-created", { detail: { invoice: payload } })
-          );
-          generatePDFBill(payload.invoice_number, payload);
-        }
-      } catch (err) {
-        console.error("Invoice POST error", err);
-        toast({
-          title: "Invoice saved locally",
-          description: `Network error — created local invoice ${payload.invoice_number}`,
-          variant: "destructive",
-        });
-        window.dispatchEvent(
-          new CustomEvent("invoice-created", { detail: { invoice: payload } })
-        );
-        generatePDFBill(payload.invoice_number, payload);
-      }
-
-      setRows([
-        {
-          code: "",
-          name: "",
-          qty: 1,
-          price: 0,
-          tax: 0,
-          total: 0,
-          product_id: null,
+    try {
+      const res = await fetch(`${API_BASE}/api/invoices`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-      ]);
-      setAppliedCoupon(null);
+        body: JSON.stringify({
+          payment_method: paymentMethod,
+          customer_id: selectedCustomerId,
+          redeem_points: clampedRedeem,
+          coupon_code: couponCode || null,
+          items: validItems.map((r) => ({
+            product_id: r.product_id,
+            qty: Number(r.qty || 0),
+            price: Number(r.price || 0),
+            tax: Number(r.tax || 0),
+          })),
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Invoice creation failed");
+
+      console.log("Invoice response:", json);
+
+      toast({
+        title: "Invoice Created",
+        description: `Invoice ${json.invoice.invoice_number} generated`,
+      });
+
+      // Use server items & totals for PDF
+      generatePDFBill(
+        json.invoice.invoice_number,
+        json.items || [],
+        json.invoice.final_amount,
+        paymentMethod
+      );
+
+      // Reset state
+      setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
+      setPreview(null);
+      setPreviewItems([]);
       setCouponCode("");
-      setAppliedReferral(null);
-      setReferralCode("");
-      setApplyWallet(false);
-      setWalletUseAmount(0);
+      setRedeemPoints("");
+      setSelectedCustomerId(null);
+      setSelectedCustomer(null);
     } catch (err: any) {
-      console.error("Invoice error:", err);
+      console.error(err);
       toast({
         title: "Error",
-        description: err.message || "Could not create invoice",
+        description: err.message,
         variant: "destructive",
       });
     } finally {
@@ -970,31 +701,13 @@ const SupermarketBilling: React.FC = () => {
     }
   };
 
-  const generatePDFBill = (invoiceNumber: string, invoiceObj: any = null) => {
-    const payload = invoiceObj || {
-      invoice_number: invoiceNumber,
-      items: rows.filter((r) => r.name),
-      vat: {
-        enabled: vatEnabled,
-        percent: Number(vatPercent || 0),
-        trn: vatRegistrationNumber,
-      },
-      totals: {
-        subtotal: calculateSubtotal(),
-        tax: calculateIncludedTax(),
-        coupon: couponAmount,
-        referral: referralAmount,
-        wallet: walletApplied,
-        grand_total: calculateTotal(),
-      },
-      customer: {
-        name: customer.name,
-        phone: customer.phone,
-        loyaltyPoints: loyaltyPoints,
-      },
-    };
-
-    const validItems = payload.items;
+  // 🧾 PDF Receipt Generator using SERVER items
+  const generatePDFBill = (
+    invoiceNumber: string,
+    serverItems: any[],
+    finalAmount: number,
+    paymentMethod: string
+  ) => {
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -1012,135 +725,75 @@ const SupermarketBilling: React.FC = () => {
       hour12: false,
     });
 
-    let y = 10;
-
-    doc.setFontSize(10);
-    doc.setFont("courier", "normal");
-    doc.text("********************************", 40, y, { align: "center" });
-    y += 5;
-
-    doc.setFontSize(14);
-    doc.setFont("courier", "bold");
-    doc.text("SUPERMART (DEMO)", 40, y, { align: "center" });
-    y += 6;
-
-    doc.setFontSize(9);
-    doc.setFont("courier", "normal");
-    doc.text("********************************", 40, y, { align: "center" });
-    y += 6;
-
-    if (
-      payload.customer &&
-      (payload.customer.name ||
-        payload.customer.phone ||
-        payload.customer.loyaltyPoints)
-    ) {
-      if (payload.customer.name) {
-        doc.setFontSize(9);
-        doc.text(`Customer: ${payload.customer.name}`, 5, y);
-        y += 4;
-      }
-      if (payload.customer.phone) {
-        doc.setFontSize(9);
-        doc.text(`Phone: ${payload.customer.phone}`, 5, y);
-        y += 4;
-      }
-      y += 2;
-    }
-
-    if (payload.vat && payload.vat.enabled && payload.vat.trn) {
-      doc.setFontSize(9);
-      doc.text(`VAT TRN: ${payload.vat.trn}`, 5, y);
-      y += 5;
-    }
-
-    doc.setFontSize(9);
-    doc.text(`Invoice No: ${payload.invoice_number}`, 5, y);
-    y += 4;
-
-    doc.text(`Date: ${date} ${time}`, 5, y);
-    y += 6;
-
-    doc.text("----------------------------------------", 5, y);
-    y += 6;
-
-    doc.setFont("courier", "normal");
-    doc.setFontSize(10);
-
-    validItems.forEach((item: any) => {
-      const itemLine = `${item.qty}x ${item.name}`;
-      const price = `AED ${round2(item.total).toFixed(2)}`;
-
-      doc.text(itemLine, 5, y);
-      doc.text(price, 75, y, { align: "right" });
-      y += 5;
-    });
-
-    y += 2;
-    doc.setFontSize(9);
-    doc.text("----------------------------------------", 5, y);
-    y += 6;
-
-    const subtotal = payload.totals.subtotal;
-    const tax = payload.totals.tax;
-    doc.setFont("courier", "bold");
-    doc.setFontSize(11);
-    doc.text("SUBTOTAL:", 5, y);
-    doc.text(`AED ${subtotal.toFixed(2)}`, 75, y, { align: "right" });
-    y += 6;
-
-    if (payload.totals.coupon > 0) {
-      doc.setFont("courier", "normal");
-      doc.setFontSize(10);
-      doc.text(`Coupon:`, 5, y);
-      doc.text(`- AED ${payload.totals.coupon.toFixed(2)}`, 75, y, {
-        align: "right",
-      });
-      y += 6;
-    }
-
-    if (payload.totals.referral > 0) {
-      doc.setFont("courier", "normal");
-      doc.setFontSize(10);
-      doc.text(`Referral:`, 5, y);
-      doc.text(`- AED ${payload.totals.referral.toFixed(2)}`, 75, y, {
-        align: "right",
-      });
-      y += 6;
-    }
-
-    if (payload.totals.wallet > 0) {
-      doc.setFont("courier", "normal");
-      doc.setFontSize(10);
-      doc.text(`Wallet Applied:`, 5, y);
-      doc.text(`- AED ${payload.totals.wallet.toFixed(2)}`, 75, y, {
-        align: "right",
-      });
-      y += 6;
-    }
-
-    if (payload.vat && payload.vat.enabled) {
-      doc.setFont("courier", "normal");
-      doc.setFontSize(10);
-      doc.text(`VAT (${payload.vat.percent}%):`, 5, y);
-      doc.text(`AED ${tax.toFixed(2)}`, 75, y, { align: "right" });
-      y += 6;
-    }
-
-    doc.setFont("courier", "bold");
-    doc.setFontSize(12);
-    doc.text("TOTAL:", 5, y);
-    doc.text(`AED ${payload.totals.grand_total.toFixed(2)}`, 75, y, {
-      align: "right",
-    });
-    y += 8;
-
-    const paymentMethodDisplay: any = {
+    const paymentMethodDisplay: Record<string, string> = {
       cash: "CASH",
       card: "CARD",
       upi: "UPI",
       credit: "CREDIT",
     };
+
+    let y = 10;
+
+    // Top border stars
+    doc.setFontSize(10);
+    doc.setFont("courier", "normal");
+    doc.text("********************************", 40, y, { align: "center" });
+    y += 5;
+
+    // Store name
+    doc.setFontSize(16);
+    doc.setFont("courier", "bold");
+    doc.text("SUPERMART", 40, y, { align: "center" });
+    y += 5;
+
+    // Bottom border stars
+    doc.setFontSize(10);
+    doc.setFont("courier", "normal");
+    doc.text("********************************", 40, y, { align: "center" });
+    y += 6;
+
+    // Invoice number and timestamp
+    doc.setFontSize(9);
+    doc.text(`Invoice No: ${invoiceNumber}`, 5, y);
+    y += 4;
+    doc.text(`Date: ${date} ${time}`, 5, y);
+    y += 4;
+
+    // Dashed line
+    doc.text("----------------------------------------", 5, y);
+    y += 6;
+
+    // Items
+    doc.setFont("courier", "normal");
+    doc.setFontSize(10);
+
+    serverItems.forEach((item) => {
+      const itemLine = `${item.quantity}x ${item.name || "Item"}`;
+      const priceLine = `AED ${Number(
+        item.total ?? item.net_price ?? 0
+      ).toFixed(2)}`;
+
+      doc.text(itemLine, 5, y);
+      doc.text(priceLine, 75, y, { align: "right" });
+      y += 5;
+    });
+
+    // Dashed line before totals
+    y += 2;
+    doc.setFontSize(9);
+    doc.text("----------------------------------------", 5, y);
+    y += 6;
+
+    // Total amount from server
+    doc.setFont("courier", "bold");
+    doc.setFontSize(11);
+    doc.text("TOTAL:", 40, y, { align: "right" });
+    doc.text(`AED ${Number(finalAmount).toFixed(2)}`, 75, y, {
+      align: "right",
+    });
+    y += 6;
+
+    // Payment method
     doc.setFont("courier", "normal");
     doc.setFontSize(10);
     doc.text("Payment Method:", 5, y);
@@ -1150,519 +803,742 @@ const SupermarketBilling: React.FC = () => {
       y,
       { align: "right" }
     );
-    y += 6;
+    y += 5;
 
+    // Dashed line
     doc.setFontSize(9);
     doc.text("----------------------------------------", 5, y);
     y += 6;
 
+    // Thank you message
     doc.setFontSize(10);
     doc.setFont("courier", "bold");
-    doc.text("********* THANK YOU! *********", 40, y, { align: "center" });
+    doc.text("********* THANK YOU! *********", 40, y, {
+      align: "center",
+    });
     y += 8;
 
-    doc.save(`receipt-${payload.invoice_number}.pdf`);
-  };
+    // Simple barcode simulation
+    doc.setLineWidth(0.5);
+    const barcodeY = y;
+    const barcodeWidth = 60;
+    const barcodeStart = (80 - barcodeWidth) / 2;
 
-  const onApplyCouponClick = async () => {
-    // If user entered a code, attempt to apply that specific rule.
-    if (couponCode && couponCode.trim()) {
-      // Ensure discount rules loaded (fetch once)
-      if (!discountRules.length) await fetchActiveDiscountRules();
-      const code = couponCode.trim().toUpperCase();
-      const rule = discountRules.find(
-        (r) => r.code && r.code.toUpperCase() === code
+    for (let i = 0; i < 40; i++) {
+      const lineWidth = Math.random() > 0.5 ? 1 : 0.5;
+      doc.setLineWidth(lineWidth);
+      doc.line(
+        barcodeStart + i * 1.5,
+        barcodeY,
+        barcodeStart + i * 1.5,
+        barcodeY + 15
       );
-      const sourceCoupon = rule;
-      if (!sourceCoupon) {
-        toast({
-          title: "Coupon not found",
-          description: "Code does not match any active rule",
-          variant: "destructive",
-        });
-        return;
-      }
-      const evalRes = evaluateCouponOnCart(sourceCoupon, rows);
-      if (!evalRes.valid) {
-        toast({
-          title: "Coupon invalid",
-          description: evalRes.reason || "Not applicable to current cart",
-          variant: "destructive",
-        });
-        setAppliedCoupon(null);
-        return;
-      }
-      setAppliedCoupon({
-        code,
-        applied_amount: evalRes.applied_amount,
-        details: evalRes.details,
-      });
-      toast({
-        title: "Coupon applied",
-        description: `Discount AED ${evalRes.applied_amount.toFixed(2)}`,
-      });
-      return;
     }
 
-    // No code entered: fetch and show picker modal with applicable rules.
-    if (!discountRules.length) await fetchActiveDiscountRules();
-    if (showAllDiscounts && !allDiscountRules.length)
-      await fetchAllDiscountRules();
-    setShowPromotionsModal(true);
+    doc.save(`receipt-${invoiceNumber}.pdf`);
   };
 
-  const quickApplyPromotion = (coupon: any) => {
-    const ev = evaluateCouponOnCart(coupon, rows);
-    if (!ev.valid) {
-      toast({
-        title: "Not applicable",
-        description: "Promotion not applicable to current cart",
-        variant: "destructive",
-      });
-      return;
-    }
-    setAppliedCoupon({
-      code: coupon.code,
-      applied_amount: ev.applied_amount,
-      details: coupon,
-    });
-    toast({
-      title: "Promotion applied",
-      description: `${coupon.code} — AED ${ev.applied_amount.toFixed(2)}`,
-    });
-    setShowPromotionsModal(false);
+  // Helper to find preview discount for a row
+  const getPreviewForRow = (row: any) => {
+    if (!previewItems?.length || !row.product_id) return null;
+    return previewItems.find(
+      (it) =>
+        Number(it.product_id) === Number(row.product_id) &&
+        Number(it.qty) === Number(row.qty) &&
+        Number(it.price) === Number(row.price)
+    );
   };
-
-  const handleCustomerInputChange = (value: string) => {
-    setCustomer((c) => ({ ...c, name: value }));
-    const matches = getMatchingCustomers(value);
-    setShowCustomerSuggestions(matches.length > 0);
-  };
-
-  const handleCustomerSelect = (cust: any) => {
-    const points =
-      cust?.loyaltyPoints ??
-      cust?.loyalty_points ??
-      cust?.loyalityPoints ??
-      cust?.loyality_points ??
-      0;
-    setCustomer({
-      name: cust.name || "",
-      phone: cust.phone || "",
-      loyalityPoints: points,
-    });
-    setLoyaltyPoints(Number(points || 0));
-    setShowCustomerSuggestions(false);
-    setTimeout(() => inputRefs.current[0]?.focus(), 100);
-  };
-
-  const handleCustomerBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    setTimeout(() => setShowCustomerSuggestions(false), 150);
-  };
-
-  const subtotalVal = calculateSubtotal();
-  const vatVal = calculateIncludedTax();
-  const couponVal = couponAmount;
-  const referralVal = referralAmount;
-  const walletVal = walletApplied;
-  const totalVal = calculateTotal();
 
   return (
     <div className="space-y-6">
-      {/* Header matching inventory style */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Billing</h1>
-        <p className="text-muted-foreground mt-1">
-          Enter products, manage customer and print receipt
-        </p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Billing table */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" />
-              Billing Table
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            {/* Customer & VAT controls */}
-            <div className="mb-4 space-y-3">
-              <div className="relative">
-                <Label className="block text-sm font-medium mb-1">
-                  Customer
-                </Label>
-                <Input
-                  ref={(el) => (customerInputRef.current = el)}
-                  className="w-full"
-                  placeholder="Type name or phone"
-                  value={customer.name}
-                  onChange={(e) => handleCustomerInputChange(e.target.value)}
-                  onFocus={(e) => {
-                    const matches = getMatchingCustomers(e.currentTarget.value);
-                    setShowCustomerSuggestions(matches.length > 0);
-                  }}
-                  onBlur={handleCustomerBlur}
-                />
-
-                {showCustomerSuggestions && (
-                  <div
-                    ref={customerSuggestionRef}
-                    className="absolute z-[9999] bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1"
-                  >
-                    {getMatchingCustomers(customer.name).map(
-                      (c: any, idx: number) => (
-                        <div
-                          key={c.id || `${c.name}-${idx}`}
-                          className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                          onMouseDown={(ev) => {
-                            ev.preventDefault();
-                            handleCustomerSelect(c);
-                          }}
-                        >
-                          <div className="font-medium text-sm">{c.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {c.phone ? `Phone: ${c.phone}` : "Phone: N/A"}
-                          </div>
-                        </div>
-                      )
-                    )}
-
-                    {getMatchingCustomers(customer.name).length === 0 && (
-                      <div className="px-3 py-2 text-xs text-gray-500">
-                        No matching customers
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* VAT controls */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="vatEnabled"
-                    type="checkbox"
-                    checked={vatEnabled}
-                    onChange={(e) => setVatEnabled(e.target.checked)}
-                  />
-                  <Label htmlFor="vatEnabled" className="text-sm font-medium">
-                    VAT Enabled
-                  </Label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Rate %</Label>
-                  <Input
-                    className="w-20"
-                    type="number"
-                    value={vatPercent}
-                    onChange={(e) => setVatPercent(Number(e.target.value || 0))}
-                  />
-                </div>
-              </div>
-
-              {/* Promotions */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="autoCoupon"
-                    checked={autoApplyBestCoupon}
-                    onChange={(e) => setAutoApplyBestCoupon(e.target.checked)}
-                  />
-                  <Label htmlFor="autoCoupon" className="text-sm">
-                    Auto-apply best coupon
-                  </Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setShowPromotionsModal(true)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <List className="mr-2 h-4 w-4" /> Promotions
-                  </Button>
-
-                  <Button
-                    onClick={() => setShowLoyaltyModal(true)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2"
-                  >
-                    <Receipt className="mr-2 h-4 w-4" />
-                    <span className="flex items-center gap-2">
-                      <span>Loyalty</span>
-                      <span className="inline-block bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded">
-                        {loyaltyPoints}
-                      </span>
-                    </span>
-                  </Button>
-                </div>
-              </div>
+      {/* Coupon Popup */}
+      {showCouponPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Available Coupons</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowCouponPopup(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b">
-                    <TableHead className="text-left py-3 text-sm font-medium">
-                      Item Code / Name
-                    </TableHead>
-                    <TableHead className="text-left py-3 text-sm font-medium">
-                      Qty
-                    </TableHead>
-                    <TableHead className="text-left py-3 text-sm font-medium">
-                      Price
-                    </TableHead>
-                    <TableHead className="text-left py-3 text-sm font-medium">
-                      VAT%
-                    </TableHead>
-                    <TableHead className="text-left py-3 text-sm font-medium">
-                      Total
-                    </TableHead>
-                    <TableHead className="text-right py-3 text-sm font-medium">
-                      Action
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+            {isLoadingCoupons ? (
+              <div className="text-center py-8">
+                <div className="h-6 w-6 mx-auto animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                <p className="text-sm text-muted-foreground mt-2">Loading coupons...</p>
+              </div>
+            ) : availableCoupons.length > 0 ? (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {availableCoupons.map((coupon) => (
+                  <div
+                    key={coupon.id}
+                    className="border rounded-lg p-4 hover:border-primary cursor-pointer transition-colors"
+                    onClick={() => handleSelectCoupon(coupon)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-primary">{coupon.code}</h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {coupon.description || "Special discount coupon"}
+                        </p>
+                        {coupon.valid_from && coupon.valid_until && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Valid: {new Date(coupon.valid_from).toLocaleDateString()} -{" "}
+                            {new Date(coupon.valid_until).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-green-600">
+                          {coupon.discount_percent
+                            ? `${coupon.discount_percent}% OFF`
+                            : `AED ${coupon.discount_amount} OFF`}
+                        </div>
+                        {coupon.min_purchase_amount && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Min. purchase: AED {coupon.min_purchase_amount}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No active coupons available</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Check back later for new promotions
+                </p>
+              </div>
+            )}
 
-                <TableBody>
-                  {rows.map((r, i) => (
-                    <TableRow key={i} className="border-b hover:bg-muted/50">
-                      <TableCell className="py-2">
+            <div className="flex gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowCouponPopup(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setCouponCode("");
+                  setShowCouponPopup(false);
+                }}
+                className="flex-1"
+              >
+                Clear Coupon
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Redeem Points Popup */}
+      {showRedeemPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Redeem Loyalty Points</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowRedeemPopup(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="text-center mb-6">
+              <Coins className="h-16 w-16 text-yellow-500 mx-auto mb-3" />
+              <p className="text-lg font-semibold">
+                Available Points: <span className="text-blue-600">{selectedCustomer?.loyalty_points || 0}</span>
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                1 Point = AED 1.00 discount
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {[10, 50, 100, 200].map((points) => (
+                <Button
+                  key={points}
+                  variant="outline"
+                  onClick={() => handleApplyRedeem(points)}
+                  disabled={points > (selectedCustomer?.loyalty_points || 0)}
+                  className="h-16 flex-col"
+                >
+                  <span className="font-semibold">{points}</span>
+                  <span className="text-xs text-muted-foreground">Points</span>
+                </Button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="Custom points"
+                max={selectedCustomer?.loyalty_points || 0}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 0;
+                  if (value <= (selectedCustomer?.loyalty_points || 0)) {
+                    setRedeemPoints(value);
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button
+                onClick={() => {
+                  if (redeemPoints && redeemPoints > 0) {
+                    handleApplyRedeem(Number(redeemPoints));
+                  }
+                }}
+                disabled={!redeemPoints || redeemPoints <= 0}
+              >
+                Apply
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRedeemPoints("");
+                setShowRedeemPopup(false);
+              }}
+              className="w-full mt-3"
+            >
+              Clear Points
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Held Bills Popup */}
+      {showHeldBills && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Held Bills</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowHeldBills(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {heldBills.length > 0 ? (
+              <div className="flex-1 overflow-y-auto">
+                <div className="space-y-3">
+                  {heldBills.map((bill) => (
+                    <div
+                      key={bill.id}
+                      className="border rounded-lg p-4 hover:border-primary cursor-pointer transition-colors"
+                      onClick={() => handleRestoreBill(bill)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-semibold">{bill.name}</h4>
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              {new Date(bill.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <p>Items: {bill.rows.filter((r: any) => r.name).length}</p>
+                            <p>Customer: {bill.customer?.name || 'Walk-in'}</p>
+                            <p>Total: AED {bill.total.toFixed(2)}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleRestoreBill(bill)}
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            Restore
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={(e) => handleDeleteHeldBill(bill.id, e)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 flex-1 flex items-center justify-center">
+                <div>
+                  <Clock className="h-16 w-16 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">No held bills</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Bills you hold will appear here
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              onClick={() => setShowHeldBills(false)}
+              className="mt-4"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Billing</h1>
+          <p className="text-muted-foreground mt-1">
+            Enter products, apply discounts, and print receipt
+          </p>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowHeldBills(true)}
+            disabled={heldBills.length === 0}
+          >
+            <Clock className="h-4 w-4 mr-2" />
+            Held Bills ({heldBills.length})
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={handleHoldBill}
+            disabled={!rows.some(row => row.name && row.qty)}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Hold Bill
+          </Button>
+        </div>
+      </div>
+
+      {/* Bill Name Input for Holding */}
+      {rows.some(row => row.name && row.qty) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <Label htmlFor="billName" className="text-blue-900 font-medium">Bill Name (for holding)</Label>
+          <div className="flex gap-2 mt-2">
+            <Input
+              id="billName"
+              value={billName}
+              onChange={(e) => setBillName(e.target.value)}
+              placeholder="e.g., Customer Phone Bill, Regular Order, etc."
+              className="flex-1"
+            />
+            <Button
+              onClick={handleHoldBill}
+              disabled={!rows.some(row => row.name && row.qty)}
+              className="whitespace-nowrap"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Hold Bill
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* LEFT: Billing Table */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Billing Table</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item Code / Name</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r, i) => {
+                  const previewRow = getPreviewForRow(r);
+                  const effectiveTotal =
+                    previewRow?.net_price ?? r.total ?? 0;
+                  const discountForRow = previewRow?.discount_amount || 0;
+
+                  return (
+                    <TableRow key={i}>
+                      <TableCell>
                         <Input
-                          ref={(el) => (inputRefs.current[i] = el)}
+                          ref={(el) => (inputRefs.current[i] = el!)}
                           value={r.code}
                           onChange={(e) =>
                             handleItemCodeChange(i, e.target.value)
                           }
                           placeholder="Enter name, barcode, or SKU"
-                          className="text-sm"
                         />
-
-                        {showSuggestions &&
-                          currentInputIndex === i &&
-                          suggestions &&
-                          suggestions.length > 0 && (
-                            <div
-                              ref={suggestionRef}
-                              className="fixed z-[9999] bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto min-w-[300px]"
-                              style={{
-                                top: `${
-                                  inputRefs.current[i]?.getBoundingClientRect()
-                                    .bottom +
-                                  window.scrollY +
-                                  4
-                                }px`,
-                                left: `${
-                                  inputRefs.current[i]?.getBoundingClientRect()
-                                    .left + window.scrollX
-                                }px`,
-                              }}
-                            >
-                              {suggestions.map((p: any, idx: number) => (
-                                <div
-                                  key={p.id || idx}
-                                  className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                                  onMouseDown={(ev) => {
-                                    ev.preventDefault();
-                                    handleSuggestionClick(p);
-                                  }}
-                                >
-                                  <div className="font-medium text-sm">
-                                    {p.name}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {p.sku && `SKU: ${p.sku} • `}
-                                    {p.barcode && `Barcode: ${p.barcode} • `}
-                                    Stock: {p.quantity || "N/A"} • AED{" "}
-                                    {p.selling_price}
-                                  </div>
+                        {showSuggestions && currentInputIndex === i && (
+                          <div
+                            ref={suggestionRef}
+                            className="fixed z-[9999] bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto min-w-[300px]"
+                            style={{
+                              top: `${
+                                inputRefs.current[i]?.getBoundingClientRect()
+                                  .bottom +
+                                window.scrollY +
+                                4
+                              }px`,
+                              left: `${
+                                inputRefs.current[i]?.getBoundingClientRect()
+                                  .left + window.scrollX
+                              }px`,
+                            }}
+                          >
+                            {suggestions.map((p, idx) => (
+                              <div
+                                key={p.id}
+                                className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
+                                onClick={() => handleSuggestionClick(p)}
+                              >
+                                <div className="font-medium text-sm">
+                                  {p.name}
                                 </div>
-                              ))}
-                            </div>
-                          )}
+                                <div className="text-xs text-gray-500">
+                                  {p.sku && `SKU: ${p.sku} • `}
+                                  {p.barcode && `Barcode: ${p.barcode} • `}
+                                  Stock: {p.quantity} • AED{" "}
+                                  {p.selling_price}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
-
-                      <TableCell className="py-2">
+                      <TableCell>
                         <Input
                           type="number"
                           value={r.qty}
-                          onChange={(e) => handleQtyChange(i, e.target.value)}
+                          onChange={(e) =>
+                            handleQtyChange(i, e.target.value)
+                          }
                           onBlur={() => {
-                            if (
-                              rows[i].qty === "" ||
-                              Number(rows[i].qty) === 0
-                            ) {
+                            if (rows[i].qty === "" || rows[i].qty === 0) {
                               const updated = [...rows];
                               updated[i].qty = 1;
                               updated[i].total = updated[i].price;
                               setRows(updated);
                             }
                           }}
-                          className="text-sm w-20"
                         />
                       </TableCell>
-
-                      <TableCell className="py-2">
-                        <Input
-                          type="number"
-                          value={r.price}
-                          onChange={(e) => {
-                            const updated = [...rows];
-                            updated[i].price = Number(e.target.value || 0);
-                            updated[i].total = round2(
-                              updated[i].price * (Number(updated[i].qty) || 0)
-                            );
-                            setRows(updated);
-                          }}
-                          className="text-sm w-24"
-                        />
+                      <TableCell>AED {r.price.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col items-end">
+                          <span className="font-medium">
+                            AED {Number(effectiveTotal).toFixed(2)}
+                          </span>
+                          {discountForRow > 0 && (
+                            <span className="text-xs text-green-600">
+                              -AED {Number(discountForRow).toFixed(2)}{" "}
+                              discount
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
-
-                      <TableCell className="py-2">
-                        <Input
-                          type="number"
-                          value={r.tax}
-                          onChange={(e) => {
-                            const updated = [...rows];
-                            updated[i].tax = Number(e.target.value || 0);
-                            setRows(updated);
-                          }}
-                          placeholder={vatEnabled ? `${vatPercent}` : "0"}
-                          className="text-sm w-16"
-                        />
-                      </TableCell>
-
-                      <TableCell className="py-2 font-medium text-sm">
-                        AED {Number(r.total || 0).toFixed(2)}
-                      </TableCell>
-
-                      <TableCell className="py-2 text-right">
+                      <TableCell>
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => deleteRow(i)}
                           disabled={rows.length === 1}
                         >
-                          <MinusCircle className="h-4 w-4" />
+                          <MinusCircle className="h-5 w-5 text-red-500" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="mt-4 flex items-center gap-2">
-              <Button variant="outline" onClick={addNewRow}>
-                <Plus className="h-4 w-4 mr-2" /> Add Row
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setRows([
-                    {
-                      code: "",
-                      name: "",
-                      qty: 1,
-                      price: 0,
-                      tax: 0,
-                      total: 0,
-                      product_id: null,
-                    },
-                  ]);
-                  setAppliedCoupon(null);
-                  setAppliedReferral(null);
-                }}
-              >
-                <X className="h-4 w-4 mr-2" /> Clear
-              </Button>
-            </div>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <Button variant="outline" onClick={addNewRow} className="mt-4">
+              + Add Row
+            </Button>
           </CardContent>
         </Card>
 
-        {/* Summary & Payments */}
+        {/* RIGHT: Summary / Customer / Discounts */}
         <Card>
           <CardHeader>
             <CardTitle>Bill Summary</CardTitle>
           </CardHeader>
-
           <CardContent className="space-y-4">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between py-2">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">
-                  AED {subtotalVal.toFixed(2)}
-                </span>
-              </div>
+            {/* Customer & Loyalty */}
+            <div className="space-y-2">
+              <Label>Customer (for loyalty & coupons)</Label>
+            <div className="relative">
+  <Input
+    placeholder="Search customer by name or phone"
+    value={customerSearch}
+    onChange={(e) => {
+      const val = e.target.value;
+      setCustomerSearch(val);
 
-              <div className="flex justify-between py-2">
-                <span className="text-muted-foreground">
-                  VAT {vatEnabled ? `(${vatPercent}%)` : "(Disabled)"}
-                </span>
-                <span className="font-medium">AED {vatVal.toFixed(2)}</span>
-              </div>
+      if (!val.trim()) {
+        setCustomerSuggestions([]);
+        setShowCustomerSuggestions(false);
+        setSelectedCustomer(null);
+        setSelectedCustomerId(null);
+        return;
+      }
 
-              {/* Coupon */}
-              <div className="pt-3 border-t space-y-2">
-                <Label className="text-sm font-medium">Coupon / Discount</Label>
+      const search = val.toLowerCase();
 
-                <div className="flex gap-2">
-                  <Input
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    placeholder="Enter coupon code"
-                    className="text-sm"
-                  />
-                  <Button onClick={onApplyCouponClick} size="sm">
-                    Apply
-                  </Button>
-                </div>
+      const filtered = customers.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          (c.phone && c.phone.toLowerCase().includes(search))
+      );
 
-                {appliedCoupon && (
-                  <div className="flex justify-between py-2 text-green-600">
-                    <span className="text-sm">
-                      Applied: {appliedCoupon.code}
-                    </span>
-                    <span className="text-sm font-medium">
-                      - AED {Number(appliedCoupon.applied_amount).toFixed(2)}
+      setCustomerSuggestions(filtered);
+      setShowCustomerSuggestions(true);
+    }}
+    onFocus={() => {
+      if (customerSuggestions.length > 0) setShowCustomerSuggestions(true);
+    }}
+  />
+
+  {showCustomerSuggestions && customerSuggestions.length > 0 && (
+    <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
+      {customerSuggestions.map((c) => (
+        <div
+          key={c.id}
+          className="p-2 cursor-pointer hover:bg-gray-100 border-b"
+          onClick={() => {
+            setSelectedCustomerId(c.id);
+            setSelectedCustomer(c);
+            setCustomerSearch(c.name);
+            setShowCustomerSuggestions(false);
+
+            // reset discounts
+            setRedeemPoints("");
+            setCouponCode("");
+            setPreview(null);
+            setPreviewItems([]);
+          }}
+        >
+          <p className="font-semibold text-sm">{c.name}</p>
+          <p className="text-xs text-gray-500">{c.phone || "No phone"}</p>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+{selectedCustomer && (
+  <div className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200">
+    <div className="flex justify-between">
+      <span className="font-medium">Name:</span>
+      <span>{selectedCustomer.name}</span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Phone:</span>
+      <span>{selectedCustomer.phone || "N/A"}</span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Points:</span>
+      <span className="text-blue-600 font-semibold">
+        {selectedCustomer.loyalty_points || 0}
+      </span>
+    </div>
+    <div className="flex justify-between">
+      <span className="font-medium">Tier:</span>
+      <span>{selectedCustomer.membership_tier || "Bronze"}</span>
+    </div>
+
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleOpenRedeemPopup}
+      className="w-full mt-2"
+    >
+      Redeem Points
+    </Button>
+  </div>
+)}
+
+
+              {selectedCustomer && (
+                <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span>Loyalty Points:</span>
+                    <span className="font-semibold text-blue-600">
+                      {selectedCustomer.loyalty_points ?? 0}
                     </span>
                   </div>
-                )}
-              </div>
+                  <div className="flex justify-between items-center">
+                    <span>Tier:</span>
+                    <span className="font-semibold">
+                      {selectedCustomer.membership_tier || "Bronze"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenRedeemPopup}
+                    className="w-full mt-2"
+                  >
+                    <Coins className="h-3 w-3 mr-1" />
+                    Redeem Points
+                  </Button>
+                </div>
+              )}
             </div>
 
             <Separator />
 
-            <div className="space-y-3">
-              {couponVal > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Coupon Discount</span>
-                  <span className="font-medium text-green-600">
-                    - AED {couponVal.toFixed(2)}
-                  </span>
+            {/* Coupon Section */}
+            <div>
+              <Label>Coupon Code</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  placeholder="Enter coupon code"
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleOpenCouponPopup}
+                  className="whitespace-nowrap"
+                >
+                  <Tag className="h-4 w-4 mr-1" />
+                  Browse
+                </Button>
+              </div>
+              
+              <div className="flex gap-2 mt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleApplyDiscounts}
+                  disabled={isApplyingDiscounts}
+                  className="flex-1"
+                >
+                  {isApplyingDiscounts ? "Applying..." : "Apply Discounts"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setCouponCode("");
+                    setPreview(null);
+                    setPreviewItems([]);
+                  }}
+                  className="flex-1"
+                >
+                  Clear
+                </Button>
+              </div>
+
+              {couponCode && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Applied Coupon:</span>
+                    <span className="text-blue-700 font-semibold">{couponCode}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Totals */}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>AED {uiSubtotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span>Tax (approx)</span>
+                <span>AED {calculateIncludedTax().toFixed(2)}</span>
+              </div>
+
+              {uiItemDiscountTotal > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>Item Discounts</span>
+                  <span>-AED {uiItemDiscountTotal.toFixed(2)}</span>
                 </div>
               )}
 
-              <div className="flex justify-between font-bold pt-2 border-t">
-                <span className="text-lg">Total</span>
-                <span className="text-2xl">AED {totalVal.toFixed(2)}</span>
+              {uiBillDiscountTotal > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>Bill Discounts</span>
+                  <span>-AED {uiBillDiscountTotal.toFixed(2)}</span>
+                </div>
+              )}
+
+              {uiCouponDiscountTotal > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>Coupon Discount</span>
+                  <span>-AED {uiCouponDiscountTotal.toFixed(2)}</span>
+                </div>
+              )}
+
+              {uiMembershipDiscountTotal > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>Membership Discount</span>
+                  <span>-AED {uiMembershipDiscountTotal.toFixed(2)}</span>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="flex justify-between">
+                <span className="font-semibold">Total before Redeem</span>
+                <span className="font-semibold">
+                  AED {uiBaseTotal.toFixed(2)}
+                </span>
               </div>
+
+              {selectedCustomer && clampedRedeem > 0 && (
+                <div className="flex justify-between text-blue-700 text-sm">
+                  <span>Redeem Points ({clampedRedeem})</span>
+                  <span>-AED {clampedRedeem.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between font-bold text-lg">
+                <span>Final Payable</span>
+                <span>AED {payableAfterRedeem.toFixed(2)}</span>
+              </div>
+
+              {preview?.preview_loyalty_points != null && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Will earn approx{" "}
+                  <span className="font-semibold">
+                    {preview.preview_loyalty_points}
+                  </span>{" "}
+                  points (before redeem).
+                </p>
+              )}
             </div>
 
             <Separator />
 
+            {/* Payment Method */}
             <div>
-              <Label className="block text-sm font-medium mb-3">
-                Payment Method
-              </Label>
-
-              <div className="grid grid-cols-2 gap-2">
+              <Label>Payment Method</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
                 {[
                   { id: "cash", icon: Banknote, label: "Cash" },
                   { id: "card", icon: CreditCard, label: "Card" },
@@ -1682,6 +1558,7 @@ const SupermarketBilling: React.FC = () => {
               </div>
             </div>
 
+            {/* Print Bill */}
             <Button
               onClick={handleGenerateInvoice}
               className="w-full mt-4"
@@ -1703,207 +1580,6 @@ const SupermarketBilling: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Promotions modal */}
-      {showPromotionsModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-2xl">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-primary" />
-                  {loadingCoupons
-                    ? "Loading Discounts"
-                    : showAllDiscounts
-                    ? "All Discount Rules"
-                    : "Active Promotions"}
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPromotionsModal(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant={showAllDiscounts ? "outline" : "default"}
-                  size="sm"
-                  onClick={async () => {
-                    setShowAllDiscounts(false);
-                    if (!discountRules.length) await fetchActiveDiscountRules();
-                  }}
-                >
-                  Active Only
-                </Button>
-                <Button
-                  variant={showAllDiscounts ? "default" : "outline"}
-                  size="sm"
-                  onClick={async () => {
-                    setShowAllDiscounts(true);
-                    if (!allDiscountRules.length) await fetchAllDiscountRules();
-                  }}
-                >
-                  All Rules
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <div className="space-y-3">
-                {(showAllDiscounts
-                  ? allDiscountRules.length
-                    ? allDiscountRules
-                    : discountRules
-                  : discountRules
-                )
-                  .filter((c) => showAllDiscounts || c.active)
-                  .map((p) => {
-                    const evalRes = evaluateCouponOnCart(p, rows);
-                    const isBackendRule =
-                      showAllDiscounts ||
-                      discountRules.some((r) => r.id === p.id);
-                    return (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
-                      >
-                        <div>
-                          <div className="font-medium text-sm">
-                            {p.code} — {p.description}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {p.scope.toUpperCase()} • {p.type.toUpperCase()} •
-                            Min order: AED {p.min_order_value || 0} •
-                            {p.stackable ? " Stackable" : " Exclusive"}
-                            {showAllDiscounts && (
-                              <>
-                                {" "}
-                                •{" "}
-                                {p.active ? (
-                                  <span className="text-green-600 font-semibold">
-                                    ACTIVE
-                                  </span>
-                                ) : (
-                                  <span className="text-yellow-600 font-semibold">
-                                    INACTIVE
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <div className="text-sm mb-2">
-                            {evalRes.valid ? (
-                              <span className="text-green-600 font-medium">
-                                Save AED {evalRes.applied_amount.toFixed(2)}
-                              </span>
-                            ) : (
-                              <span className="text-red-500">
-                                Not applicable
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex gap-2 flex-wrap justify-end">
-                            <Button
-                              size="sm"
-                              onClick={() => quickApplyPromotion(p)}
-                              disabled={!evalRes.valid || !p.active}
-                            >
-                              Apply
-                            </Button>
-                            {isBackendRule && showAllDiscounts && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => toggleRuleActive(p)}
-                              >
-                                {p.active ? "Deactivate" : "Activate"}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                navigator.clipboard?.writeText(p.code);
-                                toast({
-                                  title: "Copied",
-                                  description: `Code ${p.code} copied`,
-                                });
-                              }}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      {/* Loyalty modal */}
-      {showLoyaltyModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Receipt className="h-5 w-5 text-primary" /> Loyalty
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowLoyaltyModal(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <div className="space-y-3">
-                <div className="text-sm">Your loyalty points</div>
-                <div className="text-3xl font-bold">{loyaltyPoints}</div>
-
-                <div className="text-sm text-muted-foreground">
-                  Redeem points for discounts or offers.
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    onClick={() => {
-                      const redeem = Math.min(50, loyaltyPoints);
-                      setLoyaltyPoints((p) => p - redeem);
-                      toast({
-                        title: "Redeemed",
-                        description: `Redeemed ${redeem} points`,
-                      });
-                    }}
-                  >
-                    Redeem 50
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowLoyaltyModal(false);
-                    }}
-                  >
-                    Close
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };

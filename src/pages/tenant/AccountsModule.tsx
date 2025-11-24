@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 // API BASE
-const API = "http://localhost:5000/api/accounts";
+const API = "https://billingbackend-1vei.onrender.com/api/accounts";
 
 const AccountsModule = () => {
 

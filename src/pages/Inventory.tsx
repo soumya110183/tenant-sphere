@@ -1,4 +1,65 @@
 import React, { useEffect, useState } from "react";
+
+// Type definitions for sales returns to improve clarity & future refactors
+interface RawSalesReturn {
+  id: number;
+  sales_id: number;
+  product_id: number;
+  quantity: number;
+  reason?: string;
+  refund_type?: string;
+  refund_amount?: number;
+  total_refund?: number;
+  created_at?: string;
+  return_date?: string;
+  date?: string;
+  product_name?: string;
+  name?: string;
+  return_reason?: string;
+  type?: string;
+  amount?: number;
+}
+
+interface UISalesReturn {
+  id: number;
+  originalSaleId: number | undefined;
+  date: string;
+  productName: string;
+  productId: number;
+  quantity: number;
+  reason: string;
+  refundType: string;
+  totalRefund: number;
+  items: { name: string; qty: number; reason: string }[];
+}
+
+// Type definitions for purchase returns
+interface RawPurchaseReturn {
+  id: number;
+  Suppliers_id?: number;
+  refund_method?: string;
+  select_product?: string;
+  quantity: number;
+  reason?: string;
+  product_id: number;
+  created_at?: string;
+  products?: { name?: string; sku?: string; category?: string };
+}
+
+interface UIPurchaseReturn {
+  id: number;
+  supplierId: number | null;
+  supplierName: string;
+  date: string;
+  productName: string;
+  productId: number;
+  quantity: number;
+  reason: string;
+  refundMethod: string;
+  amountAdjusted: number;
+  items: { name: string; qty: number; reason: string; productId: number }[];
+}
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,11 +80,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { useInventory } from "@/contexts/InventoryContext";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   inventoryService,
   invoiceService,
   productService,
   purchaseService,
+  salesReturnService,
+  purchaseReturnService,
 } from "@/services/api";
 import { StatsCard } from "../components/InventoryComponent/StatsCard.jsx";
 import {
@@ -52,8 +116,55 @@ const Modal = ({
   onClose,
   onSubmit,
   productCatalog,
+  submitting, // ADD THIS
 }) => {
   if (!showModal) return null;
+
+  // Helper: compute refund lines & total for sales return modal
+  let selectedSale: any = null;
+  let refundComputation: {
+    productId: any;
+    qty: number;
+    netPrice: number;
+    lineTotal: number;
+    name: string;
+  }[] = [];
+  let totalRefund = 0;
+  if (modalType === "salesReturn" && formData.originalSaleId) {
+    selectedSale = sales.find(
+      (s: any) => String(s.id) === String(formData.originalSaleId)
+    );
+    refundComputation = (returnItems || [])
+      .filter((r) => r.productId && r.qty)
+      .map((ri: any) => {
+        const qty = parseInt(ri.qty || 0);
+        const matchItem = selectedSale?.invoice_items?.find(
+          (ii: any) =>
+            String(ii.product_id) === String(ri.productId) ||
+            String(ii.products?.id) === String(ri.productId)
+        );
+        const netPriceRaw =
+          matchItem?.net_price ??
+          matchItem?.price ??
+          matchItem?.selling_price ??
+          (matchItem?.total && matchItem?.quantity
+            ? matchItem.total / matchItem.quantity
+            : 0);
+        const netPrice = Number(netPriceRaw) || 0;
+        // If backend total already represents net (after discount), prefer that for full line.
+        const lineTotal = matchItem?.total
+          ? Number(matchItem.total) // assumes already net (after discount)
+          : netPrice * qty;
+        totalRefund += lineTotal;
+        return {
+          productId: ri.productId,
+          qty,
+          netPrice,
+          lineTotal,
+          name: matchItem?.products?.name || `Product #${ri.productId}`,
+        };
+      });
+  }
   console.log("modal:", productCatalog);
   // const [productCatalog,setProductCatalog] = useState([]);
 
@@ -710,10 +821,18 @@ const Modal = ({
                       })
                     }
                   >
-                    <option value="">Select Sale</option>
+                    <option value="">
+                      {sales.length === 0
+                        ? "No sales available"
+                        : "Select Sale/Invoice"}
+                    </option>
                     {sales.map((s) => (
                       <option key={s.id} value={s.id}>
-                        Sale #{s.id} - {s.date} - AED {s.total}
+                        Invoice #{s.invoice_number || s.id} -{" "}
+                        {s.created_at
+                          ? new Date(s.created_at).toLocaleDateString()
+                          : "N/A"}{" "}
+                        - AED {(s.total_amount || 0).toFixed(2)}
                       </option>
                     ))}
                   </select>
@@ -768,9 +887,10 @@ const Modal = ({
                         setReturnItems(updated);
                       }}
                     >
-                      <option value="">Select Product</option>
                       {products.map((p) => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.product_id}>
+                          {" "}
+                          {/* Change p.id to p.product_id */}
                           {p.name}
                         </option>
                       ))}
@@ -802,6 +922,32 @@ const Modal = ({
                     />
                   </div>
                 ))}
+
+                {formData.originalSaleId && returnItems.length > 0 && (
+                  <div className="mt-4 p-3 bg-primary/5 rounded-lg space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Total Refund:</span>
+                      <span className="font-bold text-lg">
+                        AED {totalRefund.toFixed(2)}
+                      </span>
+                    </div>
+                    {refundComputation.length > 0 && (
+                      <div className="text-xs space-y-1">
+                        {refundComputation.map((line, i) => (
+                          <div key={i} className="flex justify-between">
+                            <span>
+                              {line.name} × {line.qty} @ Net AED{" "}
+                              {line.netPrice.toFixed(2)}
+                            </span>
+                            <span className="font-medium">
+                              AED {line.lineTotal.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -841,6 +987,22 @@ const Modal = ({
                     }
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Refund Method
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.refundMethod || "Cash"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, refundMethod: e.target.value })
+                    }
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Credit">Credit Note</option>
+                    <option value="Account">Account Adjustment</option>
+                  </select>
+                </div>
               </div>
 
               <div className="border-t pt-4">
@@ -874,9 +1036,10 @@ const Modal = ({
                         setReturnItems(updated);
                       }}
                     >
-                      <option value="">Select Product</option>
                       {products.map((p) => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.product_id}>
+                          {" "}
+                          {/* Change p.id to p.product_id */}
                           {p.name}
                         </option>
                       ))}
@@ -985,15 +1148,16 @@ const Modal = ({
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-            <Button type="submit" className="flex-1">
+            <Button type="submit" className="flex-1" disabled={submitting}>
               <Save className="h-4 w-4 mr-2" />
-              {editingItem ? "Update" : "Save"}
+              {submitting ? "Submitting..." : editingItem ? "Update" : "Save"}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               className="flex-1 sm:flex-none"
+              disabled={submitting}
             >
               Cancel
             </Button>
@@ -1459,165 +1623,169 @@ const PurchasesView = ({ purchases, openModal, handleDelete }) => {
 };
 
 // Returns View Component
-const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => (
-  <div className="space-y-6">
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <RotateCcw className="h-5 w-5 text-primary" />
-            Sales Returns ({salesReturns.length})
-          </CardTitle>
-          <Button
-            onClick={() => openModal("salesReturn")}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Sales Return
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Return ID
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Original Sale
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Date
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Returned Items
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Refund Type
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Total Refund
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {salesReturns.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="6"
-                    className="text-center py-8 text-muted-foreground text-sm"
-                  >
-                    No sales returns yet.
-                  </td>
+const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
+  console.log("ReturnsView - salesReturns:", salesReturns);
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <RotateCcw className="h-5 w-5 text-primary" />
+              Sales Returns ({salesReturns.length})
+            </CardTitle>
+            <Button
+              onClick={() => openModal("salesReturn")}
+              className="w-full sm:w-auto"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Sales Return
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Return ID
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Original Sale
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Date
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Returned Items
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Refund Type
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Total Refund
+                  </th>
                 </tr>
-              ) : (
-                salesReturns.map((ret) => (
-                  <tr key={ret.id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                      SR-#{ret.id}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      #{ret.originalSaleId}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">{ret.date}</td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      {ret.items
-                        .map((i) => `${i.name} (${i.qty}) - ${i.reason}`)
-                        .join(", ")}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4">
-                      <Badge variant="outline">{ret.refundType}</Badge>
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 font-semibold text-red-600 text-sm">
-                      AED {ret.totalRefund}
+              </thead>
+              <tbody>
+                {salesReturns.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
+                      No sales returns yet.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                ) : (
+                  salesReturns.map((ret) => (
+                    <tr key={ret.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                        SR-#{ret.id}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        #{ret.originalSaleId}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {new Date(ret.date).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {ret.productName} ({ret.quantity}) - {ret.reason}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4">
+                        <Badge variant="outline">{ret.refundType}</Badge>
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-red-600 text-sm">
+                        AED{" "}
+                        {ret.totalRefund ? ret.totalRefund.toFixed(2) : "0.00"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <RotateCcw className="h-5 w-5 text-primary" />
-            Purchase Returns ({purchaseReturns.length})
-          </CardTitle>
-          <Button
-            onClick={() => openModal("purchaseReturn")}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase Return
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Return ID
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Supplier
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Date
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Returned Items
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Amount Adjusted
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {purchaseReturns.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="text-center py-8 text-muted-foreground text-sm"
-                  >
-                    No purchase returns yet.
-                  </td>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <RotateCcw className="h-5 w-5 text-primary" />
+              Purchase Returns ({purchaseReturns.length})
+            </CardTitle>
+            <Button
+              onClick={() => openModal("purchaseReturn")}
+              className="w-full sm:w-auto"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Purchase Return
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Return ID
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Supplier
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Date
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Returned Items
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Refund Method
+                  </th>
                 </tr>
-              ) : (
-                purchaseReturns.map((ret) => (
-                  <tr key={ret.id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                      PR-#{ret.id}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      {ret.supplierName || `Supplier-${ret.supplierId}`}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">{ret.date}</td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      {ret.items
-                        .map((i) => `${i.name} (${i.qty}) - ${i.reason}`)
-                        .join(", ")}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 font-semibold text-green-600 text-sm">
-                      AED {ret.amountAdjusted}
+              </thead>
+              <tbody>
+                {purchaseReturns.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="5"
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
+                      No purchase returns yet.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  </div>
-);
+                ) : (
+                  purchaseReturns.map((ret) => (
+                    <tr key={ret.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                        PR-#{ret.id}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {ret.supplierName || `Supplier-${ret.supplierId}`}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {new Date(ret.date).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {ret.productName} ({ret.quantity}) - {ret.reason}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-green-600 text-sm">
+                        {ret.refundMethod}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 // Adjustments View Component
 const AdjustmentsView = ({ stockAdjustments, openModal }) => (
@@ -1707,6 +1875,7 @@ const AdjustmentsView = ({ stockAdjustments, openModal }) => (
 
 // Main Component
 const GroceryInventory = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("stock");
   const [products, setProducts] = useState([]);
   const [baseInventory, setBaseInventory] = useState([]); // raw inventory snapshot prior to derived adjustments
@@ -1714,6 +1883,11 @@ const GroceryInventory = () => {
   const [productCatalog, setProductCatalog] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [sales, setSales] = useState([]);
+  const [salesReturns, setSalesReturns] = useState([]);
+  const [purchaseReturns, setPurchaseReturns] = useState<UIPurchaseReturn[]>(
+    []
+  );
+  const [submitting, setSubmitting] = useState(false);
 
   // Add function to load purchases
   // Update your loadPurchases function to match the actual API response
@@ -1775,6 +1949,8 @@ const GroceryInventory = () => {
     loadInventory();
     loadPurchases();
     loadSales();
+    loadSalesReturns();
+    loadPurchaseReturns();
     // Listen for invoice-created events from billing page to refresh sales & inventory
     const invoiceListener = (e: any) => {
       const invoice = e?.detail?.invoice;
@@ -1811,6 +1987,264 @@ const GroceryInventory = () => {
     const data = await productService.getAll();
     setProductCatalog(data.data);
   };
+
+  const loadSalesReturns = async () => {
+    try {
+      const response = await salesReturnService.getAll();
+      const status = response?.status;
+      console.log("Sales Returns API status:", status);
+      console.log("Sales Returns full Axios response:", response);
+
+      const apiData = response?.data;
+      console.log("Sales Returns top-level data payload:", apiData);
+
+      let rawData: any[] = [];
+      let shapeDetected = "none";
+
+      // Handle common backend shapes
+      if (apiData && apiData.success && Array.isArray(apiData.data)) {
+        rawData = apiData.data;
+        shapeDetected = "success.data[]";
+      } else if (
+        apiData &&
+        apiData.success &&
+        Array.isArray(apiData.sales_returns)
+      ) {
+        rawData = apiData.sales_returns;
+        shapeDetected = "success.sales_returns[]";
+      } else if (Array.isArray(apiData)) {
+        rawData = apiData;
+        shapeDetected = "rootArray";
+      } else if (apiData && apiData.results && Array.isArray(apiData.results)) {
+        rawData = apiData.results;
+        shapeDetected = "results[]";
+      } else if (apiData && apiData.id && apiData.sales_id) {
+        // Single object returned – wrap it
+        rawData = [apiData];
+        shapeDetected = "singleObject";
+      }
+
+      console.log("Sales Returns shape detected:", shapeDetected);
+      console.log("Sales Returns Raw Data (array):", rawData);
+
+      if (!status || status !== 200) {
+        console.warn("Non-200 status when fetching sales returns", status);
+      }
+
+      // If still empty, attempt to surface reason
+      if (rawData.length === 0) {
+        const reason =
+          apiData?.error ||
+          apiData?.message ||
+          (status !== 200 ? `HTTP ${status}` : "No records found");
+        console.warn("Sales returns rawData empty. Reason:", reason);
+        // Attempt a fallback direct fetch to bypass axios interceptors / headers issues
+        try {
+          const token = localStorage.getItem("auth_token");
+          const fallbackResp = await fetch(
+            "https://billingbackend-1vei.onrender.com/api/sales_returns",
+            {
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            }
+          );
+          const fallbackStatus = fallbackResp.status;
+          const fallbackText = await fallbackResp.text();
+          console.log("Fallback fetch status:", fallbackStatus);
+          console.log("Fallback raw response text:", fallbackText);
+          let fallbackJson: any = null;
+          try {
+            fallbackJson = JSON.parse(fallbackText);
+          } catch {
+            /* not JSON */
+          }
+          console.log("Fallback parsed JSON:", fallbackJson);
+          if (fallbackJson) {
+            let fbData: any[] = [];
+            if (Array.isArray(fallbackJson)) fbData = fallbackJson;
+            else if (fallbackJson.success && Array.isArray(fallbackJson.data))
+              fbData = fallbackJson.data;
+            else if (Array.isArray(fallbackJson.sales_returns))
+              fbData = fallbackJson.sales_returns;
+            else if (fallbackJson.id && fallbackJson.sales_id)
+              fbData = [fallbackJson];
+            if (fbData.length) {
+              console.log("Using fallback fetch sales returns data:", fbData);
+              const formattedFallback = fbData.map((ret: any) => ({
+                id: ret.id,
+                originalSaleId: ret.sales_id,
+                date:
+                  ret.created_at ||
+                  ret.return_date ||
+                  ret.date ||
+                  new Date().toISOString().split("T")[0],
+                productName:
+                  ret.product_name || ret.name || `Product #${ret.product_id}`,
+                productId: ret.product_id,
+                quantity: ret.quantity,
+                reason: ret.reason || ret.return_reason || "N/A",
+                refundType: ret.refund_type || ret.type || "Cash",
+                totalRefund:
+                  ret.total_refund || ret.refund_amount || ret.amount || 0,
+                items: [
+                  {
+                    name:
+                      ret.product_name ||
+                      ret.name ||
+                      `Product #${ret.product_id}`,
+                    qty: ret.quantity,
+                    reason: ret.reason || ret.return_reason || "N/A",
+                  },
+                ],
+              }));
+              setSalesReturns(formattedFallback);
+              return; // stop further processing
+            }
+          }
+        } catch (fbErr) {
+          console.error("Fallback fetch attempt failed:", fbErr);
+        }
+      }
+
+      // Transform backend data to match UI expectations
+      const formattedData = rawData.map((ret: any) => {
+        return {
+          id: ret.id,
+          originalSaleId: ret.sales_id,
+          date:
+            ret.created_at ||
+            ret.return_date ||
+            ret.date ||
+            new Date().toISOString().split("T")[0],
+          productName:
+            ret.product_name || ret.name || `Product #${ret.product_id}`,
+          productId: ret.product_id,
+          quantity: ret.quantity,
+          reason: ret.reason || ret.return_reason || "N/A",
+          refundType: ret.refund_type || ret.type || "Cash",
+          totalRefund: ret.total_refund || ret.refund_amount || ret.amount || 0,
+          // Synthetic items array (backend currently flat)
+          items: [
+            {
+              name:
+                ret.product_name || ret.name || `Product #${ret.product_id}`,
+              qty: ret.quantity,
+              reason: ret.reason || ret.return_reason || "N/A",
+            },
+          ],
+        };
+      });
+
+      console.log("Sales Returns formatted (UI) objects:", formattedData);
+      setSalesReturns(formattedData);
+
+      // Optional: toast when empty to guide debugging
+      if (formattedData.length === 0) {
+        toast({
+          title: "No Sales Returns",
+          description: `Fetched 0 records (shape: ${shapeDetected}). Check if any returns exist or tenant scope filters them out.`,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading sales returns:", error);
+      if ((error as any)?.response) {
+        console.error(
+          "Sales returns error status:",
+          (error as any).response.status
+        );
+        console.error(
+          "Sales returns error data:",
+          (error as any).response.data
+        );
+      }
+      setSalesReturns([]);
+      toast({
+        title: "Error",
+        description: "Failed to load sales returns",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadPurchaseReturns = async () => {
+    try {
+      const tenantId = localStorage.getItem("tenant_id");
+      const params = tenantId ? { tenant_id: tenantId } : {};
+
+      const response = await purchaseReturnService.getAll(params);
+      console.log("Purchase Returns API Response:", response);
+
+      const apiData = response?.data;
+      console.log("Purchase Returns API Data:", apiData);
+
+      let rawData: RawPurchaseReturn[] = [];
+
+      // Backend returns { purchase_returns: [...] }
+      if (apiData && Array.isArray(apiData.purchase_returns)) {
+        rawData = apiData.purchase_returns;
+      } else if (Array.isArray(apiData)) {
+        rawData = apiData;
+      } else if (apiData && apiData.data && Array.isArray(apiData.data)) {
+        rawData = apiData.data;
+      }
+
+      console.log("Purchase Returns Raw Data:", rawData);
+
+      // Transform to UI format
+      const formattedData: UIPurchaseReturn[] = rawData.map((ret) => {
+        const productName =
+          ret.products?.name ||
+          ret.select_product ||
+          `Product #${ret.product_id}`;
+        return {
+          id: ret.id,
+          supplierId: ret.Suppliers_id || null,
+          supplierName: ret.Suppliers_id
+            ? `Supplier #${ret.Suppliers_id}`
+            : "N/A",
+          date: ret.created_at || new Date().toISOString().split("T")[0],
+          productName,
+          productId: ret.product_id,
+          quantity: ret.quantity,
+          reason: ret.reason || "N/A",
+          refundMethod: ret.refund_method || "N/A",
+          amountAdjusted: 0, // Backend doesn't provide; calculate if needed
+          items: [
+            {
+              name: productName,
+              qty: ret.quantity,
+              reason: ret.reason || "N/A",
+              productId: ret.product_id,
+            },
+          ],
+        };
+      });
+
+      console.log("Purchase Returns Formatted Data:", formattedData);
+      setPurchaseReturns(formattedData);
+
+      if (formattedData.length === 0) {
+        toast({
+          title: "No Purchase Returns",
+          description: "Fetched 0 records. Check if any returns exist.",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading purchase returns:", error);
+      if ((error as any)?.response) {
+        console.error("Purchase returns error:", (error as any).response);
+      }
+      setPurchaseReturns([]);
+      toast({
+        title: "Error",
+        description: "Failed to load purchase returns",
+        variant: "destructive",
+      });
+    }
+  };
+
   const loadInventory = async () => {
     setIsLoading(true); // Start loading
     try {
@@ -1831,44 +2265,10 @@ const GroceryInventory = () => {
     }
   };
 
-  // Derive current stock from base inventory minus sold quantities plus purchases (if backend not updating yet)
+  // Derive current stock from base inventory minus sold quantities plus purchases and sales returns
   useEffect(() => {
-    if (!baseInventory.length) return;
-    // Build maps
-    const soldMap: Record<string, number> = {};
-    sales.forEach((inv: any) => {
-      if (Array.isArray(inv.items)) {
-        inv.items.forEach((it: any) => {
-          const key = String(it.product_id || it.productId || it.id || it.name);
-          const qtySold = Number(it.qty || it.quantity || 0);
-          if (!soldMap[key]) soldMap[key] = 0;
-          soldMap[key] += qtySold;
-        });
-      }
-    });
-    const purchaseMap: Record<string, number> = {};
-    purchases.forEach((pur: any) => {
-      if (Array.isArray(pur.items)) {
-        pur.items.forEach((it: any) => {
-          const key = String(it.product_id || it.productId || it.id || it.name);
-          const qtyAdded = Number(it.quantity || it.qty || 0);
-          if (!purchaseMap[key]) purchaseMap[key] = 0;
-          purchaseMap[key] += qtyAdded;
-        });
-      }
-    });
-    const derived = baseInventory.map((inv: any) => {
-      const key = String(inv.product_id || inv.id || inv.name);
-      const baseQty = Number(inv.quantity ?? 0);
-      const sold = soldMap[key] || 0;
-      const added = purchaseMap[key] || 0;
-      const effective = Math.max(0, baseQty + added - sold);
-      return effective === baseQty
-        ? inv
-        : { ...inv, quantity: effective, _derived: true };
-    });
-    setProducts(derived);
-  }, [baseInventory, sales, purchases]);
+    setProducts(baseInventory);
+  }, [baseInventory]);
 
   // const [sales, setSales] = useState([
   //   { id: 1, date: '2025-10-28 10:30', customerId: 'C001', customerName: 'Rajesh Kumar', products: [{productId: 1, name: 'Basmati Rice', qty: 5, price: 100, tax: 5}], paymentType: 'UPI', total: 525, profit: 100, staffId: 'S001' },
@@ -1880,36 +2280,7 @@ const GroceryInventory = () => {
   //   { id: 2, supplierId: 2, supplierName: 'XYZ Wholesale', invoiceNo: 'INV-2025-002', date: '2025-10-26', products: [{productId: 2, name: 'Coca Cola', qty: 100, cost: 30}], paymentMode: 'Cash', total: 3000, status: 'Paid' },
   // ]);
 
-  const [salesReturns, setSalesReturns] = useState([
-    {
-      id: 1,
-      originalSaleId: 1,
-      date: "2025-10-28",
-      items: [
-        {
-          productId: 1,
-          name: "Basmati Rice",
-          qty: 1,
-          reason: "Damaged packaging",
-        },
-      ],
-      refundType: "Cash",
-      totalRefund: 105,
-    },
-  ]);
-
-  const [purchaseReturns, setPurchaseReturns] = useState([
-    {
-      id: 1,
-      supplierId: 1,
-      supplierName: "ABC Distributors",
-      date: "2025-10-27",
-      items: [
-        { productId: 1, name: "Basmati Rice", qty: 5, reason: "Poor quality" },
-      ],
-      amountAdjusted: 400,
-    },
-  ]);
+  // salesReturns and purchaseReturns state declared above
 
   const [stockAdjustments, setStockAdjustments] = useState([
     {
@@ -1928,7 +2299,8 @@ const GroceryInventory = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({});
+  // Give formData a permissive type so TypeScript allows dynamic fields like supplierId/supplier_id
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [saleProducts, setSaleProducts] = useState([{ productId: "", qty: 1 }]);
   const [purchaseProducts, setPurchaseProducts] = useState([
     { productId: "", qty: 1 },
@@ -1997,7 +2369,7 @@ const GroceryInventory = () => {
             tax: 0,
             reorderLevel: 0,
             maxStock: 0,
-            location: "",
+            productId: ret.product_id,
             barcode: "",
             expiryDate: "",
             supplierId: 1,
@@ -2136,6 +2508,400 @@ const GroceryInventory = () => {
               "Failed to create purchase",
             variant: "destructive",
           });
+        }
+        break;
+      case "salesReturn":
+        try {
+          setSubmitting(true);
+          const itemsPayload = (returnItems || [])
+            .filter((it) => it.productId && it.qty)
+            .map((it) => ({
+              product_id: parseInt(it.productId),
+              quantity: parseInt(it.qty || 0),
+              reason: it.reason || "",
+            }));
+
+          if (!formData.originalSaleId) {
+            toast({
+              title: "Missing Sale",
+              description: "Please select the original sale/invoice.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          if (itemsPayload.length === 0) {
+            toast({
+              title: "No Items",
+              description: "Add at least one return item.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          // Optimistically add entries marked with _optimistic flag
+          const nowISO = new Date().toISOString();
+          const selectedSaleForSubmit = sales.find(
+            (s: any) => String(s.id) === String(formData.originalSaleId)
+          );
+          const optimisticEntries = itemsPayload.map((it, idx) => {
+            const productMatch = products.find(
+              (p: any) =>
+                String(p.product_id) === String(it.product_id) ||
+                String(p.id) === String(it.product_id)
+            );
+            const invoiceItemMatch = selectedSaleForSubmit?.invoice_items?.find(
+              (ii: any) =>
+                String(ii.product_id) === String(it.product_id) ||
+                String(ii.products?.id) === String(it.product_id)
+            );
+            const netPriceRaw =
+              invoiceItemMatch?.net_price ??
+              invoiceItemMatch?.price ??
+              invoiceItemMatch?.selling_price ??
+              (invoiceItemMatch?.total && invoiceItemMatch?.quantity
+                ? invoiceItemMatch.total / invoiceItemMatch.quantity
+                : 0);
+            const netPrice = Number(netPriceRaw) || 0;
+            const lineRefund = invoiceItemMatch?.total
+              ? Number(invoiceItemMatch.total)
+              : netPrice * it.quantity;
+            return {
+              id: `temp-${Date.now()}-${idx}`,
+              originalSaleId: parseInt(formData.originalSaleId),
+              date: nowISO,
+              productName: productMatch?.name || `Product #${it.product_id}`,
+              productId: it.product_id,
+              quantity: it.quantity,
+              reason: it.reason || "N/A",
+              refundType: formData.refundType || "Cash",
+              totalRefund: lineRefund,
+              _optimistic: true,
+              items: [
+                {
+                  name: productMatch?.name || `Product #${it.product_id}`,
+                  qty: it.quantity,
+                  reason: it.reason || "N/A",
+                  productId: it.product_id,
+                },
+              ],
+            } as UISalesReturn & { _optimistic?: boolean };
+          });
+          setSalesReturns((prev) => [...optimisticEntries, ...prev]);
+
+          // Backend expects flat structure
+          const firstItem = itemsPayload[0];
+          // Compute refund for first item (payload) using invoice items
+          const firstInvoiceItemMatch =
+            selectedSaleForSubmit?.invoice_items?.find(
+              (ii: any) =>
+                String(ii.product_id) === String(firstItem.product_id) ||
+                String(ii.products?.id) === String(firstItem.product_id)
+            );
+          const firstNetPriceRaw =
+            firstInvoiceItemMatch?.net_price ??
+            firstInvoiceItemMatch?.price ??
+            firstInvoiceItemMatch?.selling_price ??
+            (firstInvoiceItemMatch?.total && firstInvoiceItemMatch?.quantity
+              ? firstInvoiceItemMatch.total / firstInvoiceItemMatch.quantity
+              : 0);
+          const firstNetPrice = Number(firstNetPriceRaw) || 0;
+          const firstRefundAmount = firstInvoiceItemMatch?.total
+            ? Number(firstInvoiceItemMatch.total)
+            : firstNetPrice * firstItem.quantity;
+          const payload = {
+            sales_id: parseInt(formData.originalSaleId),
+            product_id: firstItem.product_id,
+            quantity: firstItem.quantity,
+            reason: firstItem.reason,
+            refund_type: formData.refundType || "Cash",
+            total_refund: Number(firstRefundAmount.toFixed(2)),
+            ...(localStorage.getItem("tenant_id")
+              ? {
+                  tenant_id: parseInt(
+                    localStorage.getItem("tenant_id") as string
+                  ),
+                }
+              : {}),
+          };
+
+          console.log(
+            "Sales Return Payload:",
+            JSON.stringify(payload, null, 2)
+          );
+
+          // Submit to backend - backend performs atomic inventory update
+          const response = await salesReturnService.create(payload);
+          const ok = response?.data?.success !== false;
+
+          if (ok) {
+            // Handle multiple items
+            if (itemsPayload.length > 1) {
+              for (let i = 1; i < itemsPayload.length; i++) {
+                const extra = itemsPayload[i];
+                const extraInvoiceItemMatch =
+                  selectedSaleForSubmit?.invoice_items?.find(
+                    (ii: any) =>
+                      String(ii.product_id) === String(extra.product_id) ||
+                      String(ii.products?.id) === String(extra.product_id)
+                  );
+                const extraNetPriceRaw =
+                  extraInvoiceItemMatch?.net_price ??
+                  extraInvoiceItemMatch?.price ??
+                  extraInvoiceItemMatch?.selling_price ??
+                  (extraInvoiceItemMatch?.total &&
+                  extraInvoiceItemMatch?.quantity
+                    ? extraInvoiceItemMatch.total /
+                      extraInvoiceItemMatch.quantity
+                    : 0);
+                const extraNetPrice = Number(extraNetPriceRaw) || 0;
+                const extraRefundAmount = extraInvoiceItemMatch?.total
+                  ? Number(extraInvoiceItemMatch.total)
+                  : extraNetPrice * extra.quantity;
+                const extraPayload = {
+                  sales_id: parseInt(formData.originalSaleId),
+                  product_id: extra.product_id,
+                  quantity: extra.quantity,
+                  reason: extra.reason,
+                  refund_type: formData.refundType || "Cash",
+                  total_refund: Number(extraRefundAmount.toFixed(2)),
+                  ...(localStorage.getItem("tenant_id")
+                    ? {
+                        tenant_id: parseInt(
+                          localStorage.getItem("tenant_id") as string
+                        ),
+                      }
+                    : {}),
+                };
+                try {
+                  await salesReturnService.create(extraPayload);
+                } catch (loopErr) {
+                  console.error("Additional return item failed:", loopErr);
+                }
+              }
+            }
+
+            // Backend updated inventory atomically - reload authoritative data
+            await loadInventory();
+            await loadSalesReturns();
+
+            toast({
+              title: "Sales Return Created",
+              description: "Returned items added back to inventory.",
+            });
+            closeModal();
+          } else {
+            // Remove optimistic entries on failure
+            setSalesReturns((prev) => prev.filter((r: any) => !r._optimistic));
+            toast({
+              title: "Error",
+              description:
+                response?.data?.error || "Failed to create sales return",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          // Remove optimistic entries on error
+          setSalesReturns((prev) => prev.filter((r: any) => !r._optimistic));
+          console.error("Error creating sales return:", error);
+          const errorMsg =
+            (error as any)?.response?.data?.error ||
+            (error as any)?.response?.data?.message ||
+            (error as any)?.message ||
+            "Failed to create sales return";
+          toast({
+            title: "Error",
+            description: errorMsg,
+            variant: "destructive",
+          });
+        } finally {
+          setSubmitting(false);
+        }
+        break;
+
+      case "purchaseReturn":
+        try {
+          setSubmitting(true);
+
+          const itemsPayload = (returnItems || [])
+            .filter((it) => it.productId && (it.qty || it.quantity))
+            .map((it) => ({
+              product_id: parseInt(it.productId),
+              quantity: parseInt(it.qty || it.quantity || 0),
+              reason: it.reason || "",
+            }));
+
+          if (!formData.supplierId && !formData.supplier_id) {
+            toast({
+              title: "Missing Supplier",
+              description: "Please provide the supplier ID.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          if (itemsPayload.length === 0) {
+            toast({
+              title: "No Items",
+              description: "Add at least one return item.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          // Resolve tenant_id
+          let tenantId: number | string | undefined =
+            user?.tenant_id || user?.tenantId;
+
+          if (!tenantId) {
+            const tenantIdRaw = localStorage.getItem("tenant_id");
+            if (tenantIdRaw) {
+              tenantId = /^\d+$/.test(tenantIdRaw)
+                ? parseInt(tenantIdRaw)
+                : tenantIdRaw;
+            }
+          }
+
+          console.log("Purchase Return - User:", user);
+          console.log(
+            "Purchase Return - Resolved tenant_id:",
+            tenantId,
+            "Type:",
+            typeof tenantId
+          );
+
+          if (!tenantId) {
+            toast({
+              title: "Missing Tenant",
+              description: "Tenant ID not found. Please log in again.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
+          // Optimistically add entries marked with _optimistic flag
+          const nowISO = new Date().toISOString();
+          const optimisticEntries = itemsPayload.map((it, idx) => {
+            const productMatch = products.find(
+              (p: any) =>
+                String(p.product_id) === String(it.product_id) ||
+                String(p.id) === String(it.product_id)
+            );
+            return {
+              id: `temp-${Date.now()}-${idx}`,
+              supplierId: parseInt(formData.supplierId || formData.supplier_id),
+              supplierName:
+                formData.supplierName ||
+                `Supplier #${formData.supplierId || formData.supplier_id}`,
+              date: nowISO,
+              productName: productMatch?.name || `Product #${it.product_id}`,
+              productId: it.product_id,
+              quantity: it.quantity,
+              reason: it.reason || "N/A",
+              refundMethod: formData.refundMethod || "Cash",
+              amountAdjusted: 0,
+              _optimistic: true,
+              items: [
+                {
+                  name: productMatch?.name || `Product #${it.product_id}`,
+                  qty: it.quantity,
+                  reason: it.reason || "N/A",
+                  productId: it.product_id,
+                },
+              ],
+            } as UIPurchaseReturn & { _optimistic?: boolean };
+          });
+          setPurchaseReturns((prev) => [...optimisticEntries, ...prev]);
+
+          const firstItem = itemsPayload[0];
+          const payload = {
+            Suppliers_id: parseInt(formData.supplierId || formData.supplier_id),
+            refund_method: formData.refundMethod || "Cash",
+            select_product: firstItem.product_id.toString(),
+            quantity: firstItem.quantity,
+            reason: firstItem.reason,
+            product_id: firstItem.product_id,
+            tenant_id: tenantId,
+          };
+
+          console.log(
+            "Purchase Return Payload:",
+            JSON.stringify(payload, null, 2)
+          );
+
+          // Submit to backend - backend performs atomic inventory update
+          const response = await purchaseReturnService.create(payload);
+          const ok = response?.data?.purchase_return || response?.data;
+
+          if (ok) {
+            // Handle multiple items
+            if (itemsPayload.length > 1) {
+              for (let i = 1; i < itemsPayload.length; i++) {
+                const extra = itemsPayload[i];
+                const extraPayload = {
+                  Suppliers_id: parseInt(
+                    formData.supplierId || formData.supplier_id
+                  ),
+                  refund_method: formData.refundMethod || "Cash",
+                  select_product: extra.product_id.toString(),
+                  quantity: extra.quantity,
+                  reason: extra.reason,
+                  product_id: extra.product_id,
+                  tenant_id: tenantId,
+                };
+                try {
+                  await purchaseReturnService.create(extraPayload);
+                } catch (loopErr) {
+                  console.error(
+                    "Additional purchase return item failed:",
+                    loopErr
+                  );
+                }
+              }
+            }
+
+            // Backend updated inventory atomically - reload authoritative data
+            await loadInventory();
+            await loadPurchaseReturns();
+
+            toast({
+              title: "Purchase Return Created",
+              description: "Returned items subtracted from inventory.",
+            });
+            closeModal();
+          } else {
+            // Remove optimistic entries on failure
+            setPurchaseReturns((prev) =>
+              prev.filter((r: any) => !r._optimistic)
+            );
+            toast({
+              title: "Error",
+              description:
+                response?.data?.error || "Failed to create purchase return",
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          // Remove optimistic entries on error
+          setPurchaseReturns((prev) => prev.filter((r: any) => !r._optimistic));
+          console.error("Error creating purchase return:", error);
+          const errorMsg =
+            (error as any)?.response?.data?.error ||
+            (error as any)?.response?.data?.message ||
+            (error as any)?.message ||
+            "Failed to create purchase return";
+          toast({
+            title: "Error",
+            description: errorMsg,
+            variant: "destructive",
+          });
+        } finally {
+          setSubmitting(false);
         }
         break;
       // ... rest of your cases remain the same
@@ -2333,6 +3099,7 @@ const GroceryInventory = () => {
         onClose={closeModal}
         onSubmit={handleSubmit}
         productCatalog={productCatalog}
+        submitting={submitting} // ADD THIS
       />
     </div>
   );
