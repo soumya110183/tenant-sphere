@@ -39,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { tenantAPI } from '@/services/api';
 
-const API_URL = 'https://billingbackend-1vei.onrender.com'; // Change this to your backend URL
+//const API_URL = 'https://billingbackend-1vei.onrender.com'; // unchanged
 
 interface Tenant {
   id: string;
@@ -51,6 +51,8 @@ interface Tenant {
   phone?: string;
   created_at?: string;
 }
+
+type FieldErrors = Record<string, string>;
 
 const Tenants = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -72,12 +74,15 @@ const Tenants = () => {
     status: 'active'
   });
 
+  // NEW: field-level errors and general error
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
   useEffect(() => {
     loadTenants();
   }, []);
 
   useEffect(() => {
-    // Filter tenants based on search query
     const filtered = tenants.filter(tenant =>
       tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tenant.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -86,96 +91,181 @@ const Tenants = () => {
     setFilteredTenants(filtered);
   }, [searchQuery, tenants]);
 
-const loadTenants = async () => {
-  try {
-    setLoading(true);
-    const data = await tenantAPI.getTenants();
-    setTenants(data);
-    setFilteredTenants(data);
-  } catch (error) {
-    console.error("Load tenants error:", error);
-    toast({
-      title: "Error",
-      description: error.message || "Failed to load tenants",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  /**
+   * parseApiError
+   * Robustly extract a user-friendly error message and a map of field errors
+   * from various error shapes (axios, fetch, thrown Error).
+   * - returns { message, fieldErrors }
+   */
+  const parseApiError = async (error: any): Promise<{ message: string; fieldErrors: FieldErrors; status?: number }> => {
+    // axios style: error.response && error.response.data
+    try {
+      if (error?.response && error.response.data) {
+        const data = error.response.data;
+        const message = data.message || (typeof data === 'string' ? data : 'Request failed');
+        const fieldErrors = (data.errors && typeof data.errors === 'object') ? data.errors : {};
+        return { message, fieldErrors, status: error.response.status };
+      }
+
+      // If backend returned a Response-like object (fetch)
+      if (error instanceof Response) {
+        // try to parse JSON body for structured errors
+        try {
+          const data = await error.json();
+          const message = data?.message || error.statusText || 'Request failed';
+          const fieldErrors = data?.errors && typeof data.errors === 'object' ? data.errors : {};
+          return { message, fieldErrors, status: error.status };
+        } catch (_) {
+          return { message: error.statusText || `HTTP ${error.status}`, fieldErrors: {}, status: error.status };
+        }
+      }
+
+      // If thrown error has a .message (regular JS Error or axios fallback)
+      if (error?.message) {
+        return { message: error.message, fieldErrors: {} };
+      }
+
+      // If error is plain object with message
+      if (typeof error === 'object') {
+        const message = (error && (error.message || error.error || JSON.stringify(error))) as string;
+        const fieldErrors = error.errors && typeof error.errors === 'object' ? error.errors : {};
+        return { message, fieldErrors };
+      }
+
+      // fallback
+      return { message: String(error), fieldErrors: {} };
+    } catch (e) {
+      return { message: 'Unknown error occurred', fieldErrors: {} };
+    }
+  };
+
+  const loadTenants = async () => {
+    try {
+      setLoading(true);
+      setGeneralError(null);
+      const data = await tenantAPI.getTenants();
+      setTenants(data);
+      setFilteredTenants(data);
+    } catch (error: any) {
+      console.error("Load tenants error:", error);
+      const parsed = await parseApiError(error);
+      setGeneralError(parsed.message);
+      toast({
+        title: "Error loading tenants",
+        description: parsed.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    setLoading(true);
+    e.preventDefault();
 
-    if (editingTenant) {
-      // ✅ Update tenant via tenantAPI
-      await tenantAPI.updateTenant(editingTenant.id, formData);
+    // Clear previous errors
+    setFormErrors({});
+    setGeneralError(null);
+
+    // Basic client-side checks (optional but helps UX)
+    const localErrors: FieldErrors = {};
+    if (!formData.name?.trim()) localErrors.name = 'Business name is required';
+    if (!formData.category?.trim()) localErrors.category = 'Category is required';
+    if (!formData.email?.trim()) localErrors.email = 'Email is required';
+    if (!editingTenant && !formData.password) localErrors.password = 'Password is required';
+
+    if (Object.keys(localErrors).length > 0) {
+      setFormErrors(localErrors);
       toast({
-        title: "Success",
-        description: "Tenant updated successfully",
+        title: 'Validation error',
+        description: 'Please fix the highlighted fields.',
+        variant: 'destructive',
       });
-    } else {
-      // ✅ Create tenant via tenantAPI
-      await tenantAPI.createTenant(formData);
-      toast({
-        title: "Success",
-        description: "Tenant created successfully",
-      });
+      return;
     }
 
-    setIsDialogOpen(false);
-    resetForm();
-    loadTenants(); // reload tenant list
-  } catch (error: any) {
-    console.error("Submit error:", error);
-    toast({
-      title: "Error",
-      description: error.message || "Failed to save tenant",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
 
-const handleEdit = (tenant: Tenant) => {
-  setEditingTenant(tenant);
-  setFormData({
-    name: tenant.name,
-    category: tenant.category,
-    plan: tenant.plan,
-    email: tenant.email,
-    password: "", // don’t prefill password
-    phone: tenant.phone || "",
-    status: tenant.status,
-  });
-  setIsDialogOpen(true);
-};
+      if (editingTenant) {
+        await tenantAPI.updateTenant(editingTenant.id, formData);
+        toast({ title: "Success", description: "Tenant updated successfully" });
+      } else {
+        await tenantAPI.createTenant(formData);
+        toast({ title: "Success", description: "Tenant created successfully" });
+      }
 
-const handleDelete = async (id: string) => {
-  if (!confirm("Are you sure you want to delete this tenant?")) return;
+      setIsDialogOpen(false);
+      resetForm();
+      await loadTenants(); // reload tenant list
+    } catch (error: any) {
+      console.error("Submit error:", error);
+      const parsed = await parseApiError(error);
 
-  try {
-    setLoading(true);
-    await tenantAPI.deleteTenant(id);
-    toast({
-      title: "Success",
-      description: "Tenant deleted successfully",
+      // show toast for summary
+      if (Object.keys(parsed.fieldErrors || {}).length > 0) {
+        // If there are field errors, set them so UI shows inline messages
+        setFormErrors(parsed.fieldErrors);
+        const joined = Object.entries(parsed.fieldErrors).map(([k, v]) => `${k}: ${v}`).join(' · ');
+        toast({
+          title: parsed.message || 'Validation errors',
+          description: joined,
+          variant: 'destructive',
+        });
+      } else {
+        setGeneralError(parsed.message);
+        toast({
+          title: "Error",
+          description: parsed.message || "Failed to save tenant",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (tenant: Tenant) => {
+    setEditingTenant(tenant);
+    setFormData({
+      name: tenant.name,
+      category: tenant.category,
+      plan: tenant.plan,
+      email: tenant.email,
+      password: "", // don’t prefill password
+      phone: tenant.phone || "",
+      status: tenant.status,
     });
-    loadTenants();
-  } catch (error: any) {
-    console.error("Delete error:", error);
-    toast({
-      title: "Error",
-      description: error.message || "Failed to delete tenant",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+
+    // clear previous errors when editing
+    setFormErrors({});
+    setGeneralError(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this tenant?")) return;
+
+    try {
+      setLoading(true);
+      await tenantAPI.deleteTenant(id);
+      toast({
+        title: "Success",
+        description: "Tenant deleted successfully",
+      });
+      loadTenants();
+    } catch (error: any) {
+      console.error("Delete error:", error);
+      const parsed = await parseApiError(error);
+      toast({
+        title: "Delete failed",
+        description: parsed.message || "Failed to delete tenant",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setEditingTenant(null);
@@ -188,6 +278,8 @@ const handleDelete = async (id: string) => {
       phone: '',
       status: 'active'
     });
+    setFormErrors({});
+    setGeneralError(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -226,7 +318,7 @@ const handleDelete = async (id: string) => {
               </DialogDescription>
             </DialogHeader>
             
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -236,7 +328,10 @@ const handleDelete = async (id: string) => {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      aria-invalid={!!formErrors.name}
+                      aria-describedby={formErrors.name ? 'error-name' : undefined}
                     />
+                    {formErrors.name && <p id="error-name" className="text-sm text-red-600">{formErrors.name}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
@@ -244,6 +339,8 @@ const handleDelete = async (id: string) => {
                       value={formData.category}
                       onValueChange={(value) => setFormData({ ...formData, category: value })}
                       required
+                      aria-invalid={!!formErrors.category}
+                      aria-describedby={formErrors.category ? 'error-category' : undefined}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
@@ -255,6 +352,7 @@ const handleDelete = async (id: string) => {
                         <SelectItem value="retail">Retail</SelectItem>
                       </SelectContent>
                     </Select>
+                    {formErrors.category && <p id="error-category" className="text-sm text-red-600">{formErrors.category}</p>}
                   </div>
                 </div>
 
@@ -267,7 +365,10 @@ const handleDelete = async (id: string) => {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
+                      aria-invalid={!!formErrors.email}
+                      aria-describedby={formErrors.email ? 'error-email' : undefined}
                     />
+                    {formErrors.email && <p id="error-email" className="text-sm text-red-600">{formErrors.email}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
@@ -280,7 +381,10 @@ const handleDelete = async (id: string) => {
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required={!editingTenant}
+                      aria-invalid={!!formErrors.password}
+                      aria-describedby={formErrors.password ? 'error-password' : undefined}
                     />
+                    {formErrors.password && <p id="error-password" className="text-sm text-red-600">{formErrors.password}</p>}
                   </div>
                 </div>
 
@@ -291,6 +395,8 @@ const handleDelete = async (id: string) => {
                       value={formData.plan}
                       onValueChange={(value) => setFormData({ ...formData, plan: value })}
                       required
+                      aria-invalid={!!formErrors.plan}
+                      aria-describedby={formErrors.plan ? 'error-plan' : undefined}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select plan" />
@@ -302,6 +408,7 @@ const handleDelete = async (id: string) => {
                         <SelectItem value="enterprise">Enterprise</SelectItem>
                       </SelectContent>
                     </Select>
+                    {formErrors.plan && <p id="error-plan" className="text-sm text-red-600">{formErrors.plan}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
@@ -309,7 +416,10 @@ const handleDelete = async (id: string) => {
                       id="phone"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      aria-invalid={!!formErrors.phone}
+                      aria-describedby={formErrors.phone ? 'error-phone' : undefined}
                     />
+                    {formErrors.phone && <p id="error-phone" className="text-sm text-red-600">{formErrors.phone}</p>}
                   </div>
                 </div>
 
@@ -329,6 +439,13 @@ const handleDelete = async (id: string) => {
                         <SelectItem value="suspended">Suspended</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+
+                {/* Show general error (non-field) */}
+                {generalError && (
+                  <div className="p-3 bg-red-50 border border-red-100 rounded">
+                    <p className="text-sm text-red-700">{generalError}</p>
                   </div>
                 )}
               </div>

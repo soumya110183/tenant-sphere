@@ -1,11 +1,14 @@
 import axios from "axios";
 import tenantsData from "@/data/tenants.json";
 import reportsData from "@/data/reports.json";
+import { report } from "process";
 
 // Base URLs
-//  const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "https://billingbackend-1vei.onrender.com";
-// const API_URL = "http://localhost:5000";
+// const API_URL = "https://billingbackend-1vei.onrender.com";
+//const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000";
+// Alias to maintain legacy references expecting API_BASE
+const API_BASE = API_URL;
 
 // Create an Axios instance
 const api = axios.create({
@@ -171,6 +174,322 @@ export const reportsAPI = {
   },
 };
 
+// tenantAPI report
+
+function authHeader() {
+  if (typeof window === "undefined") return {};
+  const stored =
+    localStorage.getItem("auth_token") || localStorage.getItem("token");
+  return stored ? { Authorization: `Bearer ${stored}` } : {};
+}
+
+export async function getInvoices(tenantId?: string) {
+  const q = tenantId ? `?tenant_id=${tenantId}` : "";
+  const res = await fetch(`${API_BASE}/api/invoices${q}`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  return res.json();
+}
+
+export async function getPurchases(tenantId?: string) {
+  const q = tenantId ? `?tenant_id=${tenantId}` : "";
+  const res = await fetch(`${API_BASE}/api/purchases${q}`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  return res.json();
+}
+
+export async function getInventory() {
+  const res = await fetch(`${API_BASE}/api/inventory`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  return res.json();
+}
+
+export async function getPayments(tenantId?: string) {
+  // For tenant-specific payments, use GET /api/subscriber/:id/payments
+  if (tenantId) {
+    const res = await fetch(`${API_BASE}/api/subscriber/${tenantId}/payments`, {
+      headers: { "Content-Type": "application/json", ...authHeader() },
+    });
+    return res.json();
+  }
+  // fallback to admin/all payments
+  const res = await fetch(`${API_BASE}/api/subscriber/payments`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  return res.json();
+}
+
+export async function getTimeseries(
+  startDate: string,
+  endDate: string,
+  granularity = "daily",
+  tz = "UTC",
+  exportFormat?: string
+) {
+  const params: Record<string, string> = {
+    start_date: startDate,
+    end_date: endDate,
+    granularity,
+    tz,
+  };
+
+  // Add tenant_id from localStorage if available
+  const tenantId = localStorage.getItem("tenant_id");
+  if (tenantId) {
+    params.tenant_id = tenantId;
+  }
+
+  if (exportFormat) params.export = exportFormat;
+
+  const q = new URLSearchParams(params);
+  const res = await fetch(`${API_BASE}/api/reports/tenant?${q.toString()}`, {
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`getTimeseries error (${res.status}):`, errorText);
+    throw new Error(`Failed to fetch report: ${res.status} ${res.statusText}`);
+  }
+
+  const json = await res.json();
+  return json;
+}
+
+// Invoice Payments API (from reports endpoints)
+export async function getInvoicePayments(
+  startDate?: string,
+  endDate?: string,
+  page = 1,
+  limit = 100
+) {
+  const params: Record<string, string> = {
+    start_date:
+      startDate ||
+      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+    end_date: endDate || new Date().toISOString().split("T")[0],
+    page: page.toString(),
+    limit: limit.toString(),
+  };
+
+  const tenantId = localStorage.getItem("tenant_id");
+  if (tenantId) {
+    params.tenant_id = tenantId;
+  }
+
+  const q = new URLSearchParams(params);
+  const res = await fetch(
+    `${API_BASE}/api/reports/tenant/payments?${q.toString()}`,
+    {
+      headers: { "Content-Type": "application/json", ...authHeader() },
+    }
+  );
+
+  if (!res.ok) {
+    console.error(`getInvoicePayments error (${res.status})`);
+    return [];
+  }
+
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function getInvoicePaymentsSummary(
+  startDate?: string,
+  endDate?: string
+) {
+  const params: Record<string, string> = {
+    start_date:
+      startDate ||
+      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+    end_date: endDate || new Date().toISOString().split("T")[0],
+  };
+
+  const tenantId = localStorage.getItem("tenant_id");
+  if (tenantId) {
+    params.tenant_id = tenantId;
+  }
+
+  const q = new URLSearchParams(params);
+  const res = await fetch(
+    `${API_BASE}/api/reports/tenant/payments/summary?${q.toString()}`,
+    {
+      headers: { "Content-Type": "application/json", ...authHeader() },
+    }
+  );
+
+  if (!res.ok) {
+    console.error(`getInvoicePaymentsSummary error (${res.status})`);
+    return { modes: [], total_amount: 0 };
+  }
+
+  const json = await res.json();
+  return json;
+}
+
+// ...existing code...
+
+// Removed duplicate simple pdfReportService declaration. Comprehensive version defined later below.
+// ===============================
+// PDF REPORTS API
+// ===============================
+export const pdfReportService = {
+  /**
+   * Generate Sales Return PDF Report
+   * @param {Object} params - Filter parameters
+   * @param {string} params.startDate - Start date (YYYY-MM-DD)
+   * @param {string} params.endDate - End date (YYYY-MM-DD)
+   * @param {number} params.tenantId - Optional tenant ID filter
+   */
+  generateSalesReturnPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/reports/pdf/sales-returns", {
+        params,
+        responseType: "blob",
+      });
+
+      // Create blob link to download
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `sales_returns_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate Purchase Return PDF Report
+   */
+  generatePurchaseReturnPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/reports/pdf/purchase-returns", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `purchase_returns_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate Inventory Stock PDF Report
+   */
+  generateInventoryPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/reports/pdf/inventory", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `inventory_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate Sales PDF Report
+   */
+  generateSalesPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/reports/pdf/sales", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `sales_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate Purchase PDF Report
+   */
+  generatePurchasesPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/reports/pdf/purchases", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `purchases_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw error;
+    }
+  },
+};
 // ===============================
 // ACTIVITY API (Dummy)
 // ===============================
@@ -441,7 +760,7 @@ export const purchaseReturnService = {
 export const staffService = {
   // Get all staff users belonging to the current tenant
   getAll: async (search = "") => {
-    const params = {};
+    const params: Record<string, string> = {};
     if (search) params.search = search;
     return (await api.get("/api/staff", { params })).data;
   },
