@@ -341,7 +341,7 @@ const Reports = () => {
           </Select>
 
           {/* Option to export the whole visible report as PDF / PNG */}
-          {/* <Button
+          <Button
             variant="ghost"
             size="sm"
             onClick={() => exportChartAsPng(fullReportRef, "full-report.png")}
@@ -355,7 +355,7 @@ const Reports = () => {
             onClick={() => exportChartAsPdf(fullReportRef, "full-report.pdf")}
           >
             Download Page (PDF)
-          </Button> */}
+          </Button>
         </div>
       </div>
 
@@ -369,7 +369,7 @@ const Reports = () => {
             </div>
             <div className="flex items-center gap-2">
               {/* Client-side chart exports */}
-              {/* <Button
+              <Button
                 variant="ghost"
                 size="sm"
                 onClick={() =>
@@ -386,7 +386,7 @@ const Reports = () => {
                 }
               >
                 Download PDF
-              </Button> */}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -465,7 +465,7 @@ const Reports = () => {
                 <CardDescription>New tenants per month</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                {/* <Button
+                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() =>
@@ -482,7 +482,7 @@ const Reports = () => {
                   }
                 >
                   Download PDF
-                </Button> */}
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -536,7 +536,7 @@ const Reports = () => {
                 <CardDescription>Tenants by business category</CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                {/* <Button
+                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() =>
@@ -553,7 +553,7 @@ const Reports = () => {
                   }
                 >
                   Download PDF
-                </Button> */}
+                </Button>
               </div>
             </div>
           </CardHeader>

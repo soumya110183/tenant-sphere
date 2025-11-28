@@ -137,7 +137,10 @@ const Dashboard = () => {
         const last6 = sortedKeys.slice(-6);
         const series =
           last6.length > 0
-            ? last6.map((k) => ({ month: prettyMonth(k), revenue: monthlyMap.get(k) ?? 0 }))
+            ? last6.map((k) => ({
+                month: prettyMonth(k),
+                revenue: monthlyMap.get(k) ?? 0,
+              }))
             : (dashboardData.revenueData ?? []).map((d: any) => ({
                 month: d.month,
                 revenue: Number(d.revenue ?? 0),
@@ -260,7 +263,16 @@ const Dashboard = () => {
         trendPct: trialTrend,
       },
     ],
-    [stats.totalTenants, stats.activeTenants, totalRevenue, trialValue, totalTenantsTrend, activeTenantsTrend, revenueTrend, trialTrend]
+    [
+      stats.totalTenants,
+      stats.activeTenants,
+      totalRevenue,
+      trialValue,
+      totalTenantsTrend,
+      activeTenantsTrend,
+      revenueTrend,
+      trialTrend,
+    ]
   );
 
   const getActivityIcon = (type: string) => {
@@ -294,8 +306,12 @@ const Dashboard = () => {
     <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 space-y-6">
       {/* Header */}
       <div className="min-w-0">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Welcome back. Here is the current tenant and revenue overview.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          Dashboard
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Welcome back. Here is the current tenant and revenue overview.
+        </p>
       </div>
 
       {/* Stats Cards */}
@@ -303,9 +319,14 @@ const Dashboard = () => {
         {statCards.map((stat) => {
           const { text, up } = getTrendDisplay(Number(stat.trendPct || 0));
           return (
-            <Card key={stat.title} className="hover:shadow-sm transition-shadow">
+            <Card
+              key={stat.title}
+              className="hover:shadow-sm transition-shadow"
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 min-w-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground truncate">{stat.title}</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground truncate">
+                  {stat.title}
+                </CardTitle>
                 <stat.icon className="h-4 w-4 text-primary shrink-0" />
               </CardHeader>
               <CardContent className="min-w-0">
@@ -324,7 +345,9 @@ const Dashboard = () => {
                   ) : (
                     <ArrowDownRight className="h-3 w-3 text-red-600" />
                   )}
-                  <span className={up ? "text-green-600" : "text-red-600"}>{text}</span>
+                  <span className={up ? "text-green-600" : "text-red-600"}>
+                    {text}
+                  </span>
                   <span className="text-muted-foreground">from last month</span>
                 </div>
               </CardContent>
@@ -339,19 +362,38 @@ const Dashboard = () => {
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Revenue Trend</CardTitle>
-            <p className="text-sm text-muted-foreground">Monthly revenue over the last 6 months</p>
+            <p className="text-sm text-muted-foreground">
+              Monthly revenue over the last 6 months
+            </p>
           </CardHeader>
           <CardContent>
             <div className="w-full h-[260px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueData}>
                   <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <linearGradient
+                      id="colorRevenue"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0}
+                      />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                  />
                   <XAxis dataKey="month" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip
@@ -361,7 +403,15 @@ const Dashboard = () => {
                       borderRadius: "8px",
                     }}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} name="Revenue" />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="hsl(var(--primary))"
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    strokeWidth={2}
+                    name="Revenue"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -372,13 +422,18 @@ const Dashboard = () => {
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Tenant Growth</CardTitle>
-            <p className="text-sm text-muted-foreground">New tenants per month</p>
+            <p className="text-sm text-muted-foreground">
+              New tenants per month
+            </p>
           </CardHeader>
           <CardContent>
             <div className="w-full h-[260px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={tenantGrowth}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                  />
                   <XAxis dataKey="month" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip
@@ -389,7 +444,13 @@ const Dashboard = () => {
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="tenants" stroke="hsl(var(--primary))" strokeWidth={2} name="New Tenants" />
+                  <Line
+                    type="monotone"
+                    dataKey="tenants"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    name="New Tenants"
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -403,23 +464,39 @@ const Dashboard = () => {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
-            <p className="text-sm text-muted-foreground">Latest tenant actions</p>
+            <p className="text-sm text-muted-foreground">
+              Latest tenant actions
+            </p>
           </CardHeader>
           <CardContent>
             {recentActivity.length > 0 ? (
               <div className="space-y-3">
                 {recentActivity.map((activity) => (
                   <div
-                    key={activity?.id ?? `${activity?.user ?? "u"}-${activity?.time ?? Math.random()}`}
+                    key={
+                      activity?.id ??
+                      `${activity?.user ?? "u"}-${
+                        activity?.time ?? Math.random()
+                      }`
+                    }
                     className="flex items-start gap-3 pb-3 border-b border-border last:border-0 last:pb-0"
                   >
-                    <div className="mt-1 p-2 rounded-lg bg-muted shrink-0">{getActivityIcon(activity?.type)}</div>
+                    <div className="mt-1 p-2 rounded-lg bg-muted shrink-0">
+                      {getActivityIcon(activity?.type)}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{activity?.user ?? "Unknown"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {activity?.action ?? "Action"} <span className="font-medium">{activity?.target ?? ""}</span>
+                      <p className="text-sm font-medium truncate">
+                        {activity?.user ?? "Unknown"}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">{activity?.time ?? ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {activity?.action ?? "Action"}{" "}
+                        <span className="font-medium">
+                          {activity?.target ?? ""}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {activity?.time ?? ""}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -437,7 +514,9 @@ const Dashboard = () => {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Categories</CardTitle>
-            <p className="text-sm text-muted-foreground">Tenant distribution by type</p>
+            <p className="text-sm text-muted-foreground">
+              Tenant distribution by type
+            </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -445,13 +524,21 @@ const Dashboard = () => {
                 const value = Number(cat?.value ?? 0);
                 const pct = total > 0 ? clampPercent((value / total) * 100) : 0;
                 return (
-                  <div key={`${cat?.name ?? "cat"}-${index}`} className="space-y-2">
+                  <div
+                    key={`${cat?.name ?? "cat"}-${index}`}
+                    className="space-y-2"
+                  >
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium truncate">{cat?.name ?? "Unknown"}</span>
+                      <span className="font-medium truncate">
+                        {cat?.name ?? "Unknown"}
+                      </span>
                       <span className="text-muted-foreground">{value}</span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
-                      <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -470,7 +557,9 @@ const Dashboard = () => {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Plans</CardTitle>
-            <p className="text-sm text-muted-foreground">Subscription breakdown</p>
+            <p className="text-sm text-muted-foreground">
+              Subscription breakdown
+            </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -478,13 +567,21 @@ const Dashboard = () => {
                 const value = Number(plan?.value ?? 0);
                 const pct = total > 0 ? clampPercent((value / total) * 100) : 0;
                 return (
-                  <div key={`${plan?.name ?? "plan"}-${index}`} className="space-y-2">
+                  <div
+                    key={`${plan?.name ?? "plan"}-${index}`}
+                    className="space-y-2"
+                  >
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium capitalize truncate">{plan?.name ?? "Unknown"}</span>
+                      <span className="font-medium capitalize truncate">
+                        {plan?.name ?? "Unknown"}
+                      </span>
                       <span className="text-muted-foreground">{value}</span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
-                      <div className="bg-secondary h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      <div
+                        className="bg-secondary h-2 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -506,13 +603,15 @@ const Dashboard = () => {
           <div className="flex items-center justify-between flex-wrap gap-3 min-w-0">
             <div className="min-w-0">
               <CardTitle>Quick Actions</CardTitle>
-              <p className="text-sm text-muted-foreground">Manage your platform</p>
+              <p className="text-sm text-muted-foreground">
+                Manage your platform
+              </p>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={() => navigate("/tenants")}> 
+            <Button onClick={() => navigate("/tenants")}>
               <Building2 className="mr-2 h-4 w-4" />
               View All Tenants
             </Button>

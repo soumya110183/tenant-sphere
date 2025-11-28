@@ -1,3 +1,4 @@
+// components/ReportsModule.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/use-toast";
 import {
   Download,
   TrendingUp,
@@ -18,8 +18,8 @@ import {
   ShoppingCart,
   BarChart3,
   CreditCard,
-  Loader2,
-  FileDown,
+  PieChart,
+  LineChart as LineChartIcon,
 } from "lucide-react";
 import {
   LineChart,
@@ -34,125 +34,53 @@ import {
   Pie,
   PieChart as RePieChart,
   Cell,
-  Legend,
 } from "recharts";
 
-import { useState } from "react";
-import { useReports } from "@/hooks/useReports";
-import { pdfReportService } from "@/services/api";
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
-
 const ReportsModule = () => {
-  const { toast } = useToast();
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
-  });
-  const [granularity, setGranularity] = useState<
-    "daily" | "weekly" | "monthly"
-  >("daily");
-  const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
-
-  // Use the custom hook to fetch all report data
-  const {
-    loading,
-    error,
-    summary,
-    salesSeries,
-    purchaseSeries,
-    stockReport,
-    paymentSummary,
-    dailyMetrics,
-  } = useReports({
-    startDate: dateRange.startDate,
-    endDate: dateRange.endDate,
-    granularity,
-  });
-
-  // Combine sales and purchase series for analytics chart
-  const combinedSeries = salesSeries.map((s, idx) => ({
-    date: s.date,
-    sales: s.sales || 0,
-    purchase: purchaseSeries[idx]?.purchase || 0,
-  }));
-
-  // Handle PDF downloads
-  const handleDownloadPDF = async (reportType: string) => {
-    setDownloadingPDF(reportType);
-    try {
-      const tenantId = localStorage.getItem("tenant_id");
-      const params = {
-        ...(tenantId ? { tenant_id: tenantId } : {}),
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      };
-
-      switch (reportType) {
-        case "inventory":
-          await pdfReportService.generateInventoryPDF(params);
-          break;
-        case "sales":
-          await pdfReportService.generateSalesPDF(params);
-          break;
-        case "purchases":
-          await pdfReportService.generatePurchasesPDF(params);
-          break;
-        case "salesReturns":
-          await pdfReportService.generateSalesReturnPDF(params);
-          break;
-        case "purchaseReturns":
-          await pdfReportService.generatePurchaseReturnPDF(params);
-          break;
-        case "all":
-          // Download all reports sequentially
-          await pdfReportService.generateInventoryPDF(params);
-          await pdfReportService.generateSalesPDF(params);
-          await pdfReportService.generatePurchasesPDF(params);
-          await pdfReportService.generateSalesReturnPDF(params);
-          await pdfReportService.generatePurchaseReturnPDF(params);
-          break;
-      }
-
-      toast({
-        title: "PDF Generated",
-        description: `Your ${reportType} report has been downloaded successfully.`,
-      });
-    } catch (err) {
-      console.error("PDF download error:", err);
-      toast({
-        title: "Download Failed",
-        description: "Failed to generate PDF report. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setDownloadingPDF(null);
-    }
+  // Dummy Data
+  const summary = {
+    totalSales: 13500,
+    totalPurchases: 8000,
+    profit: 5500,
+    lowStock: 4,
+    transactions: 135,
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading reports...</span>
-      </div>
-    );
-  }
+  const salesData = [
+    { date: "Oct 20", sales: 4500 },
+    { date: "Oct 21", sales: 3800 },
+    { date: "Oct 22", sales: 5200 },
+    { date: "Oct 23", sales: 6100 },
+    { date: "Oct 24", sales: 4800 },
+  ];
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <p className="text-destructive mb-4">
-            Error loading reports: {error}
-          </p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-        </div>
-      </div>
-    );
-  }
+  const purchaseData = [
+    { date: "Oct 20", purchase: 3000 },
+    { date: "Oct 21", purchase: 2000 },
+    { date: "Oct 22", purchase: 4000 },
+    { date: "Oct 23", purchase: 2500 },
+    { date: "Oct 24", purchase: 3500 },
+  ];
+
+  const stockReport = [
+    { id: 1, product: "Rice", available: 150, value: 44997.5, status: "Good" },
+    { id: 2, product: "Sugar", available: 20, value: 999.8, status: "Low" },
+    { id: 3, product: "Wheat", available: 200, value: 1998.0, status: "Good" },
+  ];
+
+  const profitReport = [
+    { id: 1, product: "Rice", revenue: 5000, cost: 3500 },
+    { id: 2, product: "Sugar", revenue: 1000, cost: 700 },
+    { id: 3, product: "Wheat", revenue: 3000, cost: 2200 },
+  ];
+
+  const paymentSummary = [
+    { mode: "Cash", value: 5500 },
+    { mode: "UPI", value: 3200 },
+    { mode: "Card", value: 2800 },
+  ];
+
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28"];
 
   return (
     <div className="space-y-6">
@@ -164,43 +92,10 @@ const ReportsModule = () => {
             View business insights and export detailed reports
           </p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex gap-2 items-center">
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, startDate: e.target.value })
-              }
-              className="px-3 py-2 border rounded-md"
-            />
-            <span>to</span>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, endDate: e.target.value })
-              }
-              className="px-3 py-2 border rounded-md"
-            />
-          </div>
-          <Button
-            onClick={() => handleDownloadPDF("all")}
-            disabled={downloadingPDF === "all"}
-          >
-            {downloadingPDF === "all" ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Export All
-              </>
-            )}
-          </Button>
-        </div>
+        <Button>
+          <Download className="mr-2 h-4 w-4" />
+          Export All
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -216,7 +111,7 @@ const ReportsModule = () => {
             <div className="text-2xl font-bold">
               AED {summary.totalSales.toLocaleString()}
             </div>
-            <p className="text-xs text-success mt-1">Period Total</p>
+            <p className="text-xs text-success mt-1">Today</p>
           </CardContent>
         </Card>
 
@@ -231,7 +126,7 @@ const ReportsModule = () => {
             <div className="text-2xl font-bold">
               AED {summary.totalPurchases.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Period Total</p>
+            <p className="text-xs text-muted-foreground mt-1">Today</p>
           </CardContent>
         </Card>
 
@@ -246,7 +141,7 @@ const ReportsModule = () => {
             <div className="text-2xl font-bold">
               AED {summary.profit.toLocaleString()}
             </div>
-            <p className="text-xs text-success mt-1">Net Profit</p>
+            <p className="text-xs text-success mt-1">Updated live</p>
           </CardContent>
         </Card>
 
@@ -274,7 +169,7 @@ const ReportsModule = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.transactions}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total Invoices</p>
+            <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
           </CardContent>
         </Card>
       </div>
@@ -286,89 +181,31 @@ const ReportsModule = () => {
           <TabsTrigger value="sales">Sales</TabsTrigger>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
+          <TabsTrigger value="profit">Profit</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
-        {/* DAILY SUMMARY TABLE */}
+        {/* DAILY SUMMARY */}
         <TabsContent value="daily-summary">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Daily Metrics Table</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
-              >
-                {downloadingPDF === "sales" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
+            <CardHeader>
+              <CardTitle>Daily Summary Overview</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 overflow-auto">
-              <Table className="min-w-[1200px] text-xs">
-                <TableHeader>
-                  <TableRow className="whitespace-nowrap">
-                    <TableHead>Date</TableHead>
-                    <TableHead>Sales (AED)</TableHead>
-                    <TableHead>Invoices</TableHead>
-                    <TableHead>Avg Bill (AED)</TableHead>
-                    <TableHead>Top Product</TableHead>
-                    <TableHead>Purchases (AED)</TableHead>
-                    <TableHead>Purchase Entries</TableHead>
-                    <TableHead>Profit (AED)</TableHead>
-                    <TableHead>Margin %</TableHead>
-                    <TableHead>Δ Prev Day %</TableHead>
-                    <TableHead>Δ Weekly Avg %</TableHead>
-                    <TableHead>Sold Qty</TableHead>
-                    <TableHead>Received Qty</TableHead>
-                    <TableHead>Cash (AED)</TableHead>
-                    <TableHead>UPI (AED)</TableHead>
-                    <TableHead>Card (AED)</TableHead>
-                    <TableHead>Credit (AED)</TableHead>
-                    <TableHead>Low Stock</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dailyMetrics.map((row) => (
-                    <TableRow key={row.date} className="whitespace-nowrap">
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell>{row.salesAmount.toLocaleString()}</TableCell>
-                      <TableCell>{row.invoiceCount}</TableCell>
-                      <TableCell>{row.avgBill.toLocaleString()}</TableCell>
-                      <TableCell>{row.topProduct}</TableCell>
-                      <TableCell>
-                        {row.purchaseAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell>{row.purchaseEntries}</TableCell>
-                      <TableCell>{row.dailyProfit.toLocaleString()}</TableCell>
-                      <TableCell>{row.marginPct.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {row.prevDaySalesChangePct === null
-                          ? "-"
-                          : row.prevDaySalesChangePct.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        {row.vsWeeklyAvgSalesChangePct.toFixed(2)}
-                      </TableCell>
-                      <TableCell>{row.soldItemsQty}</TableCell>
-                      <TableCell>{row.receivedItemsQty}</TableCell>
-                      <TableCell>{row.cash.toLocaleString()}</TableCell>
-                      <TableCell>{row.upi.toLocaleString()}</TableCell>
-                      <TableCell>{row.card.toLocaleString()}</TableCell>
-                      <TableCell>{row.credit.toLocaleString()}</TableCell>
-                      <TableCell>{row.lowStock}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {dailyMetrics.length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                  No daily data available for selected range.
-                </p>
-              )}
+            <CardContent className="space-y-6">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={salesData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar
+                    dataKey="sales"
+                    fill="hsl(var(--primary))"
+                    name="Sales"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </TabsContent>
@@ -376,33 +213,20 @@ const ReportsModule = () => {
         {/* SALES */}
         <TabsContent value="sales">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Sales Report</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
-              >
-                {downloadingPDF === "sales" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesSeries}>
+                <LineChart data={salesData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Legend />
                   <Line
                     type="monotone"
                     dataKey="sales"
                     stroke="hsl(var(--primary))"
-                    name="Sales (AED)"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -413,33 +237,17 @@ const ReportsModule = () => {
         {/* PURCHASES */}
         <TabsContent value="purchases">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Purchase Report</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("purchases")}
-                disabled={downloadingPDF === "purchases"}
-              >
-                {downloadingPDF === "purchases" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={purchaseSeries}>
+                <BarChart data={purchaseData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="purchase"
-                    fill="hsl(var(--primary))"
-                    name="Purchases (AED)"
-                  />
+                  <Bar dataKey="purchase" fill="hsl(var(--primary))" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -449,19 +257,8 @@ const ReportsModule = () => {
         {/* STOCK */}
         <TabsContent value="stock">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Stock Overview</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("inventory")}
-                disabled={downloadingPDF === "inventory"}
-              >
-                {downloadingPDF === "inventory" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -496,6 +293,35 @@ const ReportsModule = () => {
           </Card>
         </TabsContent>
 
+        {/* PROFIT */}
+        <TabsContent value="profit">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profit Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={profitReport.map((p) => ({
+                    product: p.product,
+                    profit: p.revenue - p.cost,
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="product" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    stroke="hsl(var(--primary))"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* PAYMENTS */}
         <TabsContent value="payments">
           <Card>
@@ -503,49 +329,24 @@ const ReportsModule = () => {
               <CardTitle>Payment Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <RePieChart>
-                    <Pie
-                      data={paymentSummary}
-                      dataKey="value"
-                      nameKey="mode"
-                      outerRadius={100}
-                      label
-                    >
-                      {paymentSummary.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </RePieChart>
-                </ResponsiveContainer>
-                <div className="space-y-4">
-                  {paymentSummary.map((pm, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{
-                            backgroundColor: COLORS[idx % COLORS.length],
-                          }}
-                        />
-                        <span className="font-medium">{pm.mode}</span>
-                      </div>
-                      <span className="text-lg font-bold">
-                        AED {pm.value.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <RePieChart>
+                  <Pie
+                    data={paymentSummary}
+                    dataKey="value"
+                    nameKey="mode"
+                    outerRadius={100}
+                  >
+                    {paymentSummary.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </RePieChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </TabsContent>
@@ -558,25 +359,28 @@ const ReportsModule = () => {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={combinedSeries}>
+                <LineChart
+                  data={salesData.map((d, i) => ({
+                    date: d.date,
+                    sales: d.sales,
+                    purchase: purchaseData[i]?.purchase || 0,
+                  }))}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Legend />
                   <Line
                     type="monotone"
                     dataKey="sales"
                     stroke="#82ca9d"
-                    name="Sales (AED)"
-                    strokeWidth={2}
+                    name="Sales"
                   />
                   <Line
                     type="monotone"
                     dataKey="purchase"
                     stroke="#8884d8"
-                    name="Purchases (AED)"
-                    strokeWidth={2}
+                    name="Purchases"
                   />
                 </LineChart>
               </ResponsiveContainer>
