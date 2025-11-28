@@ -42,7 +42,7 @@ export const tenantAPI = {
   updateTenant: async (id, tenantData) =>
     (await api.put(`/api/tenants/${id}`, tenantData)).data,
 
-  deleteTenant: async (id) => (await api.delete(`/tenants/${id}`)).data,
+  deleteTenant: async (id) => (await api.delete(`/api/tenants/${id}`)).data,
 };
 
 // ===============================
@@ -98,6 +98,8 @@ export const authAPI = {
         email: data.user?.email,
         role: data.user?.role,
         tenant_id: data.user?.tenant_id,
+        tenantId: data.user?.tenant_id,
+        tenantName: data.user?.tenant_name,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
           data.user?.full_name ?? data.user?.name
         }`,

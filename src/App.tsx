@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RoleBasedRoute } from "@/components/RoleBasedRoute";
 import { DashboardRouter } from "@/components/DashboardRouter";
 import { DashboardLayout } from "@/components/Layout/DashboardLayout";
+import { GroceryInventory } from '@/components/inventory';
 import Login from "./pages/Login";
 import AMC_notification from "./pages/amc_notification.js";
 import AMC_report from "./pages/amc_management.js"; 
@@ -39,6 +40,7 @@ import BillingPageUAE_TenantStyle from "./pages/billing.js";
 import LoyaltySettings from "./pages/Loyality.js";
 import Coupons from "./pages/Coupon.js";
 import Discounts from "./pages/Discounts.js";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -126,6 +128,14 @@ const App = () => (
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventorys"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <GroceryInventory />
                       </RoleBasedRoute>
                     }
                   />

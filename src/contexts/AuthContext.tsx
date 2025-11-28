@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { authAPI } from "@/services/api";
+import { authAPI, tenantAPI } from "@/services/api";
 import { jwtDecode } from "jwt-decode";
 
 import { useNavigate } from "react-router-dom";
@@ -68,7 +68,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (response.success) {
       const token = response.token;
-      const userData = response.user;
+      let userData = response.user;
+
+      // Fetch tenant details if user has tenant_id
+      if (userData.tenant_id) {
+        try {
+          const tenantResponse = await tenantAPI.getTenant(userData.tenant_id);
+          const tenant = tenantResponse.tenant || tenantResponse;
+          userData = {
+            ...userData,
+            tenantName:
+              tenant.name || tenant.tenant_name || tenant.business_name,
+            tenantId: userData.tenant_id,
+          };
+        } catch (error) {
+          console.error("Failed to fetch tenant details:", error);
+          // Continue with basic user data if tenant fetch fails
+        }
+      }
 
       // Decode token to extract expiry time
       const decoded = jwtDecode<DecodedToken>(token);

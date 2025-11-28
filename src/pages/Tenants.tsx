@@ -39,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { tenantAPI } from '@/services/api';
 
-//const API_URL = 'https://billingbackend-1vei.onrender.com'; // unchanged
+const API_URL = 'https://billingbackend-1vei.onrender.com'; // unchanged
 
 interface Tenant {
   id: string;

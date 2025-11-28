@@ -98,6 +98,8 @@ import {
 // import{Modal} from '../components/InventoryComponent/Modal.jsx';
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { PurchaseModal } from "../components/inventory/components/Modal/PurchaseModal";
+import { PurchasesView } from "../components/inventory/components/PurchasesView";
 
 const Modal = ({
   showModal,
@@ -201,141 +203,701 @@ const Modal = ({
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-4">
-          {modalType === "inventory" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Select Product *
-                </label>
-                <select
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.productId || ""}
-                  // In your modal component, update the product selection handler:
-                  onChange={(e) => {
-                    const selectedProduct = productCatalog.find(
-                      (p) => p.id === parseInt(e.target.value)
-                    );
-                    if (selectedProduct) {
-                      setFormData({
-                        ...formData,
-                        productId: selectedProduct.id,
-                        name: selectedProduct.name,
-                        brand: selectedProduct.brand,
-                        category: selectedProduct.category,
-                        unit: selectedProduct.unit,
-                        costPrice: selectedProduct.cost_price,
-                        sellingPrice: selectedProduct.selling_price,
-                        tax: selectedProduct.tax_percent || 0,
-                      });
-                    } else {
-                      // Clear product details if no product selected
-                      setFormData({
-                        ...formData,
-                        productId: "",
-                        name: "",
-                        brand: "",
-                        category: "",
-                        unit: "",
-                        costPrice: 0,
-                        sellingPrice: 0,
-                        tax: 0,
-                      });
-                    }
-                  }}
-                  disabled={editingItem}
-                >
-                  <option value="">Choose a product...</option>
-                  {productCatalog.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} - {product.brand} - AED{" "}
-                      {product.sellingPrice}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Select from existing product catalog
-                </p>
-              </div>
+        {modalType === "purchase" ? (
+          <PurchaseModal
+            formData={formData}
+            setFormData={setFormData}
+            purchaseProducts={purchaseProducts}
+            setPurchaseProducts={setPurchaseProducts}
+            productCatalog={productCatalog}
+            onSubmit={onSubmit}
+            onClose={onClose}
+            submitting={submitting}
+          />
+        ) : (
+          <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-4">
+            {modalType === "inventory" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Select Product *
+                  </label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.productId || ""}
+                    // In your modal component, update the product selection handler:
+                    onChange={(e) => {
+                      const selectedProduct = productCatalog.find(
+                        (p) => p.id === parseInt(e.target.value)
+                      );
+                      if (selectedProduct) {
+                        setFormData({
+                          ...formData,
+                          productId: selectedProduct.id,
+                          name: selectedProduct.name,
+                          brand: selectedProduct.brand,
+                          category: selectedProduct.category,
+                          unit: selectedProduct.unit,
+                          costPrice: selectedProduct.cost_price,
+                          sellingPrice: selectedProduct.selling_price,
+                          tax: selectedProduct.tax_percent || 0,
+                        });
+                      } else {
+                        // Clear product details if no product selected
+                        setFormData({
+                          ...formData,
+                          productId: "",
+                          name: "",
+                          brand: "",
+                          category: "",
+                          unit: "",
+                          costPrice: 0,
+                          sellingPrice: 0,
+                          tax: 0,
+                        });
+                      }
+                    }}
+                    disabled={editingItem}
+                  >
+                    <option value="">Choose a product...</option>
+                    {productCatalog.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - {product.brand} - AED{" "}
+                        {product.sellingPrice}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select from existing product catalog
+                  </p>
+                </div>
 
-              {formData.productId && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
-                  <div className="sm:col-span-2">
-                    <h4 className="font-medium text-sm mb-2">
-                      Product Details
-                    </h4>
+                {formData.productId && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg">
+                    <div className="sm:col-span-2">
+                      <h4 className="font-medium text-sm mb-2">
+                        Product Details
+                      </h4>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Product Name
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.name || ""}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Brand
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.brand || ""}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Category
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.category || ""}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Unit
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.unit || ""}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Cost Price (AED)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.costPrice || 0}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Selling Price (AED)
+                      </label>
+                      <input
+                        type="number"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.sellingPrice || 0}
+                        readOnly
+                      />
+                    </div>
                   </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Product Name
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.name || ""}
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Brand
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.brand || ""}
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Category
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.category || ""}
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Unit
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.unit || ""}
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Cost Price (AED)
+                    <label className="block text-sm font-medium mb-1">
+                      Quantity *
                     </label>
                     <input
                       type="number"
+                      required
+                      min="0"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.costPrice || 0}
-                      readOnly
+                      value={formData.quantity || 0}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          quantity: parseInt(e.target.value) || 0,
+                        })
+                      }
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium mb-1">
-                      Selling Price (AED)
+                    <label className="block text-sm font-medium mb-1">
+                      Reorder Level *
                     </label>
                     <input
                       type="number"
+                      required
+                      min="0"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.sellingPrice || 0}
-                      readOnly
+                      value={formData.reorderLevel || 0}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          reorderLevel: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Max Stock *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.maxStock || 0}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          maxStock: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  {/* <div>
+                  <label className="block text-sm font-medium mb-1">Location *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.location || ''}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  />
+                </div> */}
+                  {/* <div>
+                  <label className="block text-sm font-medium mb-1">Barcode</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.barcode || ''}
+                    onChange={(e) => setFormData({...formData, barcode: e.target.value})}
+                  />
+                </div> */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.expiryDate || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, expiryDate: e.target.value })
+                      }
+                    />
+                  </div>
+                  {/* <div>
+                  <label className="block text-sm font-medium mb-1">Supplier ID *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.supplierId || 1}
+                    onChange={(e) => setFormData({...formData, supplierId: parseInt(e.target.value) || 1})}
+                  />
+                </div> */}
+                </div>
+              </div>
+            )}
+
+            {modalType === "sale" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Customer ID
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.customerId || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, customerId: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Customer Name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.customerName || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          customerName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Payment Type *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.paymentType || "Cash"}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          paymentType: e.target.value,
+                        })
+                      }
+                    >
+                      <option>Cash</option>
+                      <option>UPI</option>
+                      <option>Card</option>
+                      <option>Credit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Staff ID *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.staffId || "S001"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, staffId: e.target.value })
+                      }
                     />
                   </div>
                 </div>
-              )}
 
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="font-medium text-sm">Products *</label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        setSaleProducts([
+                          ...saleProducts,
+                          { productId: "", qty: 1 },
+                        ])
+                      }
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add Product
+                    </Button>
+                  </div>
+                  {saleProducts.map((sp, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
+                    >
+                      <select
+                        required
+                        className="sm:col-span-2 px-3 py-2 border rounded-md bg-background text-sm"
+                        value={sp.productId}
+                        onChange={(e) => {
+                          const updated = [...saleProducts];
+                          updated[idx].productId = e.target.value;
+                          setSaleProducts(updated);
+                        }}
+                      >
+                        <option value="">Select Product</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} - AED {p.sellingPrice} ({p.quantity}{" "}
+                            {p.unit} available)
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        placeholder="Qty"
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={sp.qty}
+                        onChange={(e) => {
+                          const updated = [...saleProducts];
+                          updated[idx].qty = parseInt(e.target.value) || 1;
+                          setSaleProducts(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {modalType === "salesReturn" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Original Sale ID *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.originalSaleId || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          originalSaleId: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">
+                        {sales.length === 0
+                          ? "No sales available"
+                          : "Select Sale/Invoice"}
+                      </option>
+                      {sales.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          Invoice #{s.invoice_number || s.id} -{" "}
+                          {s.created_at
+                            ? new Date(s.created_at).toLocaleDateString()
+                            : "N/A"}{" "}
+                          - AED {(s.total_amount || 0).toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Refund Type *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.refundType || "Cash"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, refundType: e.target.value })
+                      }
+                    >
+                      <option>Cash</option>
+                      <option>Replacement</option>
+                      <option>Credit</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="font-medium text-sm">
+                      Return Items *
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        setReturnItems([
+                          ...returnItems,
+                          { productId: "", qty: 1, reason: "" },
+                        ])
+                      }
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add Item
+                    </Button>
+                  </div>
+                  {returnItems.map((ri, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
+                    >
+                      <select
+                        required
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.productId}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].productId = e.target.value;
+                          setReturnItems(updated);
+                        }}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.product_id}>
+                            {" "}
+                            {/* Change p.id to p.product_id */}
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        placeholder="Qty"
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.qty}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].qty = parseInt(e.target.value) || 1;
+                          setReturnItems(updated);
+                        }}
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Reason"
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.reason}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].reason = e.target.value;
+                          setReturnItems(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+
+                  {formData.originalSaleId && returnItems.length > 0 && (
+                    <div className="mt-4 p-3 bg-primary/5 rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Total Refund:</span>
+                        <span className="font-bold text-lg">
+                          AED {totalRefund.toFixed(2)}
+                        </span>
+                      </div>
+                      {refundComputation.length > 0 && (
+                        <div className="text-xs space-y-1">
+                          {refundComputation.map((line, i) => (
+                            <div key={i} className="flex justify-between">
+                              <span>
+                                {line.name} × {line.qty} @ Net AED{" "}
+                                {line.netPrice.toFixed(2)}
+                              </span>
+                              <span className="font-medium">
+                                AED {line.lineTotal.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {modalType === "purchaseReturn" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Supplier ID *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.supplierId || 1}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          supplierId: parseInt(e.target.value) || 1,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Supplier Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.supplierName || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          supplierName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Refund Method
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.refundMethod || "Cash"}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          refundMethod: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Credit">Credit Note</option>
+                      <option value="Account">Account Adjustment</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="font-medium text-sm">
+                      Return Items *
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        setReturnItems([
+                          ...returnItems,
+                          { productId: "", qty: 1, reason: "" },
+                        ])
+                      }
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add Item
+                    </Button>
+                  </div>
+                  {returnItems.map((ri, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
+                    >
+                      <select
+                        required
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.productId}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].productId = e.target.value;
+                          setReturnItems(updated);
+                        }}
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.product_id}>
+                            {" "}
+                            {/* Change p.id to p.product_id */}
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        placeholder="Qty"
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.qty}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].qty = parseInt(e.target.value) || 1;
+                          setReturnItems(updated);
+                        }}
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Reason"
+                        className="px-3 py-2 border rounded-md bg-background text-sm"
+                        value={ri.reason}
+                        onChange={(e) => {
+                          const updated = [...returnItems];
+                          updated[idx].reason = e.target.value;
+                          setReturnItems(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {modalType === "adjustment" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Product *
+                  </label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.productId || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, productId: e.target.value })
+                    }
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} - Current: {p.quantity} {p.unit}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Type *
+                  </label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.type || "Add"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, type: e.target.value })
+                    }
+                  >
+                    <option value="Add">Add</option>
+                    <option value="Remove">Remove</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Quantity *
@@ -343,7 +905,7 @@ const Modal = ({
                   <input
                     type="number"
                     required
-                    min="0"
+                    min="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                     value={formData.quantity || 0}
                     onChange={(e) =>
@@ -356,813 +918,39 @@ const Modal = ({
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Reorder Level *
+                    Reason *
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.reorderLevel || 0}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        reorderLevel: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Max Stock *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.maxStock || 0}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        maxStock: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-                {/* <div>
-                  <label className="block text-sm font-medium mb-1">Location *</label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g., Damage, Expiry, Loss"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.location || ''}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  />
-                </div> */}
-                {/* <div>
-                  <label className="block text-sm font-medium mb-1">Barcode</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.barcode || ''}
-                    onChange={(e) => setFormData({...formData, barcode: e.target.value})}
-                  />
-                </div> */}
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Expiry Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.expiryDate || ""}
+                    value={formData.reason || ""}
                     onChange={(e) =>
-                      setFormData({ ...formData, expiryDate: e.target.value })
+                      setFormData({ ...formData, reason: e.target.value })
                     }
                   />
                 </div>
-                {/* <div>
-                  <label className="block text-sm font-medium mb-1">Supplier ID *</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplierId || 1}
-                    onChange={(e) => setFormData({...formData, supplierId: parseInt(e.target.value) || 1})}
-                  />
-                </div> */}
               </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+              <Button type="submit" className="flex-1" disabled={submitting}>
+                <Save className="h-4 w-4 mr-2" />
+                {submitting ? "Submitting..." : editingItem ? "Update" : "Save"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="flex-1 sm:flex-none"
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
             </div>
-          )}
-
-          {modalType === "sale" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Customer ID
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.customerId || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customerId: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Customer Name
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.customerName || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customerName: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Payment Type *
-                  </label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.paymentType || "Cash"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, paymentType: e.target.value })
-                    }
-                  >
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Card</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Staff ID *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.staffId || "S001"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, staffId: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="font-medium text-sm">Products *</label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      setSaleProducts([
-                        ...saleProducts,
-                        { productId: "", qty: 1 },
-                      ])
-                    }
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Product
-                  </Button>
-                </div>
-                {saleProducts.map((sp, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
-                  >
-                    <select
-                      required
-                      className="sm:col-span-2 px-3 py-2 border rounded-md bg-background text-sm"
-                      value={sp.productId}
-                      onChange={(e) => {
-                        const updated = [...saleProducts];
-                        updated[idx].productId = e.target.value;
-                        setSaleProducts(updated);
-                      }}
-                    >
-                      <option value="">Select Product</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} - AED {p.sellingPrice} ({p.quantity} {p.unit}{" "}
-                          available)
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      placeholder="Qty"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={sp.qty}
-                      onChange={(e) => {
-                        const updated = [...saleProducts];
-                        updated[idx].qty = parseInt(e.target.value) || 1;
-                        setSaleProducts(updated);
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {modalType === "purchase" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Supplier ID *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplier_id || 2}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        supplier_id: parseInt(e.target.value) || 1,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Invoice Number
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.invoice_number || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        invoice_number: e.target.value,
-                      })
-                    }
-                    placeholder="Leave empty for auto-generation"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Will auto-generate if left empty
-                  </p>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="font-medium text-sm">
-                    Purchase Items *
-                  </label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      setPurchaseProducts([
-                        ...purchaseProducts,
-                        {
-                          product_id: "",
-                          quantity: 1,
-                          cost_price: 0,
-                          expiry_date: "",
-                          reorder_level: 0,
-                          max_stock: 0,
-                        },
-                      ])
-                    }
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Item
-                  </Button>
-                </div>
-
-                {purchaseProducts.map((pp, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-1 gap-4 mb-4 p-4 border rounded-lg bg-muted/20"
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="sm:col-span-2">
-                        <label className="block text-sm font-medium mb-1">
-                          Product *
-                        </label>
-                        <select
-                          required
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.product_id}
-                          onChange={(e) => {
-                            const selectedProduct = productCatalog.find(
-                              (p) => p.id === parseInt(e.target.value)
-                            ); // CHANGE: use productCatalog
-                            const updated = [...purchaseProducts];
-                            updated[idx].product_id = e.target.value;
-                            if (selectedProduct) {
-                              updated[idx].cost_price =
-                                selectedProduct.cost_price || 0;
-                            }
-                            setPurchaseProducts(updated);
-                          }}
-                        >
-                          <option value="">Select Product</option>
-                          {productCatalog.map(
-                            (
-                              product // CHANGE: use productCatalog
-                            ) => (
-                              <option key={product.id} value={product.id}>
-                                {product.name} - {product.brand} - AED{" "}
-                                {product.cost_price} per {product.unit}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Quantity *
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="1"
-                          step="0.01"
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.quantity}
-                          onChange={(e) => {
-                            const updated = [...purchaseProducts];
-                            updated[idx].quantity =
-                              parseFloat(e.target.value) || 1;
-                            setPurchaseProducts(updated);
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Cost Price (AED) *
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          step="0.01"
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.cost_price}
-                          onChange={(e) => {
-                            const updated = [...purchaseProducts];
-                            updated[idx].cost_price =
-                              parseFloat(e.target.value) || 0;
-                            setPurchaseProducts(updated);
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Expiry Date
-                        </label>
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.expiry_date || ""}
-                          onChange={(e) => {
-                            const updated = [...purchaseProducts];
-                            updated[idx].expiry_date = e.target.value;
-                            setPurchaseProducts(updated);
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Reorder Level
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.reorder_level || 0}
-                          onChange={(e) => {
-                            const updated = [...purchaseProducts];
-                            updated[idx].reorder_level =
-                              parseInt(e.target.value) || 0;
-                            setPurchaseProducts(updated);
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Max Stock
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={pp.max_stock || 0}
-                          onChange={(e) => {
-                            const updated = [...purchaseProducts];
-                            updated[idx].max_stock =
-                              parseInt(e.target.value) || 0;
-                            setPurchaseProducts(updated);
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const updated = purchaseProducts.filter(
-                            (_, i) => i !== idx
-                          );
-                          setPurchaseProducts(updated);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Remove Item
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-
-                {purchaseProducts.length > 0 && (
-                  <div className="mt-4 p-3 bg-primary/5 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Amount:</span>
-                      <span className="font-bold text-lg">
-                        AED{" "}
-                        {purchaseProducts
-                          .reduce(
-                            (sum, item) =>
-                              sum + item.quantity * item.cost_price,
-                            0
-                          )
-                          .toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {modalType === "salesReturn" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Original Sale ID *
-                  </label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.originalSaleId || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        originalSaleId: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="">
-                      {sales.length === 0
-                        ? "No sales available"
-                        : "Select Sale/Invoice"}
-                    </option>
-                    {sales.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        Invoice #{s.invoice_number || s.id} -{" "}
-                        {s.created_at
-                          ? new Date(s.created_at).toLocaleDateString()
-                          : "N/A"}{" "}
-                        - AED {(s.total_amount || 0).toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Refund Type *
-                  </label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.refundType || "Cash"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, refundType: e.target.value })
-                    }
-                  >
-                    <option>Cash</option>
-                    <option>Replacement</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="font-medium text-sm">Return Items *</label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      setReturnItems([
-                        ...returnItems,
-                        { productId: "", qty: 1, reason: "" },
-                      ])
-                    }
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Item
-                  </Button>
-                </div>
-                {returnItems.map((ri, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
-                  >
-                    <select
-                      required
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.productId}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].productId = e.target.value;
-                        setReturnItems(updated);
-                      }}
-                    >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.product_id}>
-                          {" "}
-                          {/* Change p.id to p.product_id */}
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      placeholder="Qty"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.qty}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].qty = parseInt(e.target.value) || 1;
-                        setReturnItems(updated);
-                      }}
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Reason"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.reason}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].reason = e.target.value;
-                        setReturnItems(updated);
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {formData.originalSaleId && returnItems.length > 0 && (
-                  <div className="mt-4 p-3 bg-primary/5 rounded-lg space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Refund:</span>
-                      <span className="font-bold text-lg">
-                        AED {totalRefund.toFixed(2)}
-                      </span>
-                    </div>
-                    {refundComputation.length > 0 && (
-                      <div className="text-xs space-y-1">
-                        {refundComputation.map((line, i) => (
-                          <div key={i} className="flex justify-between">
-                            <span>
-                              {line.name} × {line.qty} @ Net AED{" "}
-                              {line.netPrice.toFixed(2)}
-                            </span>
-                            <span className="font-medium">
-                              AED {line.lineTotal.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {modalType === "purchaseReturn" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Supplier ID *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplierId || 1}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        supplierId: parseInt(e.target.value) || 1,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Supplier Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplierName || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplierName: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Refund Method
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.refundMethod || "Cash"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, refundMethod: e.target.value })
-                    }
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Credit">Credit Note</option>
-                    <option value="Account">Account Adjustment</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <label className="font-medium text-sm">Return Items *</label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      setReturnItems([
-                        ...returnItems,
-                        { productId: "", qty: 1, reason: "" },
-                      ])
-                    }
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Add Item
-                  </Button>
-                </div>
-                {returnItems.map((ri, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
-                  >
-                    <select
-                      required
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.productId}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].productId = e.target.value;
-                        setReturnItems(updated);
-                      }}
-                    >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.product_id}>
-                          {" "}
-                          {/* Change p.id to p.product_id */}
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      placeholder="Qty"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.qty}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].qty = parseInt(e.target.value) || 1;
-                        setReturnItems(updated);
-                      }}
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Reason"
-                      className="px-3 py-2 border rounded-md bg-background text-sm"
-                      value={ri.reason}
-                      onChange={(e) => {
-                        const updated = [...returnItems];
-                        updated[idx].reason = e.target.value;
-                        setReturnItems(updated);
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {modalType === "adjustment" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Product *
-                </label>
-                <select
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.productId || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, productId: e.target.value })
-                  }
-                >
-                  <option value="">Select Product</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} - Current: {p.quantity} {p.unit}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Type *</label>
-                <select
-                  required
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.type || "Add"}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                >
-                  <option value="Add">Add</option>
-                  <option value="Remove">Remove</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Quantity *
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.quantity || 0}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      quantity: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Reason *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Damage, Expiry, Loss"
-                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.reason || ""}
-                  onChange={(e) =>
-                    setFormData({ ...formData, reason: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-            <Button type="submit" className="flex-1" disabled={submitting}>
-              <Save className="h-4 w-4 mr-2" />
-              {submitting ? "Submitting..." : editingItem ? "Update" : "Save"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 sm:flex-none"
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -1182,7 +970,7 @@ const StockTableRow = ({
   const percentage = getStockPercentage(item.quantity, item.maxStock);
   const margin = item.selling_price - item.cost_price;
   const marginPercent = ((margin / item.cost_price) * 100).toFixed(1);
-  console.log(item)
+  console.log(item);
 
   return (
     <tr className="border-b hover:bg-muted/50">
@@ -1500,128 +1288,6 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
     </Card>
   );
 };
-// Purchases View Component
-// Purchases View Component
-// Purchases View Component - Updated with your actual data structure
-const PurchasesView = ({ purchases, openModal, handleDelete }) => {
-  const safePurchases = Array.isArray(purchases) ? purchases : [];
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <TrendingDown className="h-5 w-5 text-primary" />
-            Purchase Records ({safePurchases.length})
-          </CardTitle>
-          <Button
-            onClick={() => openModal("purchase")}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px]">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Purchase ID
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Invoice No
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Supplier ID
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Date
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Items
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Total Amount
-                </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {safePurchases.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="7"
-                    className="text-center py-8 text-muted-foreground text-sm"
-                  >
-                    No purchases recorded yet. Create your first purchase!
-                  </td>
-                </tr>
-              ) : (
-                safePurchases.map((purchase) => (
-                  <tr key={purchase.id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                      #{purchase.id}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm font-mono">
-                      {purchase.invoice_number}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      Supplier #{purchase.supplier_id}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      {new Date(purchase.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      <div className="max-w-xs">
-                        {purchase.items &&
-                          purchase.items.slice(0, 2).map((item, index) => (
-                            <div key={item.id} className="text-xs">
-                              {item.product_name} ({item.quantity}{" "}
-                              {item.product_unit})
-                            </div>
-                          ))}
-                        {purchase.items_count > 2 && (
-                          <div className="text-xs text-muted-foreground">
-                            +{purchase.items_count - 2} more items
-                          </div>
-                        )}
-                        {(!purchase.items || purchase.items.length === 0) && (
-                          <div className="text-xs text-muted-foreground">
-                            No items
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
-                      AED {purchase.total_amount?.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className="flex gap-1 sm:gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete("purchase", purchase.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 // Returns View Component
 const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
   console.log("ReturnsView - salesReturns:", salesReturns);
@@ -1876,7 +1542,17 @@ const AdjustmentsView = ({ stockAdjustments, openModal }) => (
 // Main Component
 const GroceryInventory = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("stock");
+
+  // Read tab from URL parameter on mount
+  const getInitialTab = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get("tab");
+    // Valid tabs: stock, sales, purchases, returns, adjustments
+    const validTabs = ["stock", "sales", "purchases", "returns", "adjustments"];
+    return validTabs.includes(tabParam) ? tabParam : "stock";
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab());
   const [products, setProducts] = useState([]);
   const [baseInventory, setBaseInventory] = useState([]); // raw inventory snapshot prior to derived adjustments
   const [isLoading, setIsLoading] = useState(true);
@@ -1983,9 +1659,14 @@ const GroceryInventory = () => {
   }, []);
 
   const loadProducts = async () => {
-    // TODO: Replace with actual API call
-    const data = await productService.getAll();
-    setProductCatalog(data.data);
+    try {
+      const data = await productService.getAll();
+      console.log("Product catalog loaded:", data.data);
+      setProductCatalog(data.data || []);
+    } catch (error) {
+      console.error("Error loading products:", error);
+      setProductCatalog([]);
+    }
   };
 
   const loadSalesReturns = async () => {
@@ -2303,7 +1984,14 @@ const GroceryInventory = () => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [saleProducts, setSaleProducts] = useState([{ productId: "", qty: 1 }]);
   const [purchaseProducts, setPurchaseProducts] = useState([
-    { productId: "", qty: 1 },
+    {
+      product_id: "",
+      quantity: 1,
+      cost_price: 0,
+      expiry_date: "",
+      reorder_level: 0,
+      max_stock: 0,
+    },
   ]);
   const [returnItems, setReturnItems] = useState([
     { productId: "", qty: 1, reason: "" },
@@ -2369,11 +2057,26 @@ const GroceryInventory = () => {
             tax: 0,
             reorderLevel: 0,
             maxStock: 0,
-            productId: ret.product_id,
             barcode: "",
             expiryDate: "",
             supplierId: 1,
           });
+          break;
+        case "purchase":
+          setFormData({
+            supplier_id: 2,
+            invoice_number: "",
+          });
+          setPurchaseProducts([
+            {
+              product_id: "",
+              quantity: 1,
+              cost_price: 0,
+              expiry_date: "",
+              reorder_level: 0,
+              max_stock: 0,
+            },
+          ]);
           break;
         // ... other cases remain the same
       }
@@ -2385,7 +2088,16 @@ const GroceryInventory = () => {
     setEditingItem(null);
     setFormData({});
     setSaleProducts([{ productId: "", qty: 1 }]);
-    setPurchaseProducts([{ productId: "", qty: 1 }]);
+    setPurchaseProducts([
+      {
+        product_id: "",
+        quantity: 1,
+        cost_price: 0,
+        expiry_date: "",
+        reorder_level: 0,
+        max_stock: 0,
+      },
+    ]);
     setReturnItems([{ productId: "", qty: 1, reason: "" }]);
   };
 
@@ -2453,6 +2165,7 @@ const GroceryInventory = () => {
         break;
       case "purchase":
         try {
+          setSubmitting(true);
           const purchaseData = {
             supplier_id: parseInt(formData.supplier_id) || 2,
             invoice_number: formData.invoice_number || "",
@@ -2460,11 +2173,11 @@ const GroceryInventory = () => {
               .filter((item) => item.product_id && item.quantity > 0)
               .map((item) => ({
                 product_id: parseInt(item.product_id),
-                quantity: parseFloat(item.quantity) || 1,
-                cost_price: parseFloat(item.cost_price) || 0,
+                quantity: parseFloat(String(item.quantity)) || 1,
+                cost_price: parseFloat(String(item.cost_price)) || 0,
                 expiry_date: item.expiry_date || null,
-                reorder_level: parseInt(item.reorder_level) || 0,
-                max_stock: parseInt(item.max_stock) || 0,
+                reorder_level: parseInt(String(item.reorder_level)) || 0,
+                max_stock: parseInt(String(item.max_stock)) || 0,
               })),
           };
 
@@ -2475,8 +2188,11 @@ const GroceryInventory = () => {
               description: "Please add at least one product to the purchase",
               variant: "destructive",
             });
+            setSubmitting(false);
             return;
           }
+
+          console.log("Creating purchase with data:", purchaseData);
 
           const response = await purchaseService.create(purchaseData);
           console.log("Purchase creation response:", response);
@@ -2508,6 +2224,8 @@ const GroceryInventory = () => {
               "Failed to create purchase",
             variant: "destructive",
           });
+        } finally {
+          setSubmitting(false);
         }
         break;
       case "salesReturn":

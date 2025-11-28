@@ -104,7 +104,7 @@ const staffNavigation = [
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Billing', href: '/billing', icon: ShoppingCart },
-      { name: 'Inventory', href: '/inventory', icon: Package },
+      { name: 'Inventorys', href: '/inventorys', icon: Package },
     ]
   },
   {

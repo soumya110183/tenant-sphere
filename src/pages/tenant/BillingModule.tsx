@@ -25,11 +25,13 @@ import {
   Save,
   Clock,
   Play,
+  UserPlus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+// const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();
@@ -85,10 +87,19 @@ const SupermarketBilling = () => {
   const inputRefs = useRef<HTMLInputElement[]>([]);
   const suggestionRef = useRef<HTMLDivElement | null>(null);
 
-
   const [customerSearch, setCustomerSearch] = useState("");
-const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
-const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
+  // Add customer form state
+  const [showAddCustomerPopup, setShowAddCustomerPopup] = useState(false);
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+  });
 
   // 🔄 Fetch inventory products
   useEffect(() => {
@@ -232,7 +243,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
     const pointsToUse = Math.min(points, maxPoints);
     setRedeemPoints(pointsToUse);
     setShowRedeemPopup(false);
-    
+
     toast({
       title: "Points Redeemed",
       description: `Redeemed ${pointsToUse} points for AED ${pointsToUse}.00 discount`,
@@ -241,7 +252,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   // Hold current bill
   const handleHoldBill = () => {
-    if (rows.length === 0 || !rows.some(row => row.name && row.qty)) {
+    if (rows.length === 0 || !rows.some((row) => row.name && row.qty)) {
       toast({
         title: "Cannot Hold Bill",
         description: "Add at least one item to hold the bill",
@@ -261,12 +272,12 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
       preview,
       previewItems,
       subtotal: calculateSubtotal(),
-      total: calculateTotal()
+      total: calculateTotal(),
     };
 
-    setHeldBills(prev => [billData, ...prev]);
+    setHeldBills((prev) => [billData, ...prev]);
     setBillName("");
-    
+
     toast({
       title: "Bill Held",
       description: `Bill "${billData.name}" has been saved`,
@@ -291,11 +302,11 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
     setPreviewItems(bill.previewItems);
     setSelectedCustomerId(bill.customer?.id || null);
     setSelectedCustomer(bill.customer);
-    
+
     // Remove from held bills
-    setHeldBills(prev => prev.filter(b => b.id !== bill.id));
+    setHeldBills((prev) => prev.filter((b) => b.id !== bill.id));
     setShowHeldBills(false);
-    
+
     toast({
       title: "Bill Restored",
       description: `Bill "${bill.name}" has been restored`,
@@ -305,11 +316,83 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   // Delete held bill
   const handleDeleteHeldBill = (billId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setHeldBills(prev => prev.filter(bill => bill.id !== billId));
+    setHeldBills((prev) => prev.filter((bill) => bill.id !== billId));
     toast({
       title: "Bill Deleted",
       description: "Held bill has been removed",
     });
+  };
+
+  // Add new customer handler
+  const handleAddCustomer = async () => {
+    if (!newCustomerForm.name.trim()) {
+      toast({
+        title: "Name Required",
+        description: "Please enter customer name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!newCustomerForm.phone.trim()) {
+      toast({
+        title: "Phone Required",
+        description: "Please enter customer phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingCustomer(true);
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/customers`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newCustomerForm),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to add customer");
+      }
+
+      toast({
+        title: "Customer Added",
+        description: `${newCustomerForm.name} has been added successfully`,
+      });
+
+      // Add to customers list
+      setCustomers((prev) => [...prev, json.customer]);
+
+      // Select the new customer
+      setSelectedCustomerId(json.customer.id);
+      setSelectedCustomer(json.customer);
+      setCustomerSearch(json.customer.name);
+
+      // Reset form and close popup
+      setNewCustomerForm({
+        name: "",
+        phone: "",
+        email: "",
+        address: "",
+      });
+      setShowAddCustomerPopup(false);
+    } catch (err: any) {
+      console.error("Add customer error:", err);
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingCustomer(false);
+    }
   };
 
   // Debug: Log products when they change
@@ -399,8 +482,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
       updated[index].price = Number(exactMatch.selling_price || 0);
       updated[index].tax = Number(exactMatch.tax_percent || 0);
       updated[index].product_id = exactMatch.product_id || exactMatch.id;
-      updated[index].total =
-        (updated[index].qty || 0) * updated[index].price;
+      updated[index].total = (updated[index].qty || 0) * updated[index].price;
       setShowSuggestions(false);
       console.log("Auto-filled row with:", exactMatch.name);
     } else {
@@ -436,8 +518,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
       updated[currentInputIndex].name = product.name;
       updated[currentInputIndex].price = Number(product.selling_price || 0);
       updated[currentInputIndex].tax = Number(product.tax_percent || 0);
-      updated[currentInputIndex].product_id =
-        product.product_id || product.id;
+      updated[currentInputIndex].product_id = product.product_id || product.id;
       updated[currentInputIndex].total =
         Number(product.selling_price || 0) *
         Number(updated[currentInputIndex].qty || 0);
@@ -450,10 +531,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
     // add a new row if we were on the last one
     if (currentInputIndex === updated.length - 1) {
       addNewRow();
-      setTimeout(
-        () => inputRefs.current[currentInputIndex + 1]?.focus(),
-        100
-      );
+      setTimeout(() => inputRefs.current[currentInputIndex + 1]?.focus(), 100);
     } else {
       inputRefs.current[currentInputIndex + 1]?.focus();
     }
@@ -484,8 +562,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const calculateIncludedTax = () =>
     rows.reduce(
       (s, r) =>
-        s +
-        (Number(r.price) * (Number(r.tax) / 100)) * Number(r.qty || 0),
+        s + Number(r.price) * (Number(r.tax) / 100) * Number(r.qty || 0),
       0
     );
 
@@ -869,7 +946,9 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             {isLoadingCoupons ? (
               <div className="text-center py-8">
                 <div className="h-6 w-6 mx-auto animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                <p className="text-sm text-muted-foreground mt-2">Loading coupons...</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Loading coupons...
+                </p>
               </div>
             ) : availableCoupons.length > 0 ? (
               <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -881,13 +960,16 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="font-semibold text-primary">{coupon.code}</h4>
+                        <h4 className="font-semibold text-primary">
+                          {coupon.code}
+                        </h4>
                         <p className="text-sm text-muted-foreground mt-1">
                           {coupon.description || "Special discount coupon"}
                         </p>
                         {coupon.valid_from && coupon.valid_until && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Valid: {new Date(coupon.valid_from).toLocaleDateString()} -{" "}
+                            Valid:{" "}
+                            {new Date(coupon.valid_from).toLocaleDateString()} -{" "}
                             {new Date(coupon.valid_until).toLocaleDateString()}
                           </p>
                         )}
@@ -911,7 +993,9 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             ) : (
               <div className="text-center py-8">
                 <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">No active coupons available</p>
+                <p className="text-muted-foreground">
+                  No active coupons available
+                </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Check back later for new promotions
                 </p>
@@ -940,6 +1024,134 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
         </div>
       )}
 
+      {/* Add Customer Popup */}
+      {showAddCustomerPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Add New Customer</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setShowAddCustomerPopup(false);
+                  setNewCustomerForm({
+                    name: "",
+                    phone: "",
+                    email: "",
+                    address: "",
+                  });
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="customerName">Name *</Label>
+                <Input
+                  id="customerName"
+                  value={newCustomerForm.name}
+                  onChange={(e) =>
+                    setNewCustomerForm({
+                      ...newCustomerForm,
+                      name: e.target.value,
+                    })
+                  }
+                  placeholder="Enter customer name"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="customerPhone">Phone *</Label>
+                <Input
+                  id="customerPhone"
+                  value={newCustomerForm.phone}
+                  onChange={(e) =>
+                    setNewCustomerForm({
+                      ...newCustomerForm,
+                      phone: e.target.value,
+                    })
+                  }
+                  placeholder="Enter phone number"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="customerEmail">Email</Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  value={newCustomerForm.email}
+                  onChange={(e) =>
+                    setNewCustomerForm({
+                      ...newCustomerForm,
+                      email: e.target.value,
+                    })
+                  }
+                  placeholder="Enter email (optional)"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="customerAddress">Address</Label>
+                <Input
+                  id="customerAddress"
+                  value={newCustomerForm.address}
+                  onChange={(e) =>
+                    setNewCustomerForm({
+                      ...newCustomerForm,
+                      address: e.target.value,
+                    })
+                  }
+                  placeholder="Enter address (optional)"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAddCustomerPopup(false);
+                  setNewCustomerForm({
+                    name: "",
+                    phone: "",
+                    email: "",
+                    address: "",
+                  });
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddCustomer}
+                disabled={isAddingCustomer}
+                className="flex-1"
+              >
+                {isAddingCustomer ? (
+                  <>
+                    <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add Customer
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Redeem Points Popup */}
       {showRedeemPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -958,7 +1170,10 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             <div className="text-center mb-6">
               <Coins className="h-16 w-16 text-yellow-500 mx-auto mb-3" />
               <p className="text-lg font-semibold">
-                Available Points: <span className="text-blue-600">{selectedCustomer?.loyalty_points || 0}</span>
+                Available Points:{" "}
+                <span className="text-blue-600">
+                  {selectedCustomer?.loyalty_points || 0}
+                </span>
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 1 Point = AED 1.00 discount
@@ -1052,8 +1267,11 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                             </span>
                           </div>
                           <div className="text-sm text-muted-foreground space-y-1">
-                            <p>Items: {bill.rows.filter((r: any) => r.name).length}</p>
-                            <p>Customer: {bill.customer?.name || 'Walk-in'}</p>
+                            <p>
+                              Items:{" "}
+                              {bill.rows.filter((r: any) => r.name).length}
+                            </p>
+                            <p>Customer: {bill.customer?.name || "Walk-in"}</p>
                             <p>Total: AED {bill.total.toFixed(2)}</p>
                           </div>
                         </div>
@@ -1108,7 +1326,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             Enter products, apply discounts, and print receipt
           </p>
         </div>
-        
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -1118,11 +1336,11 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             <Clock className="h-4 w-4 mr-2" />
             Held Bills ({heldBills.length})
           </Button>
-          
+
           <Button
             variant="outline"
             onClick={handleHoldBill}
-            disabled={!rows.some(row => row.name && row.qty)}
+            disabled={!rows.some((row) => row.name && row.qty)}
           >
             <Save className="h-4 w-4 mr-2" />
             Hold Bill
@@ -1131,9 +1349,11 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
       </div>
 
       {/* Bill Name Input for Holding */}
-      {rows.some(row => row.name && row.qty) && (
+      {rows.some((row) => row.name && row.qty) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <Label htmlFor="billName" className="text-blue-900 font-medium">Bill Name (for holding)</Label>
+          <Label htmlFor="billName" className="text-blue-900 font-medium">
+            Bill Name (for holding)
+          </Label>
           <div className="flex gap-2 mt-2">
             <Input
               id="billName"
@@ -1144,7 +1364,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
             />
             <Button
               onClick={handleHoldBill}
-              disabled={!rows.some(row => row.name && row.qty)}
+              disabled={!rows.some((row) => row.name && row.qty)}
               className="whitespace-nowrap"
             >
               <Save className="h-4 w-4 mr-2" />
@@ -1174,8 +1394,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
               <TableBody>
                 {rows.map((r, i) => {
                   const previewRow = getPreviewForRow(r);
-                  const effectiveTotal =
-                    previewRow?.net_price ?? r.total ?? 0;
+                  const effectiveTotal = previewRow?.net_price ?? r.total ?? 0;
                   const discountForRow = previewRow?.discount_amount || 0;
 
                   return (
@@ -1218,8 +1437,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                                 <div className="text-xs text-gray-500">
                                   {p.sku && `SKU: ${p.sku} • `}
                                   {p.barcode && `Barcode: ${p.barcode} • `}
-                                  Stock: {p.quantity} • AED{" "}
-                                  {p.selling_price}
+                                  Stock: {p.quantity} • AED {p.selling_price}
                                 </div>
                               </div>
                             ))}
@@ -1230,9 +1448,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                         <Input
                           type="number"
                           value={r.qty}
-                          onChange={(e) =>
-                            handleQtyChange(i, e.target.value)
-                          }
+                          onChange={(e) => handleQtyChange(i, e.target.value)}
                           onBlur={() => {
                             if (rows[i].qty === "" || rows[i].qty === 0) {
                               const updated = [...rows];
@@ -1251,8 +1467,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                           </span>
                           {discountForRow > 0 && (
                             <span className="text-xs text-green-600">
-                              -AED {Number(discountForRow).toFixed(2)}{" "}
-                              discount
+                              -AED {Number(discountForRow).toFixed(2)} discount
                             </span>
                           )}
                         </div>
@@ -1286,97 +1501,109 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
           <CardContent className="space-y-4">
             {/* Customer & Loyalty */}
             <div className="space-y-2">
-              <Label>Customer (for loyalty & coupons)</Label>
-            <div className="relative">
-  <Input
-    placeholder="Search customer by name or phone"
-    value={customerSearch}
-    onChange={(e) => {
-      const val = e.target.value;
-      setCustomerSearch(val);
+              <div className="flex items-center justify-between">
+                <Label>Customer (for loyalty & coupons)</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddCustomerPopup(true)}
+                >
+                  <UserPlus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+              <div className="relative">
+                <Input
+                  placeholder="Search customer by name or phone"
+                  value={customerSearch}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCustomerSearch(val);
 
-      if (!val.trim()) {
-        setCustomerSuggestions([]);
-        setShowCustomerSuggestions(false);
-        setSelectedCustomer(null);
-        setSelectedCustomerId(null);
-        return;
-      }
+                    if (!val.trim()) {
+                      setCustomerSuggestions([]);
+                      setShowCustomerSuggestions(false);
+                      setSelectedCustomer(null);
+                      setSelectedCustomerId(null);
+                      return;
+                    }
 
-      const search = val.toLowerCase();
+                    const search = val.toLowerCase();
 
-      const filtered = customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(search) ||
-          (c.phone && c.phone.toLowerCase().includes(search))
-      );
+                    const filtered = customers.filter(
+                      (c) =>
+                        c.name.toLowerCase().includes(search) ||
+                        (c.phone && c.phone.toLowerCase().includes(search))
+                    );
 
-      setCustomerSuggestions(filtered);
-      setShowCustomerSuggestions(true);
-    }}
-    onFocus={() => {
-      if (customerSuggestions.length > 0) setShowCustomerSuggestions(true);
-    }}
-  />
+                    setCustomerSuggestions(filtered);
+                    setShowCustomerSuggestions(true);
+                  }}
+                  onFocus={() => {
+                    if (customerSuggestions.length > 0)
+                      setShowCustomerSuggestions(true);
+                  }}
+                />
 
-  {showCustomerSuggestions && customerSuggestions.length > 0 && (
-    <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
-      {customerSuggestions.map((c) => (
-        <div
-          key={c.id}
-          className="p-2 cursor-pointer hover:bg-gray-100 border-b"
-          onClick={() => {
-            setSelectedCustomerId(c.id);
-            setSelectedCustomer(c);
-            setCustomerSearch(c.name);
-            setShowCustomerSuggestions(false);
+                {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                  <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
+                    {customerSuggestions.map((c) => (
+                      <div
+                        key={c.id}
+                        className="p-2 cursor-pointer hover:bg-gray-100 border-b"
+                        onClick={() => {
+                          setSelectedCustomerId(c.id);
+                          setSelectedCustomer(c);
+                          setCustomerSearch(c.name);
+                          setShowCustomerSuggestions(false);
 
-            // reset discounts
-            setRedeemPoints("");
-            setCouponCode("");
-            setPreview(null);
-            setPreviewItems([]);
-          }}
-        >
-          <p className="font-semibold text-sm">{c.name}</p>
-          <p className="text-xs text-gray-500">{c.phone || "No phone"}</p>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
-{selectedCustomer && (
-  <div className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200">
-    <div className="flex justify-between">
-      <span className="font-medium">Name:</span>
-      <span>{selectedCustomer.name}</span>
-    </div>
-    <div className="flex justify-between">
-      <span className="font-medium">Phone:</span>
-      <span>{selectedCustomer.phone || "N/A"}</span>
-    </div>
-    <div className="flex justify-between">
-      <span className="font-medium">Points:</span>
-      <span className="text-blue-600 font-semibold">
-        {selectedCustomer.loyalty_points || 0}
-      </span>
-    </div>
-    <div className="flex justify-between">
-      <span className="font-medium">Tier:</span>
-      <span>{selectedCustomer.membership_tier || "Bronze"}</span>
-    </div>
+                          // reset discounts
+                          setRedeemPoints("");
+                          setCouponCode("");
+                          setPreview(null);
+                          setPreviewItems([]);
+                        }}
+                      >
+                        <p className="font-semibold text-sm">{c.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {c.phone || "No phone"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedCustomer && (
+                <div className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Name:</span>
+                    <span>{selectedCustomer.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Phone:</span>
+                    <span>{selectedCustomer.phone || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Points:</span>
+                    <span className="text-blue-600 font-semibold">
+                      {selectedCustomer.loyalty_points || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Tier:</span>
+                    <span>{selectedCustomer.membership_tier || "Bronze"}</span>
+                  </div>
 
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleOpenRedeemPopup}
-      className="w-full mt-2"
-    >
-      Redeem Points
-    </Button>
-  </div>
-)}
-
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenRedeemPopup}
+                    className="w-full mt-2"
+                  >
+                    Redeem Points
+                  </Button>
+                </div>
+              )}
 
               {selectedCustomer && (
                 <div className="text-xs text-muted-foreground mt-1 space-y-1">
@@ -1426,7 +1653,7 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                   Browse
                 </Button>
               </div>
-              
+
               <div className="flex gap-2 mt-2">
                 <Button
                   variant="outline"
@@ -1453,7 +1680,9 @@ const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
                 <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">Applied Coupon:</span>
-                    <span className="text-blue-700 font-semibold">{couponCode}</span>
+                    <span className="text-blue-700 font-semibold">
+                      {couponCode}
+                    </span>
                   </div>
                 </div>
               )}
