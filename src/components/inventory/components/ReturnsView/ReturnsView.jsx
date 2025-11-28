@@ -6,6 +6,7 @@ import { RotateCcw, Plus } from "lucide-react";
 const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
   return (
     <div className="space-y-6">
+      {/* SALES RETURNS */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -13,6 +14,7 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
               <RotateCcw className="h-5 w-5 text-primary" />
               Sales Returns ({salesReturns.length})
             </CardTitle>
+
             <Button
               onClick={() => openModal("salesReturn")}
               className="w-full sm:w-auto"
@@ -22,31 +24,33 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
             </Button>
           </div>
         </CardHeader>
+
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Return ID
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Original Sale
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Sale ID
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Date
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Returned Items
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Returned Item
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Refund Type
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Total Refund
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {salesReturns.length === 0 ? (
                   <tr>
@@ -60,24 +64,27 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
                 ) : (
                   salesReturns.map((ret) => (
                     <tr key={ret.id} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                      <td className="px-4 py-3 font-medium text-sm">
                         SR-#{ret.id}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        #{ret.originalSaleId}
+
+                      <td className="px-4 py-3 text-sm">#{ret.sales_id}</td>
+
+                      <td className="px-4 py-3 text-sm">
+                        {new Date(ret.created_at).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        {new Date(ret.date).toLocaleDateString()}
+
+                      <td className="px-4 py-3 text-sm">
+                        {ret.products?.name || "Unknown"} ({ret.quantity}) -{" "}
+                        {ret.reason}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        {ret.productName} ({ret.quantity}) - {ret.reason}
+
+                      <td className="px-4 py-3">
+                        <Badge variant="outline">{ret.refund_type}</Badge>
                       </td>
-                      <td className="py-3 px-2 sm:px-4">
-                        <Badge variant="outline">{ret.refundType}</Badge>
-                      </td>
-                      <td className="py-3 px-2 sm:px-4 font-semibold text-red-600 text-sm">
-                        AED{" "}
-                        {ret.totalRefund ? ret.totalRefund.toFixed(2) : "0.00"}
+
+                      <td className="px-4 py-3 text-red-600 font-semibold text-sm">
+                        AED {ret.total_refund?.toFixed(2)}
                       </td>
                     </tr>
                   ))
@@ -88,6 +95,7 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
         </CardContent>
       </Card>
 
+      {/* PURCHASE RETURNS */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -95,6 +103,7 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
               <RotateCcw className="h-5 w-5 text-primary" />
               Purchase Returns ({purchaseReturns.length})
             </CardTitle>
+
             <Button
               onClick={() => openModal("purchaseReturn")}
               className="w-full sm:w-auto"
@@ -104,28 +113,30 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
             </Button>
           </div>
         </CardHeader>
+
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Return ID
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Supplier
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Purchase ID
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Date
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Returned Items
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Returned Item
                   </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Refund Method
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {purchaseReturns.length === 0 ? (
                   <tr>
@@ -139,20 +150,23 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
                 ) : (
                   purchaseReturns.map((ret) => (
                     <tr key={ret.id} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                      <td className="px-4 py-3 font-medium text-sm">
                         PR-#{ret.id}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        {ret.supplierName || `Supplier-${ret.supplierId}`}
+
+                      <td className="px-4 py-3 text-sm">#{ret.purchase_id}</td>
+
+                      <td className="px-4 py-3 text-sm">
+                        {new Date(ret.created_at).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        {new Date(ret.date).toLocaleDateString()}
+
+                      <td className="px-4 py-3 text-sm">
+                        {ret.products?.name || "Unknown"} ({ret.quantity}) -{" "}
+                        {ret.reason}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">
-                        {ret.productName} ({ret.quantity}) - {ret.reason}
-                      </td>
-                      <td className="py-3 px-2 sm:px-4 font-semibold text-green-600 text-sm">
-                        {ret.refundMethod}
+
+                      <td className="px-4 py-3 font-semibold text-green-600 text-sm">
+                        {ret.refund_method}
                       </td>
                     </tr>
                   ))

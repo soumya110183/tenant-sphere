@@ -31,7 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 
 // const API_BASE = "https://billingbackend-1vei.onrender.com";
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();
@@ -480,7 +480,7 @@ const SupermarketBilling = () => {
       updated[index].code = exactMatch.name;
       updated[index].name = exactMatch.name;
       updated[index].price = Number(exactMatch.selling_price || 0);
-      updated[index].tax = Number(exactMatch.tax_percent || 0);
+      updated[index].tax = Number(exactMatch.tax || 0);
       updated[index].product_id = exactMatch.product_id || exactMatch.id;
       updated[index].total = (updated[index].qty || 0) * updated[index].price;
       setShowSuggestions(false);
@@ -517,7 +517,7 @@ const SupermarketBilling = () => {
       updated[currentInputIndex].code = product.name;
       updated[currentInputIndex].name = product.name;
       updated[currentInputIndex].price = Number(product.selling_price || 0);
-      updated[currentInputIndex].tax = Number(product.tax_percent || 0);
+      updated[currentInputIndex].tax = Number(product.tax || 0);
       updated[currentInputIndex].product_id = product.product_id || product.id;
       updated[currentInputIndex].total =
         Number(product.selling_price || 0) *
