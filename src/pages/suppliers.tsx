@@ -1,10 +1,6 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
 import axios from "axios";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Search,
   Plus,
@@ -20,9 +16,9 @@ import {
   Building2,
   AlertCircle,
 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ?? "https://billingbackend-1vei.onrender.com";
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 interface Supplier {
   id?: number;
@@ -49,6 +45,9 @@ const initialForm: SupplierForm = {
   address: "",
 };
 
+// =========================
+//        MODAL
+// =========================
 const SupplierModal: FC<any> = ({
   show,
   editing,
@@ -116,7 +115,10 @@ const SupplierModal: FC<any> = ({
                 className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                 value={formData.contact_person}
                 onChange={(e) =>
-                  setFormData({ ...formData, contact_person: e.target.value })
+                  setFormData({
+                    ...formData,
+                    contact_person: e.target.value,
+                  })
                 }
               />
             </div>
@@ -177,8 +179,7 @@ const SupplierModal: FC<any> = ({
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
-                Save
+                <Save className="h-4 w-4 mr-2" /> Save
               </>
             )}
           </Button>
@@ -188,6 +189,9 @@ const SupplierModal: FC<any> = ({
   );
 };
 
+// =========================
+//     MAIN PAGE
+// =========================
 const SupplierPage: FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [q, setQ] = useState("");
@@ -199,11 +203,16 @@ const SupplierPage: FC = () => {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
 
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+  // ============ GET SUPPLIERS =============
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
       const resp = await axios.get(`${API_BASE}/api/suppliers`, {
         params: { search: q },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setSuppliers(resp.data.data ?? []);
     } catch (err) {
@@ -211,12 +220,13 @@ const SupplierPage: FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, [q, token]);
 
   useEffect(() => {
     fetchSuppliers();
   }, [fetchSuppliers]);
 
+  // ============ Open Create Modal ============
   const openCreate = () => {
     setEditingId(null);
     setFormErrors({});
@@ -224,6 +234,7 @@ const SupplierPage: FC = () => {
     setModalOpen(true);
   };
 
+  // ============ Open Edit Modal ============
   const openEdit = (supplier: Supplier) => {
     setEditingId(supplier.id ?? null);
     setForm({
@@ -236,6 +247,7 @@ const SupplierPage: FC = () => {
     setModalOpen(true);
   };
 
+  // ============ Validation ============
   const validateForm = () => {
     const errors: Record<string, string> = {};
     if (!form.name.trim()) errors.name = "Name is required";
@@ -243,30 +255,40 @@ const SupplierPage: FC = () => {
     return Object.keys(errors).length === 0;
   };
 
+  // ============ SAVE / UPDATE ============
   const handleSave = async () => {
     if (!validateForm()) return;
     setSaving(true);
+
     try {
       if (editingId) {
-        await axios.put(`${API_BASE}/api/suppliers/${editingId}`, form);
+        await axios.put(`${API_BASE}/api/suppliers/${editingId}`, form, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       } else {
-        await axios.post(`${API_BASE}/api/suppliers`, form);
+        await axios.post(`${API_BASE}/api/suppliers`, form, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
       }
       setModalOpen(false);
       fetchSuppliers();
     } catch (err) {
-      setFormErrors({ general: "Save failed" });
       console.error("Save failed", err);
+      setFormErrors({ general: "Save failed" });
     } finally {
       setSaving(false);
     }
   };
 
+  // ============ DELETE ============
   const handleDelete = async (id: number) => {
     if (!confirm("Delete this supplier?")) return;
     setDeleting(id);
+
     try {
-      await axios.delete(`${API_BASE}/api/suppliers/${id}`);
+      await axios.delete(`${API_BASE}/api/suppliers/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       fetchSuppliers();
     } finally {
       setDeleting(null);
@@ -280,6 +302,7 @@ const SupplierPage: FC = () => {
         <p className="text-gray-600 mt-1">Manage supplier records</p>
       </div>
 
+      {/* Search + Add Button */}
       <div className="flex justify-between gap-3 flex-col sm:flex-row">
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -296,6 +319,7 @@ const SupplierPage: FC = () => {
         </Button>
       </div>
 
+      {/* Supplier Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -383,6 +407,7 @@ const SupplierPage: FC = () => {
         </CardContent>
       </Card>
 
+      {/* Modal */}
       <SupplierModal
         show={modalOpen}
         editing={!!editingId}
