@@ -88,6 +88,7 @@ import {
   purchaseService,
   salesReturnService,
   purchaseReturnService,
+  supplierService,
 } from "@/services/api";
 import { StatsCard } from "../components/InventoryComponent/StatsCard.jsx";
 import {
@@ -109,6 +110,7 @@ const Modal = ({
   setFormData,
   products,
   sales,
+  purchases,
   saleProducts,
   setSaleProducts,
   purchaseProducts,
@@ -118,6 +120,7 @@ const Modal = ({
   onClose,
   onSubmit,
   productCatalog,
+  suppliers,
   submitting, // ADD THIS
 }) => {
   if (!showModal) return null;
@@ -210,6 +213,7 @@ const Modal = ({
             purchaseProducts={purchaseProducts}
             setPurchaseProducts={setPurchaseProducts}
             productCatalog={productCatalog}
+            suppliers={suppliers}
             onSubmit={onSubmit}
             onClose={onClose}
             submitting={submitting}
@@ -619,14 +623,13 @@ const Modal = ({
                     <select
                       required
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.refundType || "Cash"}
+                      value={formData.refundType || "cash"}
                       onChange={(e) =>
                         setFormData({ ...formData, refundType: e.target.value })
                       }
                     >
-                      <option>Cash</option>
-                      <option>Replacement</option>
-                      <option>Credit</option>
+                      <option value="cash">Cash</option>
+                      <option value="credit_note">Credit Note</option>
                     </select>
                   </div>
                 </div>
@@ -734,46 +737,40 @@ const Modal = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Supplier ID *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.supplierId || 1}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          supplierId: parseInt(e.target.value) || 1,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Supplier Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.supplierName || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          supplierName: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Refund Method
+                      Purchase Order *
                     </label>
                     <select
+                      required
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.refundMethod || "Cash"}
+                      value={formData.purchaseId || ""}
+                      onChange={(e) => {
+                        const selectedPurchase = purchases.find(
+                          (p: any) => String(p.id) === e.target.value
+                        );
+                        setFormData({
+                          ...formData,
+                          purchaseId: e.target.value,
+                          supplierId: selectedPurchase?.supplier_id || "",
+                        });
+                      }}
+                    >
+                      <option value="">Select Purchase Order</option>
+                      {purchases.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.invoice_number || `Purchase #${p.id}`} -{" "}
+                          {new Date(p.created_at).toLocaleDateString()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Refund Method *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      value={formData.refundMethod || "cash"}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -781,9 +778,8 @@ const Modal = ({
                         })
                       }
                     >
-                      <option value="Cash">Cash</option>
-                      <option value="Credit">Credit Note</option>
-                      <option value="Account">Account Adjustment</option>
+                      <option value="cash">Cash</option>
+                      <option value="credit_note">Credit Note</option>
                     </select>
                   </div>
                 </div>
@@ -1557,6 +1553,7 @@ const GroceryInventory = () => {
   const [baseInventory, setBaseInventory] = useState([]); // raw inventory snapshot prior to derived adjustments
   const [isLoading, setIsLoading] = useState(true);
   const [productCatalog, setProductCatalog] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [sales, setSales] = useState([]);
   const [salesReturns, setSalesReturns] = useState([]);
@@ -1622,6 +1619,7 @@ const GroceryInventory = () => {
   const { toast } = useToast();
   useEffect(() => {
     loadProducts();
+    loadSuppliers();
     loadInventory();
     loadPurchases();
     loadSales();
@@ -1666,6 +1664,17 @@ const GroceryInventory = () => {
     } catch (error) {
       console.error("Error loading products:", error);
       setProductCatalog([]);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      const response = await supplierService.getAll();
+      console.log("Suppliers loaded:", response);
+      setSuppliers(response.data || []);
+    } catch (error) {
+      console.error("Error loading suppliers:", error);
+      setSuppliers([]);
     }
   };
 
@@ -2067,6 +2076,13 @@ const GroceryInventory = () => {
             supplier_id: 2,
             invoice_number: "",
           });
+          break;
+        case "purchaseReturn":
+          setFormData({
+            purchaseId: "",
+            supplierId: "",
+            refundMethod: "cash",
+          });
           setPurchaseProducts([
             {
               product_id: "",
@@ -2078,7 +2094,8 @@ const GroceryInventory = () => {
             },
           ]);
           break;
-        // ... other cases remain the same
+        default:
+          break;
       }
     }
     setShowModal(true);
@@ -2330,19 +2347,12 @@ const GroceryInventory = () => {
             ? Number(firstInvoiceItemMatch.total)
             : firstNetPrice * firstItem.quantity;
           const payload = {
-            sales_id: parseInt(formData.originalSaleId),
+            invoice_id: parseInt(formData.originalSaleId),
             product_id: firstItem.product_id,
             quantity: firstItem.quantity,
-            reason: firstItem.reason,
-            refund_type: formData.refundType || "Cash",
+            reason: firstItem.reason || "",
+            refund_type: (formData.refundType || "cash").toLowerCase(),
             total_refund: Number(firstRefundAmount.toFixed(2)),
-            ...(localStorage.getItem("tenant_id")
-              ? {
-                  tenant_id: parseInt(
-                    localStorage.getItem("tenant_id") as string
-                  ),
-                }
-              : {}),
           };
 
           console.log(
@@ -2379,19 +2389,12 @@ const GroceryInventory = () => {
                   ? Number(extraInvoiceItemMatch.total)
                   : extraNetPrice * extra.quantity;
                 const extraPayload = {
-                  sales_id: parseInt(formData.originalSaleId),
+                  invoice_id: parseInt(formData.originalSaleId),
                   product_id: extra.product_id,
                   quantity: extra.quantity,
-                  reason: extra.reason,
-                  refund_type: formData.refundType || "Cash",
+                  reason: extra.reason || "",
+                  refund_type: (formData.refundType || "cash").toLowerCase(),
                   total_refund: Number(extraRefundAmount.toFixed(2)),
-                  ...(localStorage.getItem("tenant_id")
-                    ? {
-                        tenant_id: parseInt(
-                          localStorage.getItem("tenant_id") as string
-                        ),
-                      }
-                    : {}),
                 };
                 try {
                   await salesReturnService.create(extraPayload);
@@ -2444,22 +2447,12 @@ const GroceryInventory = () => {
           setSubmitting(true);
 
           const itemsPayload = (returnItems || [])
-            .filter((it) => it.productId && (it.qty || it.quantity))
+            .filter((it) => it.productId && it.qty)
             .map((it) => ({
               product_id: parseInt(it.productId),
-              quantity: parseInt(it.qty || it.quantity || 0),
+              quantity: parseInt(String(it.qty) || "0"),
               reason: it.reason || "",
             }));
-
-          if (!formData.supplierId && !formData.supplier_id) {
-            toast({
-              title: "Missing Supplier",
-              description: "Please provide the supplier ID.",
-              variant: "destructive",
-            });
-            setSubmitting(false);
-            return;
-          }
 
           if (itemsPayload.length === 0) {
             toast({
@@ -2536,15 +2529,27 @@ const GroceryInventory = () => {
           });
           setPurchaseReturns((prev) => [...optimisticEntries, ...prev]);
 
+          if (!formData.purchaseId) {
+            toast({
+              title: "Missing Purchase Order",
+              description: "Please select the original purchase order.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
           const firstItem = itemsPayload[0];
           const payload = {
-            Suppliers_id: parseInt(formData.supplierId || formData.supplier_id),
-            refund_method: formData.refundMethod || "Cash",
-            select_product: firstItem.product_id.toString(),
-            quantity: firstItem.quantity,
-            reason: firstItem.reason,
+            purchase_id: parseInt(formData.purchaseId),
+            supplier_id: formData.supplierId
+              ? parseInt(formData.supplierId)
+              : undefined,
             product_id: firstItem.product_id,
-            tenant_id: tenantId,
+            quantity: firstItem.quantity,
+            refund_method: (formData.refundMethod || "cash").toLowerCase(),
+            reason: firstItem.reason,
+            total_refund: undefined, // Let backend calculate
           };
 
           console.log(
@@ -2562,15 +2567,17 @@ const GroceryInventory = () => {
               for (let i = 1; i < itemsPayload.length; i++) {
                 const extra = itemsPayload[i];
                 const extraPayload = {
-                  Suppliers_id: parseInt(
-                    formData.supplierId || formData.supplier_id
-                  ),
-                  refund_method: formData.refundMethod || "Cash",
-                  select_product: extra.product_id.toString(),
-                  quantity: extra.quantity,
-                  reason: extra.reason,
+                  purchase_id: parseInt(formData.purchaseId),
+                  supplier_id: formData.supplierId
+                    ? parseInt(formData.supplierId)
+                    : undefined,
                   product_id: extra.product_id,
-                  tenant_id: tenantId,
+                  quantity: extra.quantity,
+                  refund_method: (
+                    formData.refundMethod || "cash"
+                  ).toLowerCase(),
+                  reason: extra.reason,
+                  total_refund: undefined,
                 };
                 try {
                   await purchaseReturnService.create(extraPayload);
@@ -2808,6 +2815,7 @@ const GroceryInventory = () => {
         setFormData={setFormData}
         products={products}
         sales={sales}
+        purchases={purchases}
         saleProducts={saleProducts}
         setSaleProducts={setSaleProducts}
         purchaseProducts={purchaseProducts}
@@ -2817,6 +2825,7 @@ const GroceryInventory = () => {
         onClose={closeModal}
         onSubmit={handleSubmit}
         productCatalog={productCatalog}
+        suppliers={suppliers}
         submitting={submitting} // ADD THIS
       />
     </div>

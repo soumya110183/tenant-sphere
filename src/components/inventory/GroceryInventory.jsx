@@ -25,6 +25,7 @@ import {
   purchaseService,
   salesReturnService,
   purchaseReturnService,
+  supplierService,
 } from "@/services/api";
 
 const GroceryInventory = () => {
@@ -37,6 +38,7 @@ const GroceryInventory = () => {
   const [baseInventory, setBaseInventory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [productCatalog, setProductCatalog] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [sales, setSales] = useState([]);
   const [salesReturns, setSalesReturns] = useState([]);
@@ -116,6 +118,17 @@ const GroceryInventory = () => {
   const loadProducts = async () => {
     const data = await productService.getAll();
     setProductCatalog(data.data);
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      const response = await supplierService.getAll();
+      console.log("Suppliers loaded:", response);
+      setSuppliers(response.data || []);
+    } catch (error) {
+      console.error("Error loading suppliers:", error);
+      setSuppliers([]);
+    }
   };
 
   const loadSalesReturns = async () => {
@@ -941,6 +954,7 @@ const GroceryInventory = () => {
   // Load data on component mount
   useEffect(() => {
     loadProducts();
+    loadSuppliers();
     loadInventory();
     loadPurchases();
     loadSales();
@@ -1100,6 +1114,7 @@ const GroceryInventory = () => {
         onClose={closeModal}
         onSubmit={handleSubmit}
         productCatalog={productCatalog}
+        suppliers={suppliers}
         submitting={submitting}
       />
     </div>

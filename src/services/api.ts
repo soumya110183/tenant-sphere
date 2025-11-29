@@ -779,3 +779,28 @@ export const staffService = {
   // Delete staff user
   delete: async (id) => (await api.delete(`/api/staff/${id}`)).data,
 };
+
+// ===============================
+// SUPPLIER API
+// ===============================
+export const supplierService = {
+  // Get all suppliers
+  getAll: async (search = "") => {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    return (await api.get("/api/suppliers", { params })).data;
+  },
+
+  // Get single supplier detail
+  getById: async (id) => (await api.get(`/api/suppliers/${id}`)).data,
+
+  // Create supplier
+  create: async (data) => (await api.post("/api/suppliers", data)).data,
+
+  // Update supplier
+  update: async (id, data) =>
+    (await api.put(`/api/suppliers/${id}`, data)).data,
+
+  // Delete supplier
+  delete: async (id) => (await api.delete(`/api/suppliers/${id}`)).data,
+};

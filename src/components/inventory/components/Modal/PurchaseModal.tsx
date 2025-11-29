@@ -8,6 +8,7 @@ interface PurchaseModalProps {
   purchaseProducts: any[];
   setPurchaseProducts: (products: any[]) => void;
   productCatalog: any[];
+  suppliers: any[];
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   submitting: boolean;
@@ -19,6 +20,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
   purchaseProducts,
   setPurchaseProducts,
   productCatalog,
+  suppliers,
   onSubmit,
   onClose,
   submitting,
@@ -34,22 +36,26 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Supplier ID *
-            </label>
-            <input
-              type="number"
+            <label className="block text-sm font-medium mb-1">Supplier *</label>
+            <select
               required
-              min="1"
               className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-              value={formData.supplier_id || 2}
+              value={formData.supplier_id || ""}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  supplier_id: parseInt(e.target.value) || 1,
+                  supplier_id: parseInt(e.target.value) || undefined,
                 })
               }
-            />
+            >
+              <option value="">Select Supplier</option>
+              {(suppliers || []).map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                  {supplier.contact_person && ` - ${supplier.contact_person}`}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">

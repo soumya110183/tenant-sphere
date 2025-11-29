@@ -23,6 +23,7 @@ const Modal = ({
   onClose,
   onSubmit,
   productCatalog,
+  suppliers,
   submitting,
 }) => {
   if (!showModal) return null;
@@ -113,6 +114,7 @@ const Modal = ({
             purchaseProducts={purchaseProducts}
             setPurchaseProducts={setPurchaseProducts}
             productCatalog={productCatalog}
+            suppliers={suppliers}
             onSubmit={onSubmit}
             onClose={onClose}
             submitting={submitting}
