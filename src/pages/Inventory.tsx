@@ -172,6 +172,61 @@ const Modal = ({
   console.log("modal:", productCatalog);
   // const [productCatalog,setProductCatalog] = useState([]);
 
+  // Purchased products (for purchase return flow) derived from selected purchase
+  const [purchaseReturnProducts, setPurchaseReturnProducts] = useState<any[]>(
+    []
+  );
+  useEffect(() => {
+    if (modalType !== "purchaseReturn") return;
+    const purchaseId = formData.purchaseId;
+    if (!purchaseId) {
+      setPurchaseReturnProducts([]);
+      return;
+    }
+    const found = purchases.find(
+      (p: any) => String(p.id) === String(purchaseId)
+    );
+    const items = found?.purchase_items || found?.items;
+    if (Array.isArray(items) && items.length) {
+      setPurchaseReturnProducts(
+        items.map((it: any) => ({
+          product_id: it.product_id,
+          name:
+            it.products?.name || it.product_name || `Product #${it.product_id}`,
+          quantityPurchased: Number(it.quantity || 0),
+          cost_price: Number(it.cost_price || it.unit_cost || 0),
+          tax_percent: Number(it.tax_percent || it.tax || 0),
+        }))
+      );
+      return;
+    }
+    // Fallback remote fetch if local purchase object doesn't contain items
+    (async () => {
+      try {
+        const resp = await purchaseService.getById(purchaseId);
+        const remote = resp?.data?.data;
+        const remoteItems = remote?.purchase_items || remote?.items;
+        if (Array.isArray(remoteItems) && remoteItems.length) {
+          setPurchaseReturnProducts(
+            remoteItems.map((it: any) => ({
+              product_id: it.product_id,
+              name:
+                it.products?.name ||
+                it.product_name ||
+                `Product #${it.product_id}`,
+              quantityPurchased: Number(it.quantity || 0),
+              cost_price: Number(it.cost_price || it.unit_cost || 0),
+              tax_percent: Number(it.tax_percent || it.tax || 0),
+            }))
+          );
+        } else setPurchaseReturnProducts([]);
+      } catch (err) {
+        console.error("Failed to fetch purchase items", err);
+        setPurchaseReturnProducts([]);
+      }
+    })();
+  }, [modalType, formData.purchaseId, purchases]);
+
   const getModalTitle = () => {
     const titles = {
       inventory: editingItem ? "Update Inventory" : "Add Inventory",
@@ -872,125 +927,315 @@ const Modal = ({
 
             {modalType === "purchaseReturn" && (
               <div className="space-y-4">
+                {/* Supplier & Purchase Selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Purchase Order *
+                      Supplier *
                     </label>
                     <select
                       required
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.purchaseId || ""}
+                      value={formData.supplierId || ""}
                       onChange={(e) => {
-                        const selectedPurchase = purchases.find(
-                          (p: any) => String(p.id) === e.target.value
+                        const sup = suppliers.find(
+                          (s: any) => String(s.id) === e.target.value
                         );
                         setFormData({
                           ...formData,
-                          purchaseId: e.target.value,
-                          supplierId: selectedPurchase?.supplier_id || "",
+                          supplierId: e.target.value,
+                          supplierName: sup?.name || "",
+                          purchaseId: "",
                         });
+                        setReturnItems([]);
                       }}
                     >
-                      <option value="">Select Purchase Order</option>
-                      {purchases.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          {p.invoice_number || `Purchase #${p.id}`} -{" "}
-                          {new Date(p.created_at).toLocaleDateString()}
+                      <option value="">Select Supplier...</option>
+                      {suppliers.map((sup: any) => (
+                        <option key={sup.id} value={sup.id}>
+                          {sup.name}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Refund Method *
-                    </label>
-                    <select
-                      required
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.refundMethod || "cash"}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          refundMethod: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="credit_note">Credit Note</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <label className="font-medium text-sm">
-                      Return Items *
-                    </label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() =>
-                        setReturnItems([
-                          ...returnItems,
-                          { productId: "", qty: 1, reason: "" },
-                        ])
-                      }
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Add Item
-                    </Button>
-                  </div>
-                  {returnItems.map((ri, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
-                    >
+                  {formData.supplierId && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Purchase Order *
+                      </label>
                       <select
                         required
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.productId}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].productId = e.target.value;
-                          setReturnItems(updated);
-                        }}
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                        value={formData.purchaseId || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            purchaseId: e.target.value,
+                          })
+                        }
                       >
-                        {products.map((p) => (
-                          <option key={p.id} value={p.product_id}>
-                            {" "}
-                            {/* Change p.id to p.product_id */}
-                            {p.name}
-                          </option>
-                        ))}
+                        <option value="">Select Purchase...</option>
+                        {purchases
+                          .filter(
+                            (p: any) =>
+                              String(p.supplier_id) ===
+                              String(formData.supplierId)
+                          )
+                          .map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              PO #{p.invoice_number || p.id}
+                            </option>
+                          ))}
                       </select>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        placeholder="Qty"
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.qty}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].qty = parseInt(e.target.value) || 1;
-                          setReturnItems(updated);
-                        }}
-                      />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Reason"
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.reason}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].reason = e.target.value;
-                          setReturnItems(updated);
-                        }}
-                      />
                     </div>
-                  ))}
+                  )}
                 </div>
+
+                {/* Return Items */}
+                {formData.purchaseId && (
+                  <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold text-sm">Return Items *</h3>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          setReturnItems([
+                            ...returnItems,
+                            { productId: "", qty: 1, reason: "" },
+                          ])
+                        }
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add Item
+                      </Button>
+                    </div>
+                    {returnItems.map((ri, idx) => {
+                      const purchased = purchaseReturnProducts.find(
+                        (pr: any) =>
+                          String(pr.product_id) === String(ri.productId)
+                      );
+                      const inventoryMatch = products.find(
+                        (p: any) =>
+                          String(p.product_id) === String(ri.productId) ||
+                          String(p.id) === String(ri.productId)
+                      );
+                      const maxReturn = Math.min(
+                        Number(purchased?.quantityPurchased || 0),
+                        Number(inventoryMatch?.quantity || 0)
+                      );
+                      return (
+                        <div
+                          key={idx}
+                          className="grid grid-cols-12 gap-2 p-3 border rounded-md bg-background"
+                        >
+                          <div className="col-span-12 sm:col-span-5">
+                            <select
+                              required
+                              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                              value={ri.productId}
+                              onChange={(e) => {
+                                const upd = [...returnItems];
+                                upd[idx].productId = e.target.value;
+                                upd[idx].qty = 1;
+                                setReturnItems(upd);
+                              }}
+                            >
+                              <option value="">Select Product</option>
+                              {purchaseReturnProducts.map((pr: any) => (
+                                <option
+                                  key={pr.product_id}
+                                  value={pr.product_id}
+                                >
+                                  {pr.name} (Purchased: {pr.quantityPurchased})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-6 sm:col-span-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={maxReturn || 1}
+                              disabled={!ri.productId}
+                              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                              value={ri.qty}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                const upd = [...returnItems];
+                                upd[idx].qty = Math.min(val, maxReturn || 1);
+                                setReturnItems(upd);
+                              }}
+                            />
+                            {ri.productId && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Max: {maxReturn}
+                              </p>
+                            )}
+                          </div>
+                          <div className="col-span-6 sm:col-span-4">
+                            <select
+                              required
+                              disabled={!ri.productId}
+                              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                              value={ri.reason}
+                              onChange={(e) => {
+                                const upd = [...returnItems];
+                                upd[idx].reason = e.target.value;
+                                setReturnItems(upd);
+                              }}
+                            >
+                              <option value="">Reason...</option>
+                              <option value="damaged">Damaged</option>
+                              <option value="expired">Expired</option>
+                              <option value="wrong_product">
+                                Wrong Product
+                              </option>
+                              <option value="excess_stock">Excess Stock</option>
+                              <option value="quality_issue">
+                                Quality Issue
+                              </option>
+                            </select>
+                          </div>
+                          <div className="col-span-12 sm:col-span-1 flex items-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setReturnItems(
+                                  returnItems.filter((_, i) => i !== idx)
+                                )
+                              }
+                              className="w-full"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {returnItems.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Click "Add Item" to start adding return items
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Refund Method */}
+                {formData.purchaseId && returnItems.length > 0 && (
+                  <div className="border rounded-lg p-4 bg-background space-y-2">
+                    <h3 className="font-semibold text-sm mb-2">
+                      Refund Method *
+                    </h3>
+                    {["cash", "credit_note", "account"].map((m) => (
+                      <label
+                        key={m}
+                        className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-muted/50 text-sm"
+                      >
+                        <input
+                          type="radio"
+                          name="refundMethod"
+                          value={m}
+                          checked={formData.refundMethod === m}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              refundMethod: e.target.value,
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        <span className="capitalize">
+                          {m.replace("_", " ")}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* Refund Summary */}
+                {formData.purchaseId && returnItems.length > 0 && (
+                  <div className="border-2 border-primary rounded-lg p-4 bg-primary/5">
+                    <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" /> Refund Summary
+                    </h3>
+                    {(() => {
+                      let refundTotal = 0;
+                      let lines: {
+                        name: string;
+                        qty: number;
+                        cost: number;
+                        vat: number;
+                        subtotal: number;
+                      }[] = [];
+                      returnItems.forEach((ri) => {
+                        if (!ri.productId || !ri.qty) return;
+                        const purchased = purchaseReturnProducts.find(
+                          (pi: any) =>
+                            String(pi.product_id) === String(ri.productId)
+                        );
+                        const fallback = products.find(
+                          (p: any) =>
+                            String(p.product_id) === String(ri.productId) ||
+                            String(p.id) === String(ri.productId)
+                        );
+                        const name =
+                          purchased?.name ||
+                          fallback?.name ||
+                          `Product #${ri.productId}`;
+                        const cost = Number(
+                          purchased?.cost_price ||
+                            fallback?.cost_price ||
+                            fallback?.costPrice ||
+                            0
+                        );
+                        const taxP = Number(
+                          purchased?.tax_percent ||
+                            fallback?.tax_percent ||
+                            fallback?.tax ||
+                            0
+                        );
+                        const qty = Number(ri.qty);
+                        const subtotal = cost * qty;
+                        const vat = (subtotal * taxP) / 100;
+                        refundTotal += subtotal + vat;
+                        lines.push({ name, qty, cost, vat, subtotal });
+                      });
+                      const totalVat = lines.reduce((s, l) => s + l.vat, 0);
+                      return (
+                        <div className="space-y-2 text-xs">
+                          {lines.map((l, i) => (
+                            <div key={i} className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                {l.name} × {l.qty} @ AED {l.cost.toFixed(2)}
+                              </span>
+                              <span className="font-medium">
+                                AED {l.subtotal.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                          {totalVat > 0 && (
+                            <div className="flex justify-between border-t pt-1">
+                              <span className="text-muted-foreground">
+                                VAT Reversal
+                              </span>
+                              <span className="font-medium">
+                                AED {totalVat.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center border-t pt-1">
+                            <span className="font-bold">Total Refund:</span>
+                            <span className="font-bold text-primary text-lg">
+                              AED {refundTotal.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1222,7 +1467,7 @@ const StockView = ({
             <tbody>
               {isLoading ? ( // Show spinner when loading
                 <tr>
-                  <td colSpan="11" className="text-center py-12">
+                  <td colSpan={11} className="text-center py-12">
                     <div className="flex justify-center items-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
@@ -1231,7 +1476,7 @@ const StockView = ({
               ) : products.length === 0 ? ( // Show empty message when no products
                 <tr>
                   <td
-                    colSpan="11"
+                    colSpan={11}
                     className="text-center py-8 text-muted-foreground text-sm"
                   >
                     No inventory items found. Add your first inventory item to
@@ -1323,7 +1568,7 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
               {sales.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan={6}
                     className="text-center py-8 text-muted-foreground text-sm"
                   >
                     No sales recorded yet.
@@ -1381,7 +1626,7 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
                     </tr>
                     {expandedRows.has(sale.id) && sale.invoice_items && (
                       <tr className="bg-muted/20">
-                        <td colSpan="6" className="py-3 px-2 sm:px-4">
+                        <td colSpan={6} className="py-3 px-2 sm:px-4">
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground">
                               Items Sold:
@@ -1472,7 +1717,7 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
                 {salesReturns.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan={6}
                       className="text-center py-8 text-muted-foreground text-sm"
                     >
                       No sales returns yet.
@@ -1551,7 +1796,7 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
                 {purchaseReturns.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan={5}
                       className="text-center py-8 text-muted-foreground text-sm"
                     >
                       No purchase returns yet.
@@ -1634,7 +1879,7 @@ const AdjustmentsView = ({ stockAdjustments, openModal }) => (
             {stockAdjustments.length === 0 ? (
               <tr>
                 <td
-                  colSpan="6"
+                  colSpan={6}
                   className="text-center py-8 text-muted-foreground text-sm"
                 >
                   No stock adjustments yet.
@@ -2440,7 +2685,7 @@ const GroceryInventory = () => {
             const netPrice = Number(netPriceRaw) || 0;
             const lineRefund = netPrice * it.quantity;
             return {
-              id: `temp-${Date.now()}-${idx}`,
+              id: Date.now() + idx,
               originalSaleId: parseInt(formData.originalSaleId),
               date: nowISO,
               productName: productMatch?.name || `Product #${it.product_id}`,
@@ -2455,7 +2700,6 @@ const GroceryInventory = () => {
                   name: productMatch?.name || `Product #${it.product_id}`,
                   qty: it.quantity,
                   reason: it.reason || "N/A",
-                  productId: it.product_id,
                 },
               ],
             } as UISalesReturn & { _optimistic?: boolean };
@@ -2578,6 +2822,25 @@ const GroceryInventory = () => {
         try {
           setSubmitting(true);
 
+          if (!formData.supplierId) {
+            toast({
+              title: "Missing Supplier",
+              description: "Please select the supplier.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+          if (!formData.purchaseId) {
+            toast({
+              title: "Missing Purchase Order",
+              description: "Please select the original purchase order.",
+              variant: "destructive",
+            });
+            setSubmitting(false);
+            return;
+          }
+
           const itemsPayload = (returnItems || [])
             .filter((it) => it.productId && it.qty)
             .map((it) => ({
@@ -2596,38 +2859,7 @@ const GroceryInventory = () => {
             return;
           }
 
-          // Resolve tenant_id
-          let tenantId: number | string | undefined =
-            user?.tenant_id || user?.tenantId;
-
-          if (!tenantId) {
-            const tenantIdRaw = localStorage.getItem("tenant_id");
-            if (tenantIdRaw) {
-              tenantId = /^\d+$/.test(tenantIdRaw)
-                ? parseInt(tenantIdRaw)
-                : tenantIdRaw;
-            }
-          }
-
-          console.log("Purchase Return - User:", user);
-          console.log(
-            "Purchase Return - Resolved tenant_id:",
-            tenantId,
-            "Type:",
-            typeof tenantId
-          );
-
-          if (!tenantId) {
-            toast({
-              title: "Missing Tenant",
-              description: "Tenant ID not found. Please log in again.",
-              variant: "destructive",
-            });
-            setSubmitting(false);
-            return;
-          }
-
-          // Optimistically add entries marked with _optimistic flag
+          // Optimistic UI entries with cost+VAT calculation
           const nowISO = new Date().toISOString();
           const optimisticEntries = itemsPayload.map((it, idx) => {
             const productMatch = products.find(
@@ -2635,19 +2867,27 @@ const GroceryInventory = () => {
                 String(p.product_id) === String(it.product_id) ||
                 String(p.id) === String(it.product_id)
             );
+            const costPrice = Number(
+              productMatch?.cost_price || productMatch?.costPrice || 0
+            );
+            const taxPercent = Number(
+              productMatch?.tax_percent || productMatch?.tax || 0
+            );
+            const lineSubtotal = costPrice * it.quantity;
+            const lineVat = (lineSubtotal * taxPercent) / 100;
+            const lineTotal = lineSubtotal + lineVat;
             return {
-              id: `temp-${Date.now()}-${idx}`,
-              supplierId: parseInt(formData.supplierId || formData.supplier_id),
+              id: Date.now() + idx,
+              supplierId: parseInt(formData.supplierId),
               supplierName:
-                formData.supplierName ||
-                `Supplier #${formData.supplierId || formData.supplier_id}`,
+                formData.supplierName || `Supplier #${formData.supplierId}`,
               date: nowISO,
               productName: productMatch?.name || `Product #${it.product_id}`,
               productId: it.product_id,
               quantity: it.quantity,
               reason: it.reason || "N/A",
-              refundMethod: formData.refundMethod || "Cash",
-              amountAdjusted: 0,
+              refundMethod: formData.refundMethod || "cash",
+              amountAdjusted: lineTotal,
               _optimistic: true,
               items: [
                 {
@@ -2661,55 +2901,66 @@ const GroceryInventory = () => {
           });
           setPurchaseReturns((prev) => [...optimisticEntries, ...prev]);
 
-          if (!formData.purchaseId) {
-            toast({
-              title: "Missing Purchase Order",
-              description: "Please select the original purchase order.",
-              variant: "destructive",
-            });
-            setSubmitting(false);
-            return;
-          }
-
           const firstItem = itemsPayload[0];
+          const firstProduct = products.find(
+            (p: any) =>
+              String(p.product_id) === String(firstItem.product_id) ||
+              String(p.id) === String(firstItem.product_id)
+          );
+          const firstCostPrice = Number(
+            firstProduct?.cost_price || firstProduct?.costPrice || 0
+          );
+          const firstTaxPercent = Number(
+            firstProduct?.tax_percent || firstProduct?.tax || 0
+          );
+          const firstSubtotal = firstCostPrice * firstItem.quantity;
+          const firstVat = (firstSubtotal * firstTaxPercent) / 100;
+          const firstTotalRefund = firstSubtotal + firstVat;
+
           const payload = {
             purchase_id: parseInt(formData.purchaseId),
-            supplier_id: formData.supplierId
-              ? parseInt(formData.supplierId)
-              : undefined,
+            supplier_id: parseInt(formData.supplierId),
             product_id: firstItem.product_id,
             quantity: firstItem.quantity,
             refund_method: (formData.refundMethod || "cash").toLowerCase(),
-            reason: firstItem.reason,
-            total_refund: undefined, // Let backend calculate
+            reason: firstItem.reason || "",
+            total_refund: Number(firstTotalRefund.toFixed(2)),
           };
 
           console.log(
             "Purchase Return Payload:",
             JSON.stringify(payload, null, 2)
           );
-
-          // Submit to backend - backend performs atomic inventory update
           const response = await purchaseReturnService.create(payload);
           const ok = response?.data?.purchase_return || response?.data;
-
           if (ok) {
-            // Handle multiple items
             if (itemsPayload.length > 1) {
               for (let i = 1; i < itemsPayload.length; i++) {
                 const extra = itemsPayload[i];
+                const extraProduct = products.find(
+                  (p: any) =>
+                    String(p.product_id) === String(extra.product_id) ||
+                    String(p.id) === String(extra.product_id)
+                );
+                const extraCostPrice = Number(
+                  extraProduct?.cost_price || extraProduct?.costPrice || 0
+                );
+                const extraTaxPercent = Number(
+                  extraProduct?.tax_percent || extraProduct?.tax || 0
+                );
+                const extraSubtotal = extraCostPrice * extra.quantity;
+                const extraVat = (extraSubtotal * extraTaxPercent) / 100;
+                const extraTotalRefund = extraSubtotal + extraVat;
                 const extraPayload = {
                   purchase_id: parseInt(formData.purchaseId),
-                  supplier_id: formData.supplierId
-                    ? parseInt(formData.supplierId)
-                    : undefined,
+                  supplier_id: parseInt(formData.supplierId),
                   product_id: extra.product_id,
                   quantity: extra.quantity,
                   refund_method: (
                     formData.refundMethod || "cash"
                   ).toLowerCase(),
-                  reason: extra.reason,
-                  total_refund: undefined,
+                  reason: extra.reason || "",
+                  total_refund: Number(extraTotalRefund.toFixed(2)),
                 };
                 try {
                   await purchaseReturnService.create(extraPayload);
@@ -2721,18 +2972,14 @@ const GroceryInventory = () => {
                 }
               }
             }
-
-            // Backend updated inventory atomically - reload authoritative data
             await loadInventory();
             await loadPurchaseReturns();
-
             toast({
               title: "Purchase Return Created",
               description: "Returned items subtracted from inventory.",
             });
             closeModal();
           } else {
-            // Remove optimistic entries on failure
             setPurchaseReturns((prev) =>
               prev.filter((r: any) => !r._optimistic)
             );
@@ -2744,7 +2991,6 @@ const GroceryInventory = () => {
             });
           }
         } catch (error) {
-          // Remove optimistic entries on error
           setPurchaseReturns((prev) => prev.filter((r: any) => !r._optimistic));
           console.error("Error creating purchase return:", error);
           const errorMsg =
