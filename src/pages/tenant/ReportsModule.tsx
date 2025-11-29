@@ -21,27 +21,10 @@ import {
   Loader2,
   FileDown,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Pie,
-  PieChart as RePieChart,
-  Cell,
-  Legend,
-} from "recharts";
 
 import { useState } from "react";
 import { useReports } from "@/hooks/useReports";
 import { pdfReportService } from "@/services/api";
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 const ReportsModule = () => {
   const { toast } = useToast();
@@ -72,11 +55,12 @@ const ReportsModule = () => {
     granularity,
   });
 
-  // Combine sales and purchase series for analytics chart
+  // Combine sales and purchase series for analytics
   const combinedSeries = salesSeries.map((s, idx) => ({
     date: s.date,
     sales: s.sales || 0,
     purchase: purchaseSeries[idx]?.purchase || 0,
+    profit: (s.sales || 0) - (purchaseSeries[idx]?.purchase || 0),
   }));
 
   // Handle PDF downloads
@@ -373,11 +357,11 @@ const ReportsModule = () => {
           </Card>
         </TabsContent>
 
-        {/* SALES */}
+        {/* SALES - Converted from Chart to Table */}
         <TabsContent value="sales">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Sales Report</CardTitle>
+              <CardTitle>Sales Report - Detailed Breakdown</CardTitle>
               <Button
                 size="sm"
                 onClick={() => handleDownloadPDF("sales")}
@@ -391,30 +375,75 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="sales"
-                    stroke="hsl(var(--primary))"
-                    name="Sales (AED)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Sales Amount (AED)</TableHead>
+                      <TableHead>Number of Invoices</TableHead>
+                      <TableHead>Average Invoice Value</TableHead>
+                      <TableHead>Growth Rate</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {salesSeries.map((sale, index) => {
+                      const prevSale = salesSeries[index - 1]?.sales || 0;
+                      const growthRate = prevSale 
+                        ? ((sale.sales - prevSale) / prevSale * 100)
+                        : 0;
+                      
+                      return (
+                        <TableRow key={sale.date}>
+                          <TableCell className="font-medium">{sale.date}</TableCell>
+                          <TableCell>AED {sale.sales?.toLocaleString() || '0'}</TableCell>
+                          <TableCell>{sale.invoiceCount || 'N/A'}</TableCell>
+                          <TableCell>
+                            AED {sale.avgInvoiceValue?.toLocaleString() || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                growthRate >= 0 ? "default" : "destructive"
+                              }
+                            >
+                              {growthRate >= 0 ? '+' : ''}{growthRate.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                sale.sales > (salesSeries[index - 1]?.sales || 0)
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {sale.sales > (salesSeries[index - 1]?.sales || 0)
+                                ? "Increasing"
+                                : "Decreasing"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {salesSeries.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">
+                  No sales data available for the selected period.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* PURCHASES */}
+        {/* PURCHASES - Converted from Chart to Table */}
         <TabsContent value="purchases">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Purchase Report</CardTitle>
+              <CardTitle>Purchase Report - Detailed Breakdown</CardTitle>
               <Button
                 size="sm"
                 onClick={() => handleDownloadPDF("purchases")}
@@ -428,20 +457,54 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={purchaseSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="purchase"
-                    fill="hsl(var(--primary))"
-                    name="Purchases (AED)"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Purchase Amount (AED)</TableHead>
+                      <TableHead>Number of Orders</TableHead>
+                      <TableHead>Average Order Value</TableHead>
+                      <TableHead>Vendor Count</TableHead>
+                      <TableHead>Growth Rate</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {purchaseSeries.map((purchase, index) => {
+                      const prevPurchase = purchaseSeries[index - 1]?.purchase || 0;
+                      const growthRate = prevPurchase 
+                        ? ((purchase.purchase - prevPurchase) / prevPurchase * 100)
+                        : 0;
+                      
+                      return (
+                        <TableRow key={purchase.date}>
+                          <TableCell className="font-medium">{purchase.date}</TableCell>
+                          <TableCell>AED {purchase.purchase?.toLocaleString() || '0'}</TableCell>
+                          <TableCell>{purchase.orderCount || 'N/A'}</TableCell>
+                          <TableCell>
+                            AED {purchase.avgOrderValue?.toLocaleString() || 'N/A'}
+                          </TableCell>
+                          <TableCell>{purchase.vendorCount || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                growthRate >= 0 ? "default" : "destructive"
+                              }
+                            >
+                              {growthRate >= 0 ? '+' : ''}{growthRate.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {purchaseSeries.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">
+                  No purchase data available for the selected period.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -464,122 +527,177 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Available</TableHead>
-                    <TableHead>Stock Value</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {stockReport.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.product}</TableCell>
-                      <TableCell>{item.available}</TableCell>
-                      <TableCell>AED {item.value.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            item.status === "Low" ? "destructive" : "default"
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </TableCell>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Available Stock</TableHead>
+                      <TableHead>Minimum Stock Level</TableHead>
+                      <TableHead>Stock Value (AED)</TableHead>
+                      <TableHead>Cost Price</TableHead>
+                      <TableHead>Selling Price</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* PAYMENTS */}
-        <TabsContent value="payments">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <RePieChart>
-                    <Pie
-                      data={paymentSummary}
-                      dataKey="value"
-                      nameKey="mode"
-                      outerRadius={100}
-                      label
-                    >
-                      {paymentSummary.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </RePieChart>
-                </ResponsiveContainer>
-                <div className="space-y-4">
-                  {paymentSummary.map((pm, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{
-                            backgroundColor: COLORS[idx % COLORS.length],
-                          }}
-                        />
-                        <span className="font-medium">{pm.mode}</span>
-                      </div>
-                      <span className="text-lg font-bold">
-                        AED {pm.value.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                  </TableHeader>
+                  <TableBody>
+                    {stockReport.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.product}</TableCell>
+                        <TableCell>{item.sku || 'N/A'}</TableCell>
+                        <TableCell>{item.available}</TableCell>
+                        <TableCell>{item.minStockLevel || 'N/A'}</TableCell>
+                        <TableCell>AED {item.value?.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell>AED {item.costPrice?.toFixed(2) || 'N/A'}</TableCell>
+                        <TableCell>AED {item.sellingPrice?.toFixed(2) || 'N/A'}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              item.status === "Low" 
+                                ? "destructive" 
+                                : item.status === "Out of Stock"
+                                ? "destructive"
+                                : "default"
+                            }
+                          >
+                            {item.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ANALYTICS */}
+        {/* PAYMENTS - Converted from Chart to Table */}
+        <TabsContent value="payments">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Summary - Detailed Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Amount (AED)</TableHead>
+                      <TableHead>Percentage of Total</TableHead>
+                      <TableHead>Transaction Count</TableHead>
+                      <TableHead>Average Transaction</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paymentSummary.map((payment, index) => {
+                      const total = paymentSummary.reduce((sum, pm) => sum + pm.value, 0);
+                      const percentage = total > 0 ? (payment.value / total) * 100 : 0;
+                      
+                      return (
+                        <TableRow key={payment.mode}>
+                          <TableCell className="font-medium">{payment.mode}</TableCell>
+                          <TableCell>AED {payment.value.toLocaleString()}</TableCell>
+                          <TableCell>{percentage.toFixed(1)}%</TableCell>
+                          <TableCell>{payment.transactionCount || 'N/A'}</TableCell>
+                          <TableCell>
+                            AED {payment.avgTransaction?.toLocaleString() || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                percentage > 30 ? "default" : "secondary"
+                              }
+                            >
+                              {percentage > 30 ? "Primary" : "Secondary"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {paymentSummary.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">
+                  No payment data available.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ANALYTICS - Converted from Chart to Table */}
         <TabsContent value="analytics">
           <Card>
             <CardHeader>
-              <CardTitle>Overall Analytics</CardTitle>
+              <CardTitle>Overall Analytics - Comparative Analysis</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={combinedSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="sales"
-                    stroke="#82ca9d"
-                    name="Sales (AED)"
-                    strokeWidth={2}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="purchase"
-                    stroke="#8884d8"
-                    name="Purchases (AED)"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Sales (AED)</TableHead>
+                      <TableHead>Purchases (AED)</TableHead>
+                      <TableHead>Profit (AED)</TableHead>
+                      <TableHead>Profit Margin %</TableHead>
+                      <TableHead>Sales vs Purchases</TableHead>
+                      <TableHead>Efficiency Ratio</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {combinedSeries.map((item) => {
+                      const profitMargin = item.sales > 0 ? (item.profit / item.sales) * 100 : 0;
+                      const salesVsPurchases = item.purchase > 0 ? (item.sales / item.purchase) * 100 : 0;
+                      const efficiency = item.purchase > 0 ? (item.profit / item.purchase) * 100 : 0;
+                      
+                      return (
+                        <TableRow key={item.date}>
+                          <TableCell className="font-medium">{item.date}</TableCell>
+                          <TableCell>AED {item.sales.toLocaleString()}</TableCell>
+                          <TableCell>AED {item.purchase.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <span className={item.profit >= 0 ? "text-green-600" : "text-red-600"}>
+                              AED {item.profit.toLocaleString()}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={profitMargin >= 20 ? "default" : "secondary"}
+                            >
+                              {profitMargin.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={salesVsPurchases >= 100 ? "default" : "secondary"}
+                            >
+                              {salesVsPurchases.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={efficiency >= 15 ? "default" : efficiency >= 0 ? "secondary" : "destructive"}
+                            >
+                              {efficiency.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {combinedSeries.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">
+                  No analytics data available for the selected period.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
