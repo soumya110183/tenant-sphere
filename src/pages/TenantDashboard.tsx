@@ -501,7 +501,7 @@ const TenantDashboard = () => {
         <TabsList>
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
           <TabsTrigger value="weekly">Weekly Sales</TabsTrigger>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
+          {/* <TabsTrigger value="sales">Sales</TabsTrigger> */}
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
@@ -516,17 +516,6 @@ const TenantDashboard = () => {
                 <TrendingUp className="h-5 w-5 text-primary" />
                 Revenue Trend (Last 6 Months)
               </CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
-              >
-                {downloadingPDF === "sales" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -572,17 +561,6 @@ const TenantDashboard = () => {
                 <Package className="h-5 w-5 text-primary" />
                 Weekly Sales (Last 7 Days)
               </CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
-              >
-                {downloadingPDF === "sales" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -612,7 +590,7 @@ const TenantDashboard = () => {
           </Card>
         </TabsContent>
 
-        {/* SALES */}
+        {/* SALES
         <TabsContent value="sales">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -642,7 +620,7 @@ const TenantDashboard = () => {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> */}
 
         {/* PURCHASES */}
         <TabsContent value="purchases">
