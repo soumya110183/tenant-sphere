@@ -78,6 +78,7 @@ import {
   X,
   Save,
   Loader2,
+  DollarSign,
 } from "lucide-react";
 import { useInventory } from "@/contexts/InventoryContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -156,10 +157,8 @@ const Modal = ({
             ? matchItem.total / matchItem.quantity
             : 0);
         const netPrice = Number(netPriceRaw) || 0;
-        // If backend total already represents net (after discount), prefer that for full line.
-        const lineTotal = matchItem?.total
-          ? Number(matchItem.total) // assumes already net (after discount)
-          : netPrice * qty;
+        // Calculate line total based on return quantity, not original sale quantity
+        const lineTotal = netPrice * qty;
         totalRefund += lineTotal;
         return {
           productId: ri.productId,
@@ -584,139 +583,272 @@ const Modal = ({
 
             {modalType === "salesReturn" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Original Sale ID *
-                    </label>
-                    <select
-                      required
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.originalSaleId || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          originalSaleId: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">
-                        {sales.length === 0
-                          ? "No sales available"
-                          : "Select Sale/Invoice"}
+                {/* Step 1: Select Invoice */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Select Original Invoice *
+                  </label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                    value={formData.originalSaleId || ""}
+                    onChange={(e) => {
+                      const selectedInvoice = sales.find(
+                        (s) => String(s.id) === e.target.value
+                      );
+                      setFormData({
+                        ...formData,
+                        originalSaleId: e.target.value,
+                      });
+                      // Reset return items when invoice changes
+                      setReturnItems([]);
+                    }}
+                  >
+                    <option value="">
+                      {sales.length === 0
+                        ? "No sales available"
+                        : "Select Invoice..."}
+                    </option>
+                    {sales.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        Invoice #{s.invoice_number || s.id} –{" "}
+                        {s.created_at
+                          ? new Date(s.created_at).toLocaleDateString("en-GB", {
+                              day: "2-digit",
+                              month: "short",
+                            })
+                          : "N/A"}{" "}
+                        – AED {(s.total_amount || 0).toFixed(2)}
+                        {s.customer_name
+                          ? ` – ${s.customer_name}`
+                          : " – Walk-in"}
                       </option>
-                      {sales.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          Invoice #{s.invoice_number || s.id} -{" "}
-                          {s.created_at
-                            ? new Date(s.created_at).toLocaleDateString()
-                            : "N/A"}{" "}
-                          - AED {(s.total_amount || 0).toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Refund Type *
-                    </label>
-                    <select
-                      required
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.refundType || "cash"}
-                      onChange={(e) =>
-                        setFormData({ ...formData, refundType: e.target.value })
-                      }
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="credit_note">Credit Note</option>
-                    </select>
-                  </div>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <label className="font-medium text-sm">
-                      Return Items *
-                    </label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() =>
-                        setReturnItems([
-                          ...returnItems,
-                          { productId: "", qty: 1, reason: "" },
-                        ])
-                      }
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Add Item
-                    </Button>
-                  </div>
-                  {returnItems.map((ri, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2"
-                    >
-                      <select
-                        required
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.productId}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].productId = e.target.value;
-                          setReturnItems(updated);
-                        }}
-                      >
-                        {products.map((p) => (
-                          <option key={p.id} value={p.product_id}>
-                            {" "}
-                            {/* Change p.id to p.product_id */}
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        placeholder="Qty"
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.qty}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].qty = parseInt(e.target.value) || 1;
-                          setReturnItems(updated);
-                        }}
-                      />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Reason"
-                        className="px-3 py-2 border rounded-md bg-background text-sm"
-                        value={ri.reason}
-                        onChange={(e) => {
-                          const updated = [...returnItems];
-                          updated[idx].reason = e.target.value;
-                          setReturnItems(updated);
-                        }}
-                      />
-                    </div>
-                  ))}
+                {/* Step 2: Show Invoice Items if invoice selected */}
+                {formData.originalSaleId &&
+                  (() => {
+                    const selectedInvoice = sales.find(
+                      (s) => String(s.id) === String(formData.originalSaleId)
+                    );
+                    const invoiceItems = selectedInvoice?.invoice_items || [];
 
-                  {formData.originalSaleId && returnItems.length > 0 && (
-                    <div className="mt-4 p-3 bg-primary/5 rounded-lg space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Total Refund:</span>
-                        <span className="font-bold text-lg">
-                          AED {totalRefund.toFixed(2)}
-                        </span>
+                    return invoiceItems.length > 0 ? (
+                      <div className="border rounded-lg p-4 bg-muted/20">
+                        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          Items from this Sale
+                        </h3>
+                        <div className="space-y-2">
+                          {invoiceItems.map((item, idx) => {
+                            const productId =
+                              item.product_id || item.products?.id;
+                            const productName =
+                              item.products?.name ||
+                              item.product_name ||
+                              `Product #${productId}`;
+                            const qtySold = Number(item.quantity || 0);
+                            const itemPrice = Number(
+                              item.net_price ||
+                                item.price ||
+                                item.selling_price ||
+                                0
+                            );
+                            const itemTotal = Number(
+                              item.total || itemPrice * qtySold
+                            );
+
+                            // Check if this item is in returnItems
+                            const returnItemIndex = returnItems.findIndex(
+                              (ri) => String(ri.productId) === String(productId)
+                            );
+                            const isSelected = returnItemIndex >= 0;
+                            const returnItem = isSelected
+                              ? returnItems[returnItemIndex]
+                              : null;
+
+                            return (
+                              <div
+                                key={idx}
+                                className={`grid grid-cols-12 gap-2 p-3 border rounded-md items-center ${
+                                  isSelected
+                                    ? "bg-primary/5 border-primary"
+                                    : "bg-background"
+                                }`}
+                              >
+                                {/* Checkbox */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setReturnItems([
+                                          ...returnItems,
+                                          {
+                                            productId: String(productId),
+                                            qty: 1,
+                                            reason: "",
+                                          },
+                                        ]);
+                                      } else {
+                                        setReturnItems(
+                                          returnItems.filter(
+                                            (ri) =>
+                                              String(ri.productId) !==
+                                              String(productId)
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                </div>
+
+                                {/* Product Info */}
+                                <div className="col-span-5">
+                                  <div className="font-medium text-sm">
+                                    {productName}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Sold: {qtySold} @ AED {itemPrice.toFixed(2)}{" "}
+                                    = AED {itemTotal.toFixed(2)}
+                                  </div>
+                                </div>
+
+                                {/* Return Qty Input */}
+                                <div className="col-span-2">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={qtySold}
+                                    disabled={!isSelected}
+                                    value={returnItem?.qty || 1}
+                                    onChange={(e) => {
+                                      const updated = [...returnItems];
+                                      const value =
+                                        parseInt(e.target.value) || 1;
+                                      updated[returnItemIndex].qty = Math.min(
+                                        value,
+                                        qtySold
+                                      );
+                                      setReturnItems(updated);
+                                    }}
+                                    placeholder="Qty"
+                                    className="w-full px-2 py-1 border rounded text-sm"
+                                  />
+                                </div>
+
+                                {/* Reason Input */}
+                                <div className="col-span-4">
+                                  <input
+                                    type="text"
+                                    disabled={!isSelected}
+                                    required={isSelected}
+                                    value={returnItem?.reason || ""}
+                                    onChange={(e) => {
+                                      const updated = [...returnItems];
+                                      updated[returnItemIndex].reason =
+                                        e.target.value;
+                                      setReturnItems(updated);
+                                    }}
+                                    placeholder="Reason (e.g., damaged, expired)"
+                                    className="w-full px-2 py-1 border rounded text-sm"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {returnItems.length === 0 && (
+                          <p className="text-sm text-muted-foreground mt-2 text-center">
+                            Select items above to return
+                          </p>
+                        )}
                       </div>
+                    ) : (
+                      <div className="border rounded-lg p-4 bg-muted/20 text-center text-sm text-muted-foreground">
+                        No items found in this invoice
+                      </div>
+                    );
+                  })()}
+
+                {/* Step 3: Refund Method Selection */}
+                {formData.originalSaleId && returnItems.length > 0 && (
+                  <div className="border rounded-lg p-4 bg-background">
+                    <h3 className="font-semibold text-sm mb-3">
+                      Refund Method *
+                    </h3>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-muted/50">
+                        <input
+                          type="radio"
+                          name="refundType"
+                          value="cash"
+                          checked={formData.refundType === "cash"}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              refundType: e.target.value,
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">Cash Refund</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-muted/50">
+                        <input
+                          type="radio"
+                          name="refundType"
+                          value="credit_note"
+                          checked={formData.refundType === "credit_note"}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              refundType: e.target.value,
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">Credit Note</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-muted/50">
+                        <input
+                          type="radio"
+                          name="refundType"
+                          value="replacement"
+                          checked={formData.refundType === "replacement"}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              refundType: e.target.value,
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        <span className="text-sm">Replacement</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Refund Summary */}
+                {formData.originalSaleId && returnItems.length > 0 && (
+                  <div className="border-2 border-primary rounded-lg p-4 bg-primary/5">
+                    <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Refund Summary
+                    </h3>
+                    <div className="space-y-2">
                       {refundComputation.length > 0 && (
-                        <div className="text-xs space-y-1">
+                        <div className="text-xs space-y-1 pb-2 border-b">
                           {refundComputation.map((line, i) => (
                             <div key={i} className="flex justify-between">
-                              <span>
-                                {line.name} × {line.qty} @ Net AED{" "}
+                              <span className="text-muted-foreground">
+                                {line.name} × {line.qty} @ AED{" "}
                                 {line.netPrice.toFixed(2)}
                               </span>
                               <span className="font-medium">
@@ -726,9 +858,15 @@ const Modal = ({
                           ))}
                         </div>
                       )}
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="font-bold">Total Refund Amount:</span>
+                        <span className="font-bold text-xl text-primary">
+                          AED {totalRefund.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2252,7 +2390,7 @@ const GroceryInventory = () => {
             .filter((it) => it.productId && it.qty)
             .map((it) => ({
               product_id: parseInt(it.productId),
-              quantity: parseInt(it.qty || 0),
+              quantity: parseInt(String(it.qty || 0)),
               reason: it.reason || "",
             }));
 
@@ -2300,9 +2438,7 @@ const GroceryInventory = () => {
                 ? invoiceItemMatch.total / invoiceItemMatch.quantity
                 : 0);
             const netPrice = Number(netPriceRaw) || 0;
-            const lineRefund = invoiceItemMatch?.total
-              ? Number(invoiceItemMatch.total)
-              : netPrice * it.quantity;
+            const lineRefund = netPrice * it.quantity;
             return {
               id: `temp-${Date.now()}-${idx}`,
               originalSaleId: parseInt(formData.originalSaleId),
@@ -2343,9 +2479,7 @@ const GroceryInventory = () => {
               ? firstInvoiceItemMatch.total / firstInvoiceItemMatch.quantity
               : 0);
           const firstNetPrice = Number(firstNetPriceRaw) || 0;
-          const firstRefundAmount = firstInvoiceItemMatch?.total
-            ? Number(firstInvoiceItemMatch.total)
-            : firstNetPrice * firstItem.quantity;
+          const firstRefundAmount = firstNetPrice * firstItem.quantity;
           const payload = {
             invoice_id: parseInt(formData.originalSaleId),
             product_id: firstItem.product_id,
@@ -2385,9 +2519,7 @@ const GroceryInventory = () => {
                       extraInvoiceItemMatch.quantity
                     : 0);
                 const extraNetPrice = Number(extraNetPriceRaw) || 0;
-                const extraRefundAmount = extraInvoiceItemMatch?.total
-                  ? Number(extraInvoiceItemMatch.total)
-                  : extraNetPrice * extra.quantity;
+                const extraRefundAmount = extraNetPrice * extra.quantity;
                 const extraPayload = {
                   invoice_id: parseInt(formData.originalSaleId),
                   product_id: extra.product_id,
