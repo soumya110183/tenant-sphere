@@ -10,10 +10,10 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RoleBasedRoute } from "@/components/RoleBasedRoute";
 import { DashboardRouter } from "@/components/DashboardRouter";
 import { DashboardLayout } from "@/components/Layout/DashboardLayout";
-import { GroceryInventory } from '@/components/inventory';
+import { GroceryInventory } from "@/components/inventory";
 import Login from "./pages/Login";
 import AMC_notification from "./pages/amc_notification.js";
-import AMC_report from "./pages/amc_management.js"; 
+import AMC_report from "./pages/amc_management.js";
 import Dashboard from "./pages/Dashboard";
 import TenantDashboard from "./pages/TenantDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
@@ -166,7 +166,7 @@ const App = () => (
                   <Route
                     path="billings"
                     element={
-                      <RoleBasedRoute allowedRoles={["tenant"]}>  
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
                         <BillingPageUAE_TenantStyle />
                       </RoleBasedRoute>
                     }
