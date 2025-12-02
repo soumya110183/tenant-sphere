@@ -43,8 +43,13 @@ const Modules = () => {
   const loadTenants = async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      const data = await tenantAPI.getTenants();
+      const resp = await tenantAPI.getTenants();
+      // Backend returns paginated: {success, page, limit, totalRecords, totalPages, data: [...]}
+      const data = Array.isArray(resp?.data)
+        ? resp.data
+        : Array.isArray(resp)
+        ? resp
+        : [];
       setTenants(data);
       if (data.length > 0) {
         setSelectedTenant(data[0]);
@@ -63,40 +68,27 @@ const Modules = () => {
     setLoading(true);
 
     try {
-      // If tenant record already contains a modules column as an object map, use it
-      const tenantModules = selectedTenant.modules;
-      let available: string[] = [];
-      let enabled: string[] = [];
+      // Backend returns: { available: [...], enabled: {...} }
+      const response = await moduleAPI.getTenantModules(selectedTenant.id);
 
-      if (
-        tenantModules &&
-        typeof tenantModules === "object" &&
-        !Array.isArray(tenantModules)
-      ) {
-        available = Object.keys(tenantModules);
-        enabled = available.filter((k) => !!tenantModules[k]);
-      } else {
-        // Fallback to existing API calls
-        const availableFromApi =
-          (await moduleAPI.getModulesByCategory(selectedTenant.category)) || [];
-        const enabledFromApi =
-          (await moduleAPI.getTenantModules(selectedTenant.id)) || [];
+      const available: string[] = Array.isArray(response?.available)
+        ? response.available
+        : [];
+      const enabledMap = response?.enabled || {};
 
-        available = availableFromApi;
-        if (Array.isArray(enabledFromApi)) {
-          enabled = enabledFromApi;
-        } else if (enabledFromApi && typeof enabledFromApi === "object") {
-          enabled = Object.keys(enabledFromApi).filter(
-            (k) => !!enabledFromApi[k]
-          );
-        }
-      }
+      // Convert enabled object map to array of enabled keys
+      const enabled: string[] = available.filter((key) => !!enabledMap[key]);
 
       setAvailableModules(available);
       setEnabledModules(enabled);
       setHasChanges(false);
     } catch (error) {
       console.error("Failed to load modules:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load modules. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -113,27 +105,23 @@ const Modules = () => {
 
   const handleSaveChanges = async () => {
     try {
-      // Determine payload shape based on tenant.modules shape
-      let payload: any;
-      if (
-        selectedTenant?.modules &&
-        typeof selectedTenant.modules === "object" &&
-        !Array.isArray(selectedTenant.modules)
-      ) {
-        // convert enabledModules array into object mapping
-        payload = availableModules.reduce(
-          (acc: Record<string, boolean>, key) => {
-            acc[key] = enabledModules.includes(key);
-            return acc;
-          },
-          {}
-        );
-      } else {
-        // backend expects an array of enabled module keys
-        payload = enabledModules;
-      }
+      // Convert enabledModules array into object mapping (backend expects {modules: {key: boolean}})
+      const payload = availableModules.reduce(
+        (acc: Record<string, boolean>, key) => {
+          acc[key] = enabledModules.includes(key);
+          return acc;
+        },
+        {}
+      );
 
-      await moduleAPI.updateTenantModules(selectedTenant.id, payload);
+      // Backend expects { modules } in request body; response: { message, tenant }
+      const resp = await moduleAPI.updateTenantModules(
+        selectedTenant.id,
+        payload
+      );
+      const updatedTenant = resp?.tenant
+        ? resp.tenant
+        : { ...selectedTenant, module_settings: payload };
 
       toast({
         title: "Modules updated",
@@ -142,14 +130,12 @@ const Modules = () => {
 
       setHasChanges(false);
 
-      // Update tenant in list (keep the same modules shape)
+      // Update tenant in list with new module_settings
       const updatedTenants = tenants.map((t) =>
-        t.id === selectedTenant.id ? { ...t, modules: payload } : t
+        t.id === selectedTenant.id ? updatedTenant : t
       );
       setTenants(updatedTenants);
-      setSelectedTenant((prev) =>
-        prev ? { ...prev, modules: payload } : prev
-      );
+      setSelectedTenant(updatedTenant);
     } catch (error) {
       toast({
         title: "Error",

@@ -40,6 +40,7 @@ import BillingPageUAE_TenantStyle from "./pages/billing.js";
 import LoyaltySettings from "./pages/Loyality.js";
 import Coupons from "./pages/Coupon.js";
 import Discounts from "./pages/Discounts.js";
+import Employees from "./pages/Employees.jsx";
 
 const queryClient = new QueryClient();
 
@@ -224,6 +225,14 @@ const App = () => (
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <Discounts />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="employees"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Employees />
                       </RoleBasedRoute>
                     }
                   />

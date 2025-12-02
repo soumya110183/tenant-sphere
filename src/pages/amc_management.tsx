@@ -405,19 +405,20 @@ const AMC_report: React.FC = () => {
     const loadTenants = async () => {
       setLoading(true);
       try {
-        const data = await tenantAPI.getTenants();
-        const tenantsList = Array.isArray(data) ? data : data?.tenants || [];
-        setTenants(tenantsList.length ? tenantsList : tenantsData);
-        if ((tenantsList.length ? tenantsList : tenantsData).length > 0) {
-          setSelected((tenantsList.length ? tenantsList : tenantsData)[0]);
+        const resp = await tenantAPI.getTenants();
+        // Backend returns paginated: {success, page, limit, totalRecords, totalPages, data: [...]}
+        const tenantsList = Array.isArray(resp?.data)
+          ? resp.data
+          : Array.isArray(resp)
+          ? resp
+          : [];
+        setTenants(tenantsList);
+        if (tenantsList.length > 0) {
+          setSelected(tenantsList[0]);
         }
       } catch (error) {
-        console.error(
-          "Failed to load tenants from API, using fallback:",
-          error
-        );
-        setTenants(tenantsData);
-        if (tenantsData.length > 0) setSelected(tenantsData[0]);
+        console.error("Failed to load tenants from API:", error);
+        setTenants([]);
       } finally {
         setLoading(false);
       }
@@ -524,7 +525,10 @@ const AMC_report: React.FC = () => {
           new Date().toISOString().split("T")[0];
         // keep endDate empty to indicate no explicit AMC end exists yet
         setEndDate(selected?.expire_date ?? "");
-        const calculatedExpire = calculateExpireDate(fallbackStart, billingFrequency);
+        const calculatedExpire = calculateExpireDate(
+          fallbackStart,
+          billingFrequency
+        );
         setExpireDate(calculatedExpire);
       }
     } catch (error) {
@@ -603,8 +607,12 @@ const AMC_report: React.FC = () => {
       } else {
         // fallback: compute expireDate from tenant.created_at or today
         const start =
-          selected.created_at?.split("T")[0] || new Date().toISOString().split("T")[0];
-        const calculatedExpireDate = calculateExpireDate(start, billingFrequency);
+          selected.created_at?.split("T")[0] ||
+          new Date().toISOString().split("T")[0];
+        const calculatedExpireDate = calculateExpireDate(
+          start,
+          billingFrequency
+        );
         setExpireDate(calculatedExpireDate);
       }
     }
@@ -822,7 +830,10 @@ const AMC_report: React.FC = () => {
         new Date().toISOString().split("T")[0];
 
       // endDate (state) is the canonical end; if not provided, compute from start + freq
-      const computedExpireFromStart = calculateExpireDate(startDate, billingFrequency);
+      const computedExpireFromStart = calculateExpireDate(
+        startDate,
+        billingFrequency
+      );
       const finalEndDate = endDate || expireDate || computedExpireFromStart;
 
       const amcData = {
@@ -992,7 +1003,8 @@ const AMC_report: React.FC = () => {
                         tenant.expire_date ||
                         tenant.due_date ||
                         tenant.created_at;
-                      const expire = tenantAMC?.end_date || tenant.expire_date || null;
+                      const expire =
+                        tenantAMC?.end_date || tenant.expire_date || null;
                       const days = daysRemaining(tenant);
                       return (
                         <tr

@@ -88,6 +88,12 @@ const tenantNavigation = [
     ],
   },
   {
+    category: "Employees Management",
+    items: [
+      { name: "Employees", href: "/employees", icon: Store },
+    ],
+  },
+  {
     category: "System",
     items: [{ name: "Settings", href: "/settings", icon: Settings }],
   },

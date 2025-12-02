@@ -1,73 +1,89 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Package, Plus, Edit, Trash2, Search, X, Save, Tag, DollarSign, BarChart, Layers, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Package,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  X,
+  Save,
+  Tag,
+  DollarSign,
+  BarChart,
+  Layers,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 
 // API Configuration
-const API_BASE_URL = 'https://billingbackend-1vei.onrender.com/api/products';
+const API_BASE_URL = "https://billingbackend-1vei.onrender.com/api/products";
 
 // Helper function to get auth token
 const getAuthToken = () => {
-  return localStorage.getItem('auth_token') || '';
+  return localStorage.getItem("auth_token") || "";
 };
 
 // API Service
 const productService = {
-  async getAll(search = '', limit = 100, offset = 0) {
-    const params = new URLSearchParams({ limit, offset });
-    if (search) params.append('search', search);
-    
+  async getAll(search = "", limit = 100, offset = 0) {
+    const params = new URLSearchParams();
+    params.append("limit", String(limit));
+    params.append("offset", String(offset));
+    if (search) params.append("search", search);
+
     const response = await fetch(`${API_BASE_URL}?${params}`, {
       headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-        'Content-Type': 'application/json'
-      }
+        Authorization: `Bearer ${getAuthToken()}`,
+        "Content-Type": "application/json",
+      },
     });
-    if (!response.ok) throw new Error('Failed to fetch products');
+    if (!response.ok) throw new Error("Failed to fetch products");
     const result = await response.json();
     return result.data;
   },
 
   async create(productData) {
     const response = await fetch(API_BASE_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${getAuthToken()}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(productData)
+      body: JSON.stringify(productData),
     });
-    if (!response.ok) throw new Error('Failed to create product');
+    if (!response.ok) throw new Error("Failed to create product");
     const result = await response.json();
     return result.data;
   },
 
   async update(id, productData) {
     const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${getAuthToken()}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(productData)
+      body: JSON.stringify(productData),
     });
-    if (!response.ok) throw new Error('Failed to update product');
+    if (!response.ok) throw new Error("Failed to update product");
     const result = await response.json();
     return result.data;
   },
 
   async delete(id) {
     const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-        'Content-Type': 'application/json'
-      }
+        Authorization: `Bearer ${getAuthToken()}`,
+        "Content-Type": "application/json",
+      },
     });
-    if (!response.ok) throw new Error('Failed to delete product');
+    if (!response.ok) throw new Error("Failed to delete product");
     return true;
-  }
+  },
 };
 
 // Product Stats Card Component
@@ -76,19 +92,31 @@ const ProductStatsCard = ({ stat }) => (
     <CardContent className="pt-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className={`text-2xl font-bold ${stat.color || 'text-foreground'}`}>
+          <div
+            className={`text-2xl font-bold ${stat.color || "text-foreground"}`}
+          >
             {stat.value}
           </div>
           <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
         </div>
-        <stat.icon className={`h-8 w-8 ${stat.color || 'text-muted-foreground'}`} />
+        <stat.icon
+          className={`h-8 w-8 ${stat.color || "text-muted-foreground"}`}
+        />
       </div>
     </CardContent>
   </Card>
 );
 
 // Search and Filter Component for Products
-const ProductSearchFilter = ({ searchTerm, setSearchTerm, filterCategory, setFilterCategory, categories, onAddProduct, isLoading }) => (
+const ProductSearchFilter = ({
+  searchTerm,
+  setSearchTerm,
+  filterCategory,
+  setFilterCategory,
+  categories,
+  onAddProduct,
+  isLoading,
+}) => (
   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
     <div className="flex-1 relative">
       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -108,8 +136,10 @@ const ProductSearchFilter = ({ searchTerm, setSearchTerm, filterCategory, setFil
       disabled={isLoading}
     >
       <option value="All">All Categories</option>
-      {categories.map(cat => (
-        <option key={cat} value={cat}>{cat}</option>
+      {categories.map((cat) => (
+        <option key={cat} value={cat}>
+          {cat}
+        </option>
       ))}
     </select>
     <Button onClick={onAddProduct} disabled={isLoading}>
@@ -123,7 +153,7 @@ const ProductSearchFilter = ({ searchTerm, setSearchTerm, filterCategory, setFil
 const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
   const margin = product.selling_price - product.cost_price;
   const marginPercent = ((margin / product.cost_price) * 100).toFixed(1);
-  
+
   return (
     <tr className="border-b hover:bg-muted/50">
       <td className="py-3 px-2 sm:px-4 font-medium text-sm">
@@ -133,35 +163,65 @@ const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
           </div>
           <div>
             <div>{product.name}</div>
-            <div className="text-xs text-muted-foreground">SKU: {product.sku || 'N/A'}</div>
+            <div className="text-xs text-muted-foreground">
+              SKU: {product.sku || "N/A"}
+            </div>
           </div>
         </div>
       </td>
-      <td className="py-3 px-2 sm:px-4 text-sm">{product.brand || 'N/A'}</td>
+      <td className="py-3 px-2 sm:px-4 text-sm">{product.brand || "N/A"}</td>
       <td className="py-3 px-2 sm:px-4 text-sm">
-        <Badge variant="outline">{product.category || 'Uncategorized'}</Badge>
+        <Badge variant="outline">{product.category || "Uncategorized"}</Badge>
       </td>
-      <td className="py-3 px-2 sm:px-4 text-sm">{product.unit || 'N/A'}</td>
-      <td className="py-3 px-2 sm:px-4 text-sm">AED {product.cost_price || 0}</td>
-      <td className="py-3 px-2 sm:px-4 text-sm">AED {product.selling_price || 0}</td>
+      <td className="py-3 px-2 sm:px-4 text-sm">{product.unit || "N/A"}</td>
+      <td className="py-3 px-2 sm:px-4 text-sm">
+        AED {product.cost_price || 0}
+      </td>
+      <td className="py-3 px-2 sm:px-4 text-sm">
+        AED {product.selling_price || 0}
+      </td>
       <td className="py-3 px-2 sm:px-4">
-        <span className={`font-medium text-xs sm:text-sm ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+        <span
+          className={`font-medium text-xs sm:text-sm ${
+            margin >= 0 ? "text-green-600" : "text-red-600"
+          }`}
+        >
           AED {margin.toFixed(2)} ({marginPercent}%)
         </span>
       </td>
       <td className="py-3 px-2 sm:px-4 text-sm">{product.tax || 0}%</td>
       <td className="py-3 px-2 sm:px-4">
-        <Badge className={product.status === 'Active' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}>
+        <Badge
+          className={
+            product.status === "Active"
+              ? "bg-green-500/10 text-green-500"
+              : "bg-red-500/10 text-red-500"
+          }
+        >
           {product.status}
         </Badge>
       </td>
       <td className="py-3 px-2 sm:px-4">
         <div className="flex gap-1 sm:gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => onEdit(product)} disabled={isDeleting}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(product)}
+            disabled={isDeleting}
+          >
             <Edit className="h-3 w-3" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onDelete(product.id)} disabled={isDeleting}>
-            {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDelete(product.id)}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
           </Button>
         </div>
       </td>
@@ -170,28 +230,65 @@ const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
 };
 
 // Product Modal Component
-const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClose, onSubmit, isSubmitting }) => {
+const ProductModal = ({
+  showModal,
+  editingProduct,
+  formData,
+  setFormData,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}) => {
   if (!showModal) return null;
 
   const categories = [
-    'Grocery', 'Beverage', 'Dairy', 'Bakery', 'Personal Care', 
-    'Household', 'Frozen Foods', 'Snacks', 'Baby Care', 'Health & Wellness'
+    "Grocery",
+    "Beverage",
+    "Dairy",
+    "Bakery",
+    "Personal Care",
+    "Household",
+    "Frozen Foods",
+    "Snacks",
+    "Baby Care",
+    "Health & Wellness",
   ];
 
-  const units = ['kg', 'g', 'litre', 'ml', 'piece', 'pack', 'bottle', 'can', 'box', 'dozen'];
+  const units = [
+    "kg",
+    "g",
+    "litre",
+    "ml",
+    "piece",
+    "pack",
+    "bottle",
+    "can",
+    "box",
+    "dozen",
+  ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
           <h2 className="text-lg sm:text-xl font-bold">
-            {editingProduct ? 'Edit Product' : 'Add New Product'}
+            {editingProduct ? "Edit Product" : "Add New Product"}
           </h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground" disabled={isSubmitting}>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+            disabled={isSubmitting}
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
-        
+
         <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Basic Information */}
@@ -200,44 +297,56 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                 <Tag className="h-4 w-4" />
                 Basic Information
               </h3>
-              
+
               <div>
-                <label className="block text-sm font-medium mb-1">Product Name *</label>
+                <label className="block text-sm font-medium mb-1">
+                  Product Name *
+                </label>
                 <input
                   type="text"
                   required
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  value={formData.name || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   placeholder="Enter product name"
                   disabled={isSubmitting}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium mb-1">Brand</label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.brand || ''}
-                  onChange={(e) => setFormData({...formData, brand: e.target.value})}
+                  value={formData.brand || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, brand: e.target.value })
+                  }
                   placeholder="Enter brand name"
                   disabled={isSubmitting}
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Category</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Category
+                  </label>
                   <select
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.category || ''}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    value={formData.category || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
                     disabled={isSubmitting}
                   >
                     <option value="">Select Category</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -245,50 +354,66 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                   <label className="block text-sm font-medium mb-1">Unit</label>
                   <select
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.unit || ''}
-                    onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                    value={formData.unit || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, unit: e.target.value })
+                    }
                     disabled={isSubmitting}
                   >
                     <option value="">Select Unit</option>
-                    {units.map(unit => (
-                      <option key={unit} value={unit}>{unit}</option>
+                    {units.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">SKU Code</label>
+                  <label className="block text-sm font-medium mb-1">
+                    SKU Code
+                  </label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.sku || ''}
-                    onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                    value={formData.sku || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, sku: e.target.value })
+                    }
                     placeholder="e.g., PROD-001"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Barcode</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Barcode
+                  </label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.barcode || ''}
-                    onChange={(e) => setFormData({...formData, barcode: e.target.value})}
+                    value={formData.barcode || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, barcode: e.target.value })
+                    }
                     placeholder="Optional barcode"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
+                <label className="block text-sm font-medium mb-1">
+                  Description
+                </label>
                 <textarea
                   rows={3}
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  value={formData.description || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   placeholder="Product description (optional)"
                   disabled={isSubmitting}
                 />
@@ -301,54 +426,88 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                 <DollarSign className="h-4 w-4" />
                 Pricing & Status
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Cost Price (AED)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Cost Price (AED)
+                  </label>
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.cost_price || 0}
-                    onChange={(e) => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})}
+                    value={formData.cost_price ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        cost_price:
+                          e.target.value === ""
+                            ? ""
+                            : parseFloat(e.target.value) || 0,
+                      })
+                    }
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Selling Price (AED)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Selling Price (AED)
+                  </label>
                   <input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.selling_price || 0}
-                    onChange={(e) => setFormData({...formData, selling_price: parseFloat(e.target.value) || 0})}
+                    value={formData.selling_price ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        selling_price:
+                          e.target.value === ""
+                            ? ""
+                            : parseFloat(e.target.value) || 0,
+                      })
+                    }
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tax Rate (%)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Tax Rate (%)
+                  </label>
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    step="0.01"
+                    step="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.tax || 0}
-                    onChange={(e) => setFormData({...formData, tax: parseFloat(e.target.value) || 0})}
+                    value={formData.tax ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        tax:
+                          e.target.value === ""
+                            ? ""
+                            : parseFloat(e.target.value) || 0,
+                      })
+                    }
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Status</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Status
+                  </label>
                   <select
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.status || 'Active'}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    value={formData.status || "Active"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, status: e.target.value })
+                    }
                     disabled={isSubmitting}
                   >
                     <option value="Active">Active</option>
@@ -357,7 +516,7 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                   </select>
                 </div>
               </div>
-              
+
               {/* Margin Display */}
               <div className="p-3 bg-muted/20 rounded-lg">
                 <h4 className="font-medium text-sm mb-2">Profit Margin</h4>
@@ -365,13 +524,23 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                   <div>
                     <span className="text-muted-foreground">Profit:</span>
                     <div className="font-semibold text-green-600">
-                      AED {((formData.selling_price || 0) - (formData.cost_price || 0)).toFixed(2)}
+                      AED{" "}
+                      {(
+                        (formData.selling_price || 0) -
+                        (formData.cost_price || 0)
+                      ).toFixed(2)}
                     </div>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Margin %:</span>
                     <div className="font-semibold text-green-600">
-                      {(((formData.selling_price || 0) - (formData.cost_price || 0)) / (formData.cost_price || 1) * 100).toFixed(1)}%
+                      {(
+                        (((formData.selling_price || 0) -
+                          (formData.cost_price || 0)) /
+                          (formData.cost_price || 1)) *
+                        100
+                      ).toFixed(1)}
+                      %
                     </div>
                   </div>
                 </div>
@@ -382,39 +551,54 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
                 <Layers className="h-4 w-4" />
                 Additional Information
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Supplier Code</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Supplier Code
+                  </label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.supplier_code || ''}
-                    onChange={(e) => setFormData({...formData, supplier_code: e.target.value})}
+                    value={formData.supplier_code || ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        supplier_code: e.target.value,
+                      })
+                    }
                     placeholder="e.g., SUP-001"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">HSN Code</label>
+                  <label className="block text-sm font-medium mb-1">
+                    HSN Code
+                  </label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.hsn_code || ''}
-                    onChange={(e) => setFormData({...formData, hsn_code: e.target.value})}
+                    value={formData.hsn_code || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, hsn_code: e.target.value })
+                    }
                     placeholder="For tax purposes"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium mb-1">Product Features</label>
+                <label className="block text-sm font-medium mb-1">
+                  Product Features
+                </label>
                 <textarea
                   rows={2}
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                  value={formData.features || ''}
-                  onChange={(e) => setFormData({...formData, features: e.target.value})}
+                  value={formData.features || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, features: e.target.value })
+                  }
                   placeholder="Key features (optional)"
                   disabled={isSubmitting}
                 />
@@ -427,16 +611,22 @@ const ProductModal = ({ showModal, editingProduct, formData, setFormData, onClos
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {editingProduct ? 'Updating...' : 'Adding...'}
+                  {editingProduct ? "Updating..." : "Adding..."}
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  {editingProduct ? 'Update Product' : 'Add Product'}
+                  {editingProduct ? "Update Product" : "Add Product"}
                 </>
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1 sm:flex-none" disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 sm:flex-none"
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
           </div>
@@ -469,8 +659,8 @@ const ErrorAlert = ({ message, onClose }) => (
 // Main Product Catalog Component
 const ProductCatalog = () => {
   const [products, setProducts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('All');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({});
@@ -478,7 +668,6 @@ const ProductCatalog = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
-  
 
   // Load products on component mount
   useEffect(() => {
@@ -498,15 +687,18 @@ const ProductCatalog = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const loadProducts = async (search = '') => {
+  const loadProducts = async (search = "") => {
     try {
       setIsLoading(true);
       setError(null);
       const data = await productService.getAll(search);
       setProducts(data);
     } catch (err) {
-      console.error('Error loading products:', err);
-      setError(err.message || 'Failed to load products. Please check your connection and authentication.');
+      console.error("Error loading products:", err);
+      setError(
+        err.message ||
+          "Failed to load products. Please check your connection and authentication."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -529,24 +721,24 @@ const ProductCatalog = () => {
         description: product.description,
         supplier_code: product.supplier_code,
         hsn_code: product.hsn_code,
-        features: product.features
+        features: product.features,
       });
     } else {
       setFormData({
-        name: '',
-        brand: '',
-        category: '',
-        unit: '',
+        name: "",
+        brand: "",
+        category: "",
+        unit: "",
         cost_price: 0,
         selling_price: 0,
         tax: 0,
-        sku: '',
-        barcode: '',
-        status: 'Active',
-        description: '',
-        supplier_code: '',
-        hsn_code: '',
-        features: ''
+        sku: "",
+        barcode: "",
+        status: "Active",
+        description: "",
+        supplier_code: "",
+        hsn_code: "",
+        features: "",
       });
     }
     setShowModal(true);
@@ -559,44 +751,51 @@ const ProductCatalog = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  try {
-    setIsSubmitting(true);
-    setError(null);
+    e.preventDefault();
 
-    let result;
-    if (editingProduct) {
-      result = await productService.update(editingProduct.id, formData);
-      // Update existing product in state
-      setProducts(prevProducts => 
-        prevProducts.map(p => p.id === editingProduct.id ? { ...result, id: editingProduct.id } : p)
-      );
-    } else {
-      result = await productService.create(formData);
-      // Add new product to state
-      setProducts(prevProducts => [...prevProducts, { ...result, id: result.id }]);
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      let result;
+      if (editingProduct) {
+        result = await productService.update(editingProduct.id, formData);
+        // Update existing product in state
+        setProducts((prevProducts) =>
+          prevProducts.map((p) =>
+            p.id === editingProduct.id
+              ? { ...result, id: editingProduct.id }
+              : p
+          )
+        );
+      } else {
+        result = await productService.create(formData);
+        // Add new product to state
+        setProducts((prevProducts) => [
+          ...prevProducts,
+          { ...result, id: result.id },
+        ]);
+      }
+
+      closeModal();
+    } catch (err) {
+      console.error("Error saving product:", err);
+      setError(err.message || "Failed to save product. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    closeModal();
-  } catch (err) {
-    console.error('Error saving product:', err);
-    setError(err.message || 'Failed to save product. Please try again.');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-    
+    if (!confirm("Are you sure you want to delete this product?")) return;
+
     try {
       setIsDeleting(true);
       setError(null);
       await productService.delete(id);
       await loadProducts();
     } catch (err) {
-      console.error('Error deleting product:', err);
-      setError(err.message || 'Failed to delete product. Please try again.');
+      console.error("Error deleting product:", err);
+      setError(err.message || "Failed to delete product. Please try again.");
     } finally {
       setIsDeleting(false);
     }
@@ -604,52 +803,65 @@ const ProductCatalog = () => {
 
   // Calculate statistics
   const totalProducts = products.length;
-  const activeProducts = products.filter(p => p.status === 'Active').length;
-  const averageMargin = products.length > 0 
-    ? products.reduce((sum, p) => sum + ((p.selling_price - p.cost_price) / p.cost_price * 100), 0) / products.length 
-    : 0;
-  const categoriesCount = new Set(products.map(p => p.category).filter(Boolean)).size;
+  const activeProducts = products.filter((p) => p.status === "Active").length;
+  const averageMargin =
+    products.length > 0
+      ? products.reduce(
+          (sum, p) =>
+            sum + ((p.selling_price - p.cost_price) / p.cost_price) * 100,
+          0
+        ) / products.length
+      : 0;
+  const categoriesCount = new Set(
+    products.map((p) => p.category).filter(Boolean)
+  ).size;
 
   const stats = [
-    { 
-      label: 'Total Products', 
-      value: totalProducts, 
+    {
+      label: "Total Products",
+      value: totalProducts,
       icon: Package,
-      color: 'text-blue-500'
+      color: "text-blue-500",
     },
-    { 
-      label: 'Active Products', 
-      value: activeProducts, 
+    {
+      label: "Active Products",
+      value: activeProducts,
       icon: BarChart,
-      color: 'text-green-500'
+      color: "text-green-500",
     },
-    { 
-      label: 'Avg. Margin', 
-      value: `${averageMargin.toFixed(1)}%`, 
+    {
+      label: "Avg. Margin",
+      value: `${averageMargin.toFixed(1)}%`,
       icon: DollarSign,
-      color: 'text-purple-500'
+      color: "text-purple-500",
     },
-    { 
-      label: 'Categories', 
-      value: categoriesCount, 
+    {
+      label: "Categories",
+      value: categoriesCount,
       icon: Layers,
-      color: 'text-orange-500'
+      color: "text-orange-500",
     },
   ];
 
-  const categories = ['All', ...new Set(products.map(p => p.category).filter(Boolean))];
-  
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = filterCategory === 'All' || product.category === filterCategory;
+  const categories = [
+    "All",
+    ...new Set(products.map((p) => p.category).filter(Boolean)),
+  ];
+
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory =
+      filterCategory === "All" || product.category === filterCategory;
     return matchesCategory;
   });
-console.log(products);
+  console.log(products);
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Product Catalog</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+              Product Catalog
+            </h1>
             <p className="text-muted-foreground mt-1 text-sm sm:text-base">
               Manage your product database and master catalog
             </p>
@@ -695,25 +907,48 @@ console.log(products);
                 <table className="w-full min-w-[1000px]">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Product</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Brand</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Category</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Unit</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Cost</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Selling</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Margin</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Tax</th>
-                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Status</th>
-                      <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">Actions</th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Product
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Brand
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Category
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Unit
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Cost
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Selling
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Margin
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Tax
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Status
+                      </th>
+                      <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan="10" className="text-center py-8 text-muted-foreground text-sm">
-                          {products.length === 0 
-                            ? 'No products found. Add your first product to get started!' 
-                            : 'No products match your search criteria.'}
+                        <td
+                          colSpan={10}
+                          className="text-center py-8 text-muted-foreground text-sm"
+                        >
+                          {products.length === 0
+                            ? "No products found. Add your first product to get started!"
+                            : "No products match your search criteria."}
                         </td>
                       </tr>
                     ) : (

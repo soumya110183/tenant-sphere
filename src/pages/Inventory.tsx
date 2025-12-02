@@ -416,12 +416,13 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.quantity || 0}
+                      value={formData.quantity ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          quantity: parseInt(e.target.value) || 0,
+                          quantity: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -434,12 +435,13 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.reorderLevel || 0}
+                      value={formData.reorderLevel ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          reorderLevel: parseInt(e.target.value) || 0,
+                          reorderLevel: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -452,12 +454,13 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.maxStock || 0}
+                      value={formData.maxStock ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          maxStock: parseInt(e.target.value) || 0,
+                          maxStock: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -621,12 +624,13 @@ const Modal = ({
                         type="number"
                         required
                         min="1"
+                        step="1"
                         placeholder="Qty"
                         className="px-3 py-2 border rounded-md bg-background text-sm"
                         value={sp.qty}
                         onChange={(e) => {
                           const updated = [...saleProducts];
-                          updated[idx].qty = parseInt(e.target.value) || 1;
+                          updated[idx].qty = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
                           setSaleProducts(updated);
                         }}
                       />
@@ -779,13 +783,13 @@ const Modal = ({
                                     type="number"
                                     min="1"
                                     max={qtySold}
+                                    step="1"
                                     disabled={!isSelected}
-                                    value={returnItem?.qty || 1}
+                                    value={returnItem?.qty ?? ""}
                                     onChange={(e) => {
                                       const updated = [...returnItems];
-                                      const value =
-                                        parseInt(e.target.value) || 1;
-                                      updated[returnItemIndex].qty = Math.min(
+                                      const value = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
+                                      updated[returnItemIndex].qty = value === "" ? "" : Math.min(
                                         value,
                                         qtySold
                                       );
@@ -1056,13 +1060,14 @@ const Modal = ({
                               type="number"
                               min={1}
                               max={maxReturn || 1}
+                              step="1"
                               disabled={!ri.productId}
                               className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                              value={ri.qty}
+                              value={ri.qty ?? ""}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 1;
+                                const val = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
                                 const upd = [...returnItems];
-                                upd[idx].qty = Math.min(val, maxReturn || 1);
+                                upd[idx].qty = val === "" ? "" : Math.min(val, maxReturn || 1);
                                 setReturnItems(upd);
                               }}
                             />
@@ -1285,12 +1290,13 @@ const Modal = ({
                     type="number"
                     required
                     min="1"
+                    step="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.quantity || 0}
+                    value={formData.quantity ?? ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        quantity: parseInt(e.target.value) || 0,
+                        quantity: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
                       })
                     }
                   />

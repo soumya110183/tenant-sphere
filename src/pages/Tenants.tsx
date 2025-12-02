@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
   MoreVertical,
   Building2,
   Mail,
-  Phone
-} from 'lucide-react';
+  Phone,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,25 +21,25 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { tenantAPI } from '@/services/api';
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { tenantAPI } from "@/services/api";
 
-const API_URL = 'https://billingbackend-1vei.onrender.com'; // unchanged
+const API_URL = "https://billingbackend-1vei.onrender.com"; // unchanged
 
 interface Tenant {
   id: string;
@@ -57,7 +57,7 @@ type FieldErrors = Record<string, string>;
 const Tenants = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [filteredTenants, setFilteredTenants] = useState<Tenant[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,13 +65,13 @@ const Tenants = () => {
 
   // Form state
   const [formData, setFormData] = useState({
-    name: '',
-    category: '',
-    plan: '',
-    email: '',
-    password: '',
-    phone: '',
-    status: 'active'
+    name: "",
+    category: "",
+    plan: "",
+    email: "",
+    password: "",
+    phone: "",
+    status: "active",
   });
 
   // NEW: field-level errors and general error
@@ -83,10 +83,11 @@ const Tenants = () => {
   }, []);
 
   useEffect(() => {
-    const filtered = tenants.filter(tenant =>
-      tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = tenants.filter(
+      (tenant) =>
+        tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tenant.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tenant.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredTenants(filtered);
   }, [searchQuery, tenants]);
@@ -97,14 +98,28 @@ const Tenants = () => {
    * from various error shapes (axios, fetch, thrown Error).
    * - returns { message, fieldErrors }
    */
-  const parseApiError = async (error: any): Promise<{ message: string; fieldErrors: FieldErrors; status?: number }> => {
+  const parseApiError = async (
+    error: any
+  ): Promise<{
+    message: string;
+    fieldErrors: FieldErrors;
+    status?: number;
+    details?: string;
+  }> => {
     // axios style: error.response && error.response.data
     try {
       if (error?.response && error.response.data) {
         const data = error.response.data;
-        const message = data.message || (typeof data === 'string' ? data : 'Request failed');
-        const fieldErrors = (data.errors && typeof data.errors === 'object') ? data.errors : {};
-        return { message, fieldErrors, status: error.response.status };
+        // Prefer backend's `error` field, then `message`, else stringify
+        const message =
+          data.error ||
+          data.message ||
+          data.details ||
+          (typeof data === "string" ? data : "Request failed");
+        const fieldErrors =
+          data.errors && typeof data.errors === "object" ? data.errors : {};
+        const details = data.details || data.detail;
+        return { message, fieldErrors, status: error.response.status, details };
       }
 
       // If backend returned a Response-like object (fetch)
@@ -112,30 +127,48 @@ const Tenants = () => {
         // try to parse JSON body for structured errors
         try {
           const data = await error.json();
-          const message = data?.message || error.statusText || 'Request failed';
-          const fieldErrors = data?.errors && typeof data.errors === 'object' ? data.errors : {};
-          return { message, fieldErrors, status: error.status };
+          const message =
+            data?.error ||
+            data?.message ||
+            data?.details ||
+            error.statusText ||
+            "Request failed";
+          const fieldErrors =
+            data?.errors && typeof data.errors === "object" ? data.errors : {};
+          const details = data?.details || data?.detail;
+          return { message, fieldErrors, status: error.status, details };
         } catch (_) {
-          return { message: error.statusText || `HTTP ${error.status}`, fieldErrors: {}, status: error.status };
+          return {
+            message: error.statusText || `HTTP ${error.status}`,
+            fieldErrors: {},
+            status: error.status,
+          };
         }
       }
 
       // If thrown error has a .message (regular JS Error or axios fallback)
       if (error?.message) {
-        return { message: error.message, fieldErrors: {} };
+        return {
+          message: error.message,
+          fieldErrors: {},
+          details: (error as any)?.details,
+        };
       }
 
       // If error is plain object with message
-      if (typeof error === 'object') {
-        const message = (error && (error.message || error.error || JSON.stringify(error))) as string;
-        const fieldErrors = error.errors && typeof error.errors === 'object' ? error.errors : {};
-        return { message, fieldErrors };
+      if (typeof error === "object") {
+        const message = (error &&
+          (error.message || error.error || JSON.stringify(error))) as string;
+        const fieldErrors =
+          error.errors && typeof error.errors === "object" ? error.errors : {};
+        const details = (error as any)?.details;
+        return { message, fieldErrors, details };
       }
 
       // fallback
       return { message: String(error), fieldErrors: {} };
     } catch (e) {
-      return { message: 'Unknown error occurred', fieldErrors: {} };
+      return { message: "Unknown error occurred", fieldErrors: {} };
     }
   };
 
@@ -143,9 +176,14 @@ const Tenants = () => {
     try {
       setLoading(true);
       setGeneralError(null);
-      const data = await tenantAPI.getTenants();
-      setTenants(data);
-      setFilteredTenants(data);
+      const resp = await tenantAPI.getTenants();
+      const list = Array.isArray(resp?.data)
+        ? resp.data
+        : Array.isArray(resp)
+        ? resp
+        : [];
+      setTenants(list);
+      setFilteredTenants(list);
     } catch (error: any) {
       console.error("Load tenants error:", error);
       const parsed = await parseApiError(error);
@@ -169,17 +207,19 @@ const Tenants = () => {
 
     // Basic client-side checks (optional but helps UX)
     const localErrors: FieldErrors = {};
-    if (!formData.name?.trim()) localErrors.name = 'Business name is required';
-    if (!formData.category?.trim()) localErrors.category = 'Category is required';
-    if (!formData.email?.trim()) localErrors.email = 'Email is required';
-    if (!editingTenant && !formData.password) localErrors.password = 'Password is required';
+    if (!formData.name?.trim()) localErrors.name = "Business name is required";
+    if (!formData.category?.trim())
+      localErrors.category = "Category is required";
+    if (!formData.email?.trim()) localErrors.email = "Email is required";
+    if (!editingTenant && !formData.password)
+      localErrors.password = "Password is required";
 
     if (Object.keys(localErrors).length > 0) {
       setFormErrors(localErrors);
       toast({
-        title: 'Validation error',
-        description: 'Please fix the highlighted fields.',
-        variant: 'destructive',
+        title: "Validation error",
+        description: "Please fix the highlighted fields.",
+        variant: "destructive",
       });
       return;
     }
@@ -202,23 +242,54 @@ const Tenants = () => {
       console.error("Submit error:", error);
       const parsed = await parseApiError(error);
 
-      // show toast for summary
+      // Prefer field-level errors if provided by backend
       if (Object.keys(parsed.fieldErrors || {}).length > 0) {
-        // If there are field errors, set them so UI shows inline messages
         setFormErrors(parsed.fieldErrors);
-        const joined = Object.entries(parsed.fieldErrors).map(([k, v]) => `${k}: ${v}`).join(' · ');
+        const joined = Object.entries(parsed.fieldErrors)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(" · ");
         toast({
-          title: parsed.message || 'Validation errors',
+          title: parsed.message || "Validation errors",
           description: joined,
-          variant: 'destructive',
-        });
-      } else {
-        setGeneralError(parsed.message);
-        toast({
-          title: "Error",
-          description: parsed.message || "Failed to save tenant",
           variant: "destructive",
         });
+      } else {
+        // Heuristic: map duplicate key violations to specific fields
+        const hay = `${parsed.message || ""} ${
+          parsed.details || ""
+        }`.toLowerCase();
+        const isDuplicate = /duplicate|already exists|unique|23505/.test(hay);
+        const duplicateEmail =
+          isDuplicate &&
+          (hay.includes("email") || hay.includes("tenants_email_key"));
+        const duplicatePhone =
+          isDuplicate &&
+          (hay.includes("phone") || hay.includes("tenants_phone_key"));
+
+        const inferredFieldErrors: FieldErrors = {};
+        if (duplicateEmail) inferredFieldErrors.email = "Email already exists";
+        if (duplicatePhone) inferredFieldErrors.phone = "Phone already exists";
+
+        if (Object.keys(inferredFieldErrors).length > 0) {
+          setFormErrors(inferredFieldErrors);
+          const joined = Object.entries(inferredFieldErrors)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(" · ");
+          toast({
+            title: "Duplicate value",
+            description: joined,
+            variant: "destructive",
+          });
+        } else {
+          // Fallback to general error if no field could be inferred
+          setGeneralError(parsed.details || parsed.message);
+          toast({
+            title: "Error",
+            description:
+              parsed.details || parsed.message || "Failed to save tenant",
+            variant: "destructive",
+          });
+        }
       }
     } finally {
       setLoading(false);
@@ -270,24 +341,28 @@ const Tenants = () => {
   const resetForm = () => {
     setEditingTenant(null);
     setFormData({
-      name: '',
-      category: '',
-      plan: '',
-      email: '',
-      password: '',
-      phone: '',
-      status: 'active'
+      name: "",
+      category: "",
+      plan: "",
+      email: "",
+      password: "",
+      phone: "",
+      status: "active",
     });
     setFormErrors({});
     setGeneralError(null);
   };
 
   const getStatusColor = (status: string) => {
-    switch(status?.toLowerCase()) {
-      case 'active': return 'bg-green-500/10 text-green-500 hover:bg-green-500/20';
-      case 'inactive': return 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20';
-      case 'suspended': return 'bg-red-500/10 text-red-500 hover:bg-red-500/20';
-      default: return 'bg-gray-500/10 text-gray-500';
+    switch (status?.toLowerCase()) {
+      case "active":
+        return "bg-green-500/10 text-green-500 hover:bg-green-500/20";
+      case "inactive":
+        return "bg-gray-500/10 text-gray-500 hover:bg-gray-500/20";
+      case "suspended":
+        return "bg-red-500/10 text-red-500 hover:bg-red-500/20";
+      default:
+        return "bg-gray-500/10 text-gray-500";
     }
   };
 
@@ -297,13 +372,18 @@ const Tenants = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tenants</h1>
-          <p className="text-gray-500 mt-1">Manage your tenant organizations and subscriptions</p>
+          <p className="text-gray-500 mt-1">
+            Manage your tenant organizations and subscriptions
+          </p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) resetForm();
-        }}>
+
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -312,12 +392,16 @@ const Tenants = () => {
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{editingTenant ? 'Edit Tenant' : 'Add New Tenant'}</DialogTitle>
+              <DialogTitle>
+                {editingTenant ? "Edit Tenant" : "Add New Tenant"}
+              </DialogTitle>
               <DialogDescription>
-                {editingTenant ? 'Update tenant information' : 'Create a new tenant organization'}
+                {editingTenant
+                  ? "Update tenant information"
+                  : "Create a new tenant organization"}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmit} noValidate>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -326,21 +410,33 @@ const Tenants = () => {
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
                       required
                       aria-invalid={!!formErrors.name}
-                      aria-describedby={formErrors.name ? 'error-name' : undefined}
+                      aria-describedby={
+                        formErrors.name ? "error-name" : undefined
+                      }
                     />
-                    {formErrors.name && <p id="error-name" className="text-sm text-red-600">{formErrors.name}</p>}
+                    {formErrors.name && (
+                      <p id="error-name" className="text-sm text-red-600">
+                        {formErrors.name}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
                     <Select
                       value={formData.category}
-                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, category: value })
+                      }
                       required
                       aria-invalid={!!formErrors.category}
-                      aria-describedby={formErrors.category ? 'error-category' : undefined}
+                      aria-describedby={
+                        formErrors.category ? "error-category" : undefined
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
@@ -352,7 +448,11 @@ const Tenants = () => {
                         <SelectItem value="retail">Retail</SelectItem>
                       </SelectContent>
                     </Select>
-                    {formErrors.category && <p id="error-category" className="text-sm text-red-600">{formErrors.category}</p>}
+                    {formErrors.category && (
+                      <p id="error-category" className="text-sm text-red-600">
+                        {formErrors.category}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -363,28 +463,45 @@ const Tenants = () => {
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
                       required
                       aria-invalid={!!formErrors.email}
-                      aria-describedby={formErrors.email ? 'error-email' : undefined}
+                      aria-describedby={
+                        formErrors.email ? "error-email" : undefined
+                      }
                     />
-                    {formErrors.email && <p id="error-email" className="text-sm text-red-600">{formErrors.email}</p>}
+                    {formErrors.email && (
+                      <p id="error-email" className="text-sm text-red-600">
+                        {formErrors.email}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      Password {editingTenant && '(leave blank to keep current)'}
-                      {!editingTenant && ' *'}
+                      Password{" "}
+                      {editingTenant && "(leave blank to keep current)"}
+                      {!editingTenant && " *"}
                     </Label>
                     <Input
                       id="password"
                       type="password"
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
                       required={!editingTenant}
                       aria-invalid={!!formErrors.password}
-                      aria-describedby={formErrors.password ? 'error-password' : undefined}
+                      aria-describedby={
+                        formErrors.password ? "error-password" : undefined
+                      }
                     />
-                    {formErrors.password && <p id="error-password" className="text-sm text-red-600">{formErrors.password}</p>}
+                    {formErrors.password && (
+                      <p id="error-password" className="text-sm text-red-600">
+                        {formErrors.password}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -393,10 +510,14 @@ const Tenants = () => {
                     <Label htmlFor="plan">Subscription Plan *</Label>
                     <Select
                       value={formData.plan}
-                      onValueChange={(value) => setFormData({ ...formData, plan: value })}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, plan: value })
+                      }
                       required
                       aria-invalid={!!formErrors.plan}
-                      aria-describedby={formErrors.plan ? 'error-plan' : undefined}
+                      aria-describedby={
+                        formErrors.plan ? "error-plan" : undefined
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select plan" />
@@ -404,22 +525,36 @@ const Tenants = () => {
                       <SelectContent>
                         <SelectItem value="trial">Trial</SelectItem>
                         <SelectItem value="basic">Basic</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
+                        <SelectItem value="professional">
+                          Professional
+                        </SelectItem>
                         <SelectItem value="enterprise">Enterprise</SelectItem>
                       </SelectContent>
                     </Select>
-                    {formErrors.plan && <p id="error-plan" className="text-sm text-red-600">{formErrors.plan}</p>}
+                    {formErrors.plan && (
+                      <p id="error-plan" className="text-sm text-red-600">
+                        {formErrors.plan}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
                     <Input
                       id="phone"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
                       aria-invalid={!!formErrors.phone}
-                      aria-describedby={formErrors.phone ? 'error-phone' : undefined}
+                      aria-describedby={
+                        formErrors.phone ? "error-phone" : undefined
+                      }
                     />
-                    {formErrors.phone && <p id="error-phone" className="text-sm text-red-600">{formErrors.phone}</p>}
+                    {formErrors.phone && (
+                      <p id="error-phone" className="text-sm text-red-600">
+                        {formErrors.phone}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -428,7 +563,9 @@ const Tenants = () => {
                     <Label htmlFor="status">Status</Label>
                     <Select
                       value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value })}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, status: value })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -451,11 +588,19 @@ const Tenants = () => {
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Saving...' : editingTenant ? 'Update Tenant' : 'Create Tenant'}
+                  {loading
+                    ? "Saving..."
+                    : editingTenant
+                    ? "Update Tenant"
+                    : "Create Tenant"}
                 </Button>
               </DialogFooter>
             </form>
@@ -482,12 +627,12 @@ const Tenants = () => {
       {loading && tenants.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-             <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading tenants...</p>
-        </div>
-      </div>
+            <div className="flex items-center justify-center h-screen">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-4 text-muted-foreground">Loading tenants...</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -502,10 +647,12 @@ const Tenants = () => {
                     </div>
                     <div>
                       <CardTitle className="text-lg">{tenant.name}</CardTitle>
-                      <p className="text-sm text-gray-500 capitalize">{tenant.category}</p>
+                      <p className="text-sm text-gray-500 capitalize">
+                        {tenant.category}
+                      </p>
                     </div>
                   </div>
-                  
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -517,7 +664,7 @@ const Tenants = () => {
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={() => handleDelete(tenant.id)}
                         className="text-red-600 focus:text-red-600"
                       >
@@ -528,13 +675,15 @@ const Tenants = () => {
                   </DropdownMenu>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">Plan</span>
-                  <Badge variant="outline" className="capitalize">{tenant.plan}</Badge>
+                  <Badge variant="outline" className="capitalize">
+                    {tenant.plan}
+                  </Badge>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">Status</span>
                   <Badge className={getStatusColor(tenant.status)}>
@@ -545,7 +694,9 @@ const Tenants = () => {
                 <div className="pt-3 border-t space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Mail className="h-3 w-3 text-gray-400" />
-                    <span className="text-gray-500 truncate">{tenant.email}</span>
+                    <span className="text-gray-500 truncate">
+                      {tenant.email}
+                    </span>
                   </div>
                   {tenant.phone && (
                     <div className="flex items-center gap-2 text-sm">
@@ -566,7 +717,9 @@ const Tenants = () => {
             <Building2 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-semibold mb-2">No tenants found</h3>
             <p className="text-gray-500 mb-4">
-              {searchQuery ? 'Try adjusting your search query' : 'Get started by adding your first tenant'}
+              {searchQuery
+                ? "Try adjusting your search query"
+                : "Get started by adding your first tenant"}
             </p>
             {!searchQuery && (
               <Button onClick={() => setIsDialogOpen(true)}>

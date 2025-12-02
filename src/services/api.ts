@@ -6,7 +6,7 @@ import { report } from "process";
 // Base URLs
 // const API_URL = "https://billingbackend-1vei.onrender.com";
 //const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000"; // Update with your backend URL
 // Alias to maintain legacy references expecting API_BASE
 const API_BASE = API_URL;
 
@@ -124,11 +124,13 @@ export const authAPI = {
 // MODULE API
 // ===============================
 export const moduleAPI = {
+  // Backend mount: /api/modules with routes ":id/modules"
+  // Final paths: GET/PUT /api/modules/:id/modules
   getTenantModules: async (tenantId) =>
-    (await api.get(`/api/tenants/${tenantId}/modules`)).data,
+    (await api.get(`/api/modules/${tenantId}/modules`)).data,
 
   updateTenantModules: async (tenantId, modules) =>
-    (await api.put(`/api/tenants/${tenantId}`, { modules })).data,
+    (await api.put(`/api/modules/${tenantId}/modules`, { modules })).data,
 };
 
 // ===============================
