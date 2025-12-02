@@ -6,7 +6,7 @@ import { report } from "process";
 // Base URLs
 // const API_URL = "https://billingbackend-1vei.onrender.com";
 //const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "http://localhost:5000";
 // Alias to maintain legacy references expecting API_BASE
 const API_BASE = API_URL;
 

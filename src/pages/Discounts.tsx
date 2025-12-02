@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 type DiscountRule = {
   id: number;

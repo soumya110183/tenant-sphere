@@ -22,7 +22,7 @@ import {
   DollarSign,
 } from "lucide-react";
 
-const API = "https://billingbackend-1vei.onrender.com/api/accounts";
+const API = "http://localhost:5000/api/accounts";
 
 const AccountsModule = () => {
   const [loading, setLoading] = useState(true);
