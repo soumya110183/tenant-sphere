@@ -28,7 +28,7 @@ export const Navbar = () => {
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-full items-center justify-between px-6">
-        {/* Search */}
+        {/* Search
         <div className="flex-1 max-w-md">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -38,10 +38,11 @@ export const Navbar = () => {
               className="pl-10 bg-muted/50"
             />
           </div>
-        </div>
+        </div> */}
 
-        {/* Right side actions */}
-        <div className="flex items-center gap-3">
+       {/* Right side actions */}
+        <div className="flex items-center gap-3 ml-auto">
+
           {/* Theme Toggle */}
           <Button
             variant="ghost"
@@ -55,45 +56,6 @@ export const Navbar = () => {
               <Sun className="h-5 w-5" />
             )}
           </Button>
-
-          {/* Notifications */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
-                  3
-                </Badge>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="space-y-2 p-2">
-                <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                  <div className="flex-1 text-sm">
-                    <p className="font-medium">Plan expiring soon</p>
-                    <p className="text-muted-foreground text-xs">Urban Cuts subscription expires in 5 days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                  <div className="flex-1 text-sm">
-                    <p className="font-medium">New tenant registered</p>
-                    <p className="text-muted-foreground text-xs">Sunset Diner just signed up</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                  <div className="h-2 w-2 rounded-full bg-muted mt-2" />
-                  <div className="flex-1 text-sm">
-                    <p className="font-medium">Support ticket</p>
-                    <p className="text-muted-foreground text-xs">Li Wei submitted a payment issue ticket</p>
-                  </div>
-                </div>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           {/* User Menu */}
           <DropdownMenu>
@@ -109,6 +71,7 @@ export const Navbar = () => {
                 </div>
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
@@ -117,11 +80,14 @@ export const Navbar = () => {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+
               <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
+
               <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout

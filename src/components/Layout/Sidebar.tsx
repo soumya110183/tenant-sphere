@@ -105,15 +105,9 @@ const staffNavigation = [
     category: "Daily Operations",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Billing", href: "/billing", icon: ShoppingCart },
-      { name: "Inventorys", href: "/inventorys", icon: Package },
-    ],
-  },
-  {
-    category: "Tasks & Management",
-    items: [
-      { name: "Tasks", href: "/tasks", icon: ClipboardList },
-      { name: "Customers", href: "/customers", icon: UserCheck },
+      { name: "Billing", href: "/billings", icon: ShoppingCart },
+      { name: "Inventorys", href: "/inventory", icon: Package },
+      { name: "Stocks", href: "/stock", icon: ClipboardList }
     ],
   },
   {

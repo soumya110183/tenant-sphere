@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 // Type definitions for sales returns to improve clarity & future refactors
 interface RawSalesReturn {
@@ -44,6 +45,9 @@ interface RawPurchaseReturn {
   product_id: number;
   created_at?: string;
   products?: { name?: string; sku?: string; category?: string };
+  total_refund?: number;
+  refund_amount?: number;
+  amount?: number;
 }
 
 interface UIPurchaseReturn {
@@ -422,7 +426,10 @@ const Modal = ({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          quantity: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
+                          quantity:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -441,7 +448,10 @@ const Modal = ({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          reorderLevel: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
+                          reorderLevel:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -460,7 +470,10 @@ const Modal = ({
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          maxStock: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
+                          maxStock:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -630,7 +643,10 @@ const Modal = ({
                         value={sp.qty}
                         onChange={(e) => {
                           const updated = [...saleProducts];
-                          updated[idx].qty = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
+                          updated[idx].qty =
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 1;
                           setSaleProducts(updated);
                         }}
                       />
@@ -788,11 +804,14 @@ const Modal = ({
                                     value={returnItem?.qty ?? ""}
                                     onChange={(e) => {
                                       const updated = [...returnItems];
-                                      const value = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
-                                      updated[returnItemIndex].qty = value === "" ? "" : Math.min(
-                                        value,
-                                        qtySold
-                                      );
+                                      const value =
+                                        e.target.value === ""
+                                          ? ""
+                                          : parseInt(e.target.value) || 1;
+                                      updated[returnItemIndex].qty =
+                                        value === ""
+                                          ? ""
+                                          : Math.min(value, qtySold);
                                       setReturnItems(updated);
                                     }}
                                     placeholder="Qty"
@@ -1065,9 +1084,15 @@ const Modal = ({
                               className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                               value={ri.qty ?? ""}
                               onChange={(e) => {
-                                const val = e.target.value === "" ? "" : parseInt(e.target.value) || 1;
+                                const val =
+                                  e.target.value === ""
+                                    ? ""
+                                    : parseInt(e.target.value) || 1;
                                 const upd = [...returnItems];
-                                upd[idx].qty = val === "" ? "" : Math.min(val, maxReturn || 1);
+                                upd[idx].qty =
+                                  val === ""
+                                    ? ""
+                                    : Math.min(val, maxReturn || 1);
                                 setReturnItems(upd);
                               }}
                             />
@@ -1296,7 +1321,10 @@ const Modal = ({
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        quantity: e.target.value === "" ? "" : parseInt(e.target.value) || 0,
+                        quantity:
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value) || 0,
                       })
                     }
                   />
@@ -1927,17 +1955,38 @@ const AdjustmentsView = ({ stockAdjustments, openModal }) => (
 // Main Component
 const GroceryInventory = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Read tab from URL parameter on mount
+  // Read tab from URL path
   const getInitialTab = () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    // Valid tabs: stock, sales, purchases, returns, adjustments
-    const validTabs = ["stock", "sales", "purchases", "returns", "adjustments"];
-    return validTabs.includes(tabParam) ? tabParam : "stock";
+    const path = location.pathname;
+    // Valid tabs: stock, sales, purchases, sales returns, purchase returns, adjustments
+    if (path.includes("/inventory/sales-returns")) return "sales returns";
+    if (path.includes("/inventory/purchase-returns")) return "purchase returns";
+    if (path.includes("/inventory/sales")) return "sales";
+    if (path.includes("/inventory/purchases")) return "purchases";
+    if (path.includes("/inventory/adjustments")) return "adjustments";
+    return "stock"; // default to stock
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab());
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const tabRoutes = {
+      stock: "/inventory",
+      sales: "/inventory/sales",
+      purchases: "/inventory/purchases",
+      "sales returns": "/inventory/sales-returns",
+      "purchase returns": "/inventory/purchase-returns",
+      adjustments: "/inventory/adjustments",
+    };
+    const currentRoute = tabRoutes[activeTab] || "/inventory";
+    if (location.pathname !== currentRoute) {
+      navigate(currentRoute, { replace: true });
+    }
+  }, [activeTab, navigate, location.pathname]);
   const [products, setProducts] = useState([]);
   const [baseInventory, setBaseInventory] = useState([]); // raw inventory snapshot prior to derived adjustments
   const [isLoading, setIsLoading] = useState(true);
@@ -2277,6 +2326,12 @@ const GroceryInventory = () => {
           ret.products?.name ||
           ret.select_product ||
           `Product #${ret.product_id}`;
+
+        // Get amount from backend fields
+        const amount = Number(
+          ret.total_refund || ret.refund_amount || ret.amount || 0
+        );
+
         return {
           id: ret.id,
           supplierId: ret.Suppliers_id || null,
@@ -2289,7 +2344,7 @@ const GroceryInventory = () => {
           quantity: ret.quantity,
           reason: ret.reason || "N/A",
           refundMethod: ret.refund_method || "N/A",
-          amountAdjusted: 0, // Backend doesn't provide; calculate if needed
+          amountAdjusted: amount,
           items: [
             {
               name: productName,
@@ -3175,20 +3230,174 @@ const GroceryInventory = () => {
           />
         )}
 
-        {activeTab === "returns" && (
-          <ReturnsView
-            salesReturns={salesReturns}
-            purchaseReturns={purchaseReturns}
-            openModal={openModal}
-          />
+        {activeTab === "sales returns" && (
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <RotateCcw className="h-5 w-5 text-primary" />
+                  Sales Returns ({salesReturns.length})
+                </CardTitle>
+                <Button
+                  onClick={() => openModal("salesReturn")}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Sales Return
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Date
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Invoice ID
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Products
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Refund Type
+                      </th>
+                      <th className="text-right py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Total Refund
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesReturns.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No sales returns found
+                        </td>
+                      </tr>
+                    ) : (
+                      salesReturns.map((ret) => (
+                        <tr key={ret.id} className="border-b hover:bg-muted/50">
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            {ret.date}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            #{ret.originalSaleId}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            {ret.items.map((item, idx) => (
+                              <div key={idx}>
+                                {item.name} (x{item.qty})
+                              </div>
+                            ))}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm capitalize">
+                            {ret.refundType}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-right text-sm font-medium">
+                            AED {ret.totalRefund.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {activeTab === "adjustments" && (
+        {activeTab === "purchase returns" && (
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <RotateCcw className="h-5 w-5 text-primary" />
+                  Purchase Returns ({purchaseReturns.length})
+                </CardTitle>
+                <Button
+                  onClick={() => openModal("purchaseReturn")}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Purchase Return
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Date
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Supplier
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Products
+                      </th>
+                      <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Refund Method
+                      </th>
+                      <th className="text-right py-3 px-2 sm:px-4 font-semibold text-sm">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseReturns.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No purchase returns found
+                        </td>
+                      </tr>
+                    ) : (
+                      purchaseReturns.map((ret) => (
+                        <tr key={ret.id} className="border-b hover:bg-muted/50">
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            {ret.date}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            {ret.supplierName}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm">
+                            {ret.items.map((item, idx) => (
+                              <div key={idx}>
+                                {item.name} (x{item.qty})
+                              </div>
+                            ))}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-sm capitalize">
+                            {ret.refundMethod}
+                          </td>
+                          <td className="py-3 px-2 sm:px-4 text-right text-sm font-medium">
+                            AED {ret.amountAdjusted.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* {activeTab === "adjustments" && (
           <AdjustmentsView
             stockAdjustments={stockAdjustments}
             openModal={openModal}
           />
-        )}
+        )} */}
       </div>
 
       <Modal

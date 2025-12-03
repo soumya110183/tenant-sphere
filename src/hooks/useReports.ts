@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { getTimeseries } from "@/services/api";
+import {
+  getTimeseries,
+  tenantReportAPI,
+  getInvoices,
+  getPurchases,
+} from "@/services/api";
 
 /* -----------------------------
    Types / Interfaces
@@ -161,8 +166,161 @@ export function useReports({
 
     (async () => {
       try {
-        // Fetch unified report data from backend (single call gets ALL data including payment_summary)
-        const reportRes = await getTimeseries(startDate, endDate, granularity);
+        // Try the unified timeseries endpoint first (existing backend)
+        let reportRes: any = null;
+        try {
+          reportRes = await getTimeseries(startDate, endDate, granularity);
+        } catch (err) {
+          console.warn(
+            "getTimeseries failed, falling back to tenantReport endpoints",
+            err
+          );
+        }
+
+        // If unified response not available or contains no timeseries data,
+        // assemble a compatible shape from tenant-specific endpoints.
+        if (
+          !reportRes ||
+          Object.keys(reportRes).length === 0 ||
+          (Array.isArray(reportRes.timeseries) &&
+            reportRes.timeseries.length === 0)
+        ) {
+          // Parallel tenant-specific calls
+          // Helper to log server errors and return a safe fallback value
+          const wrap = async (p: Promise<any>, name: string, fallback: any) =>
+            p.catch((err: any) => {
+              try {
+                console.error(
+                  `${name} error:`,
+                  err?.response?.status,
+                  err?.response?.data || err?.message || err
+                );
+              } catch (e) {
+                console.error(`${name} error (no response):`, err);
+              }
+              return fallback;
+            });
+
+          const [
+            summary,
+            sales,
+            purchasesSeries,
+            stock,
+            paymentSummary,
+            invoicesResp,
+            purchasesResp,
+          ] = await Promise.all([
+            wrap(tenantReportAPI.getSummary(), "tenantReport.getSummary", null),
+            wrap(
+              tenantReportAPI.getSalesChart(),
+              "tenantReport.getSalesChart",
+              []
+            ),
+            wrap(
+              tenantReportAPI.getPurchaseChart(),
+              "tenantReport.getPurchaseChart",
+              []
+            ),
+            wrap(
+              tenantReportAPI.getStockReport(),
+              "tenantReport.getStockReport",
+              []
+            ),
+            wrap(
+              tenantReportAPI.getPaymentSummary(),
+              "tenantReport.getPaymentSummary",
+              null
+            ),
+            wrap(
+              getInvoices(localStorage.getItem("tenant_id") || undefined),
+              "getInvoices",
+              []
+            ),
+            wrap(
+              getPurchases(localStorage.getItem("tenant_id") || undefined),
+              "getPurchases",
+              []
+            ),
+          ]);
+
+          // Build timeseries by merging sales and purchases by date
+          const salesArr = Array.isArray(sales) ? sales : [];
+          const purchasesArr = Array.isArray(purchasesSeries)
+            ? purchasesSeries
+            : [];
+          const byDate: Record<string, any> = {};
+
+          salesArr.forEach((s: any) => {
+            const d = s.date || s.day || s.label || s.month || s.month_label;
+            if (!d) return;
+            byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+            byDate[d].sales = Number(
+              s.sales ?? s.total ?? s.value ?? s.amount ?? 0
+            );
+          });
+          purchasesArr.forEach((p: any) => {
+            const d = p.date || p.day || (p.created_at || "").slice(0, 10);
+            if (!d) return;
+            byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+            byDate[d].purchase = Number(p.purchase ?? p.total ?? p.value ?? 0);
+          });
+
+          const timeseries = Object.values(byDate).sort(
+            (a: any, b: any) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+
+          // Normalize payment summary: tenant endpoint may return an array [{mode, value}]
+          const paymentModesArr = Array.isArray(paymentSummary)
+            ? paymentSummary
+            : paymentSummary?.modes || [];
+          const totalPaymentAmount = paymentModesArr.reduce(
+            (s: number, m: any) => s + Number(m.value ?? m.total ?? 0),
+            0
+          );
+          const payment_summary_normalized = {
+            total_amount: totalPaymentAmount,
+            modes: paymentModesArr.map((m: any) => ({
+              mode: m.mode || m.name || m.method || "Unknown",
+              total: Number(m.value ?? m.total ?? 0),
+              count: m.count || 0,
+            })),
+          };
+
+          // Normalize stock items so later logic (which expects 'quantity' and 'cost_price') works
+          const stockArr = Array.isArray(stock) ? stock : [];
+          const stock_page_normalized = stockArr.map((it: any, idx: number) => {
+            const quantity = Number(it.available ?? it.quantity ?? it.qty ?? 0);
+            const value = Number(it.value ?? it.stock_value ?? 0);
+            const cost_price =
+              quantity > 0
+                ? Number((value / quantity).toFixed(2))
+                : Number(it.cost_price ?? 0);
+            return {
+              id: it.id ?? it.product_id ?? it.product ?? `s-${idx}`,
+              product_id: it.product_id ?? undefined,
+              product_name:
+                it.product ?? it.product_name ?? it.products?.name ?? "",
+              quantity,
+              cost_price,
+              reorder_level: it.reorder_level ?? it.reorder ?? 0,
+              ...it,
+            };
+          });
+
+          reportRes = {
+            timeseries,
+            invoices_page: Array.isArray(invoicesResp)
+              ? invoicesResp
+              : invoicesResp?.data || [],
+            purchases_page: Array.isArray(purchasesResp)
+              ? purchasesResp
+              : purchasesResp?.data || [],
+            stock_page: stock_page_normalized,
+            payment_summary: payment_summary_normalized,
+            summary: summary || {},
+          };
+        }
 
         if (!mounted) return;
 
