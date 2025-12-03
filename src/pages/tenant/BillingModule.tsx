@@ -8,8 +8,8 @@ import { RedeemPointsPopup } from "@/components/billingComponent/RedeemPointsPop
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
 
-//const API_BASE = "http://localhost:5000";
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
+
 // =============================================
 // TYPES
 // =============================================
@@ -132,6 +132,7 @@ const SupermarketBilling = () => {
           },
         });
         const json = await res.json();
+        console.log("Fetched products:", json.data);
         if (res.ok) setProducts(json.data || []);
         else toast({
           title: "Failed to load products",
@@ -415,7 +416,7 @@ total: preview?.total || 0
 
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE}/api/invoices`, {
+      const res = await fetch(`${API_BASE}/api/billing`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
