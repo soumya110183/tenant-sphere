@@ -1564,13 +1564,7 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
             <ShoppingCart className="h-5 w-5 text-primary" />
             Sales Transactions ({sales.length})
           </CardTitle>
-          <Button
-            onClick={() => openModal("sale")}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Sale
-          </Button>
+          
         </div>
       </CardHeader>
       <CardContent>

@@ -10,6 +10,7 @@ import {
   Tag,
   X,
   User,
+  UserPlus,
   Phone,
   Mail,
   MapPin,
@@ -436,38 +437,42 @@ export default function BillSummary({
 
       <CardContent className="space-y-4">
         {/* Customer Search Section (top) */}
-        <div className="flex gap-2 items-start">
-          {/* keep left column at least input-height so popups overlay instead of pushing layout */}
-          <div className="flex-1 min-h-[40px] relative">
-            {/* Prefer your existing CustomerSearch component. If it's not available or path differs,
-                update the import above or replace this block with your own search UI. */}
-            {typeof CustomerSearch === "function" ? (
-              <CustomerSearch
-                customers={customers}
-                selectedCustomer={selectedCustomer}
-                onCustomerSelect={onCustomerSelect}
-                onClearCustomer={onClearCustomer}
-              />
-            ) : (
-              <>
-                <Label>Customer</Label>
-                <Input
-                  value={selectedCustomer?.name ?? ""}
-                  readOnly
-                  placeholder="Select or add customer"
-                />
-              </>
-            )}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Customer</div>
+            <div className="text-xs text-muted-foreground">
+              (for loyalty & coupons)
+            </div>
           </div>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => setModalOpen(true)}
-            className="whitespace-nowrap self-start mt-1"
+            className="flex items-center gap-2 px-3 py-1 rounded-md"
           >
-            Add Customer
+            <UserPlus className="h-4 w-4" />
+            Add
           </Button>
+        </div>
+
+        <div className="mt-2">
+          {typeof CustomerSearch === "function" ? (
+            <CustomerSearch
+              customers={customers}
+              selectedCustomer={selectedCustomer}
+              onCustomerSelect={onCustomerSelect}
+              onClearCustomer={onClearCustomer}
+            />
+          ) : (
+            <>
+              <Input
+                value={selectedCustomer?.name ?? ""}
+                readOnly
+                placeholder="Select or add customer"
+              />
+            </>
+          )}
         </div>
 
         {selectedCustomer && (

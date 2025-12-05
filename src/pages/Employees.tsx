@@ -324,21 +324,30 @@ function EmployeeModal({
   initial,
   submitting = false,
 }: EmployeeModalProps) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     name: "",
-    email: "",
     phone: "",
-    role: "staff",
-    username: "",
+    position: "staff",
+    salary: "",
+    createLogin: false,
+    email: "",
     password: "",
-    discountPercent: 0,
     active: true,
     ...initial,
-  });
+  }));
 
   useEffect(() => {
     if (initial) {
-      setForm((f: any) => ({ ...f, ...initial }));
+      setForm((f: any) => ({
+        name: initial.name ?? f.name,
+        phone: initial.phone ?? f.phone,
+        position: (initial.role as any) ?? f.position,
+        salary: (initial as any).salary ?? f.salary ?? "",
+        createLogin: false,
+        email: initial.email ?? "",
+        password: "",
+        active: initial.active ?? true,
+      }));
     }
   }, [initial]);
 
@@ -350,15 +359,24 @@ function EmployeeModal({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.username) {
-      alert("Name and username are required.");
+    if (!form.name || !form.name.trim()) {
+      alert("Name is required.");
       return;
     }
+
+    // If createLogin is checked, require email and password
+    if (form.createLogin && (!form.email || !form.password)) {
+      alert("Email and password are required to create login.");
+      return;
+    }
+
     onSave(form);
   }
 
   const modalTitle =
-    initial && initial._id ? "Edit Employee" : "Register Employee";
+    form && initial && (initial as any)._id
+      ? "Edit Employee"
+      : "Register Employee";
 
   return (
     <div
@@ -397,19 +415,6 @@ function EmployeeModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input
-                value={form.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  update("email", e.target.value)
-                }
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                type="email"
-                placeholder="john@example.com"
-              />
-            </div>
-
-            <div>
               <label className="block text-sm font-medium mb-1">Phone</label>
               <input
                 value={form.phone}
@@ -422,25 +427,13 @@ function EmployeeModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
+              <label className="block text-sm font-medium mb-1">
+                Position *
+              </label>
               <select
-                value={form.active ? "active" : "inactive"}
+                value={form.position}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                  update("active", e.target.value === "active")
-                }
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Role *</label>
-              <select
-                value={form.role}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                  update("role", e.target.value)
+                  update("position", e.target.value)
                 }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
               >
@@ -452,59 +445,69 @@ function EmployeeModal({
 
             <div>
               <label className="block text-sm font-medium mb-1">
-                Username *
+                Salary (monthly)
               </label>
               <input
-                value={form.username}
+                value={form.salary}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  update("username", e.target.value)
-                }
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                placeholder="johndoe"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Discount %
-              </label>
-              <input
-                value={String(form.discountPercent ?? 0)}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  update(
-                    "discountPercent",
-                    Math.max(0, Math.min(100, Number(e.target.value)))
-                  )
+                  update("salary", e.target.value)
                 }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 type="number"
                 min="0"
-                max="100"
+                placeholder="0"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+            {/* <div className="flex items-center gap-3">
               <input
-                value={form.password || ""}
+                id="createLogin"
+                type="checkbox"
+                checked={!!form.createLogin}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  update("password", e.target.value)
-                }
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                type="password"
-                placeholder={
-                  initial && initial._id
-                    ? "Leave blank to keep current"
-                    : "Enter password"
+                  update("createLogin", e.target.checked)
                 }
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                {initial && initial._id
-                  ? "Only enter if you want to change the password"
-                  : "Minimum 6 characters"}
-              </p>
+               <label htmlFor="createLogin" className="text-sm">
+                Create login for employee (optional)
+              </label> 
             </div>
+
+            {form.createLogin && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Email *
+                  </label>
+                  <input
+                    value={form.email}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      update("email", e.target.value)
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                    type="email"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Password *
+                  </label>
+                  <input
+                    value={form.password || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      update("password", e.target.value)
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                    type="password"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+              </>
+            )} */}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
@@ -1209,15 +1212,19 @@ export default function Employees() {
     setSubmitting(true);
     try {
       // Normalize form data to backend format
-      const normalized = {
+      const normalized: any = {
         full_name: payload.name,
-        email: payload.email,
         phone: payload.phone,
-        position: payload.role,
-        username: payload.username,
-        password: payload.password,
-        is_active: payload.active,
+        position: payload.position || payload.role,
+        salary: payload.salary ? Number(payload.salary) : undefined,
+        // create login only when requested
+        create_login: payload.createLogin ? true : false,
       };
+
+      if (payload.createLogin) {
+        normalized.email = payload.email;
+        normalized.password = payload.password;
+      }
 
       if (payload._id) {
         // Update existing employee

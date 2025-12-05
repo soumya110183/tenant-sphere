@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Table,
@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { MinusCircle } from "lucide-react";
+import { createPortal } from "react-dom";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
@@ -54,6 +55,11 @@ export const BillingTable = ({
 
   const inputRefs = useRef<HTMLInputElement[]>([]);
   const suggestionRef = useRef<HTMLDivElement | null>(null);
+  const [portalPos, setPortalPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const getMatchingProducts = (term: string) => {
     if (!term || term.length < 1) return [];
@@ -76,7 +82,23 @@ export const BillingTable = ({
     const matches = getMatchingProducts(value);
     setSuggestions(matches);
     setCurrentInputIndex(index);
-    setShowSuggestions(matches.length > 0);
+    const shouldShow = matches.length > 0;
+    setShowSuggestions(shouldShow);
+
+    // compute portal position when suggestions are shown
+    if (shouldShow) {
+      const el = inputRefs.current[index];
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setPortalPos({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      }
+    } else {
+      setPortalPos(null);
+    }
 
     if (!value.trim()) {
       updated[index].name = "";
@@ -102,10 +124,10 @@ export const BillingTable = ({
       updated[index].price = Number(exactMatch.selling_price || 0);
       updated[index].tax = Number(exactMatch.tax || 0);
       updated[index].product_id = exactMatch.product_id;
-      updated[index].total =
-        (updated[index].qty || 0) * updated[index].price;
+      updated[index].total = (updated[index].qty || 0) * updated[index].price;
 
       setShowSuggestions(false);
+      setPortalPos(null);
     } else {
       updated[index].name = "";
       updated[index].price = 0;
@@ -140,10 +162,7 @@ export const BillingTable = ({
     // Auto-focus next row
     if (currentInputIndex === updated.length - 1) {
       onAddRow();
-      setTimeout(
-        () => inputRefs.current[currentInputIndex + 1]?.focus(),
-        100
-      );
+      setTimeout(() => inputRefs.current[currentInputIndex + 1]?.focus(), 100);
     } else {
       inputRefs.current[currentInputIndex + 1]?.focus();
     }
@@ -163,6 +182,31 @@ export const BillingTable = ({
 
     onRowsChange(updated);
   };
+
+  // Keep portal position updated on scroll/resize while suggestions are visible
+  useEffect(() => {
+    if (!showSuggestions || currentInputIndex === null) return;
+
+    const updatePos = () => {
+      const el = inputRefs.current[currentInputIndex!];
+      if (!el) return setPortalPos(null);
+      const rect = el.getBoundingClientRect();
+      setPortalPos({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    };
+
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [showSuggestions, currentInputIndex]);
 
   return (
     <Card className="lg:col-span-2">
@@ -186,43 +230,74 @@ export const BillingTable = ({
             {rows.map((r, i) => (
               <TableRow key={i}>
                 <TableCell>
-                  <Input
-                    ref={(el) => (inputRefs.current[i] = el!)}
-                    value={r.code}
-                    onChange={(e) => handleItemCodeChange(i, e.target.value)}
-                    placeholder="Enter name, barcode, or SKU"
-                  />
+                  <div className="relative">
+                    <Input
+                      ref={(el) => (inputRefs.current[i] = el!)}
+                      value={r.code}
+                      onChange={(e) => handleItemCodeChange(i, e.target.value)}
+                      placeholder="Enter name, barcode, or SKU"
+                    />
 
-                  {showSuggestions && currentInputIndex === i && (
-                    <div
-                      ref={suggestionRef}
-                      className="fixed z-[9999] bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto min-w-[300px]"
-                      style={{
-                        top:
-                          inputRefs.current[i]?.getBoundingClientRect().bottom +
-                          window.scrollY +
-                          4,
-                        left:
-                          inputRefs.current[i]?.getBoundingClientRect().left +
-                          window.scrollX,
-                      }}
-                    >
-                      {suggestions.map((p) => (
-                        <div
-                          key={p.inventory_id}
-                          className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                          onClick={() => handleSuggestionClick(p)}
-                        >
-                          <div className="font-medium text-sm">{p.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {p.sku && `SKU: ${p.sku} • `}
-                            {p.barcode && `Barcode: ${p.barcode} • `}
-                            Stock: {p.quantity} • AED {p.selling_price}
+                    {showSuggestions && currentInputIndex === i && (
+                      <>
+                        {portalPos ? (
+                          createPortal(
+                            <div
+                              ref={suggestionRef}
+                              className="bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+                              style={{
+                                position: "absolute",
+                                top: portalPos.top,
+                                left: portalPos.left,
+                                width: portalPos.width,
+                                zIndex: 9999,
+                              }}
+                            >
+                              {suggestions.map((p) => (
+                                <div
+                                  key={p.inventory_id}
+                                  className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
+                                  onClick={() => handleSuggestionClick(p)}
+                                >
+                                  <div className="font-medium text-sm">
+                                    {p.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {p.sku && `SKU: ${p.sku} • `}
+                                    {p.barcode && `Barcode: ${p.barcode} • `}
+                                    Stock: {p.quantity} • AED {p.selling_price}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>,
+                            document.body
+                          )
+                        ) : (
+                          <div
+                            ref={suggestionRef}
+                            className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1"
+                          >
+                            {suggestions.map((p) => (
+                              <div
+                                key={p.inventory_id}
+                                className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
+                                onClick={() => handleSuggestionClick(p)}
+                              >
+                                <div className="font-medium text-sm">
+                                  {p.name}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {p.sku && `SKU: ${p.sku} • `}
+                                  {p.barcode && `Barcode: ${p.barcode} • `}
+                                  Stock: {p.quantity} • AED {p.selling_price}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        )}
+                      </>
+                    )}
+                  </div>
                 </TableCell>
 
                 <TableCell>

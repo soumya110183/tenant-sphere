@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { X } from "lucide-react";
 import { useState } from "react";
 
 type Product = {
@@ -24,7 +25,7 @@ export const CustomerSearch = ({
   customers,
   selectedCustomer,
   onCustomerSelect,
-  onClearCustomer
+  onClearCustomer,
 }: {
   customers: Customer[];
   selectedCustomer: Customer | null;
@@ -32,7 +33,9 @@ export const CustomerSearch = ({
   onClearCustomer: () => void;
 }) => {
   const [customerSearch, setCustomerSearch] = useState("");
-  const [customerSuggestions, setCustomerSuggestions] = useState<Customer[]>([]);
+  const [customerSuggestions, setCustomerSuggestions] = useState<Customer[]>(
+    []
+  );
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   // 🔥 Show all customers if input is empty
@@ -40,7 +43,7 @@ export const CustomerSearch = ({
     setCustomerSearch(val);
 
     if (!val.trim()) {
-      setCustomerSuggestions(customers);     // show all
+      setCustomerSuggestions(customers); // show all
       setShowCustomerSuggestions(true);
       onClearCustomer();
       return;
@@ -72,17 +75,37 @@ export const CustomerSearch = ({
     setShowCustomerSuggestions(true);
   };
 
+  const handleClearClick = () => {
+    setCustomerSearch("");
+    setCustomerSuggestions([]);
+    setShowCustomerSuggestions(false);
+    onClearCustomer();
+  };
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 w-full">
       <Label>Customer (for loyalty & coupons)</Label>
 
       <div className="relative">
         <Input
+          className="pr-10 w-full"
           placeholder="Search customer by name or phone"
           value={customerSearch}
           onChange={(e) => handleSearchChange(e.target.value)}
           onFocus={handleInputFocus}
         />
+
+        {/* Clear / Close button inside input */}
+        {customerSearch && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={handleClearClick}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
 
         {showCustomerSuggestions && customerSuggestions.length > 0 && (
           <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
