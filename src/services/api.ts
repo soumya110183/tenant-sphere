@@ -854,6 +854,21 @@ export const employeeService = {
 };
 
 // ===============================
+// EMPLOYEE SALARY API
+// ===============================
+export const salaryService = {
+  // Pay salary for an employee
+  pay: async (data) => (await api.post("/api/employees/salary/pay", data)).data,
+
+  // Get salary history for all employees (scoped by tenant via verifyToken)
+  getAll: async () => (await api.get("/api/employees/salary")).data,
+
+  // Get salary history for a single employee
+  getByEmployee: async (employeeId) =>
+    (await api.get(`/api/employees/salary/${employeeId}`)).data,
+};
+
+// ===============================
 // EMPLOYEE DISCOUNT API
 // ===============================
 export const employeeDiscountService = {
