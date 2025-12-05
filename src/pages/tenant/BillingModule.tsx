@@ -62,7 +62,9 @@ const SupermarketBilling = () => {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
 
   const [rows, setRows] = useState<BillRow[]>([
     { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 },
@@ -131,7 +133,8 @@ const SupermarketBilling = () => {
       } else {
         toast({
           title: "Failed to load customers",
-          description: json.error || json.message || "Please check your token or server",
+          description:
+            json.error || json.message || "Please check your token or server",
           variant: "destructive",
         });
       }
@@ -469,7 +472,7 @@ const SupermarketBilling = () => {
       <HeldBillsPopup
         show={showHeldBills}
         onClose={() => setShowHeldBills(false)}
-        heldBills={heldBills}
+        heldBills={heldBills as any}
         onRestoreBill={handleRestoreBill}
         onDeleteBill={handleDeleteHeldBill}
       />
@@ -482,50 +485,58 @@ const SupermarketBilling = () => {
             Enter products, apply discounts, and print receipt
           </p>
         </div>
+
+        {/* Move HoldBillSection into header (right side) to match new UI */}
+        <div className="flex items-center">
+          <HoldBillSection
+            rows={rows}
+            billName={billName}
+            onBillNameChange={setBillName}
+            onHoldBill={handleHoldBill}
+            heldBillsCount={heldBills.length}
+            onShowHeldBills={() => setShowHeldBills(true)}
+          />
+        </div>
       </div>
 
-      {/* Hold Bill Section */}
-      <HoldBillSection
-        rows={rows}
-        billName={billName}
-        onBillNameChange={setBillName}
-        onHoldBill={handleHoldBill}
-        heldBillsCount={heldBills.length}
-        onShowHeldBills={() => setShowHeldBills(true)}
-      />
-
       {/* Main Content */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Billing Table */}
-        <BillingTable
-          rows={rows}
-          products={products}
-          onRowsChange={setRows}
-          onAddRow={addNewRow}
-          onDeleteRow={deleteRow}
-        />
+      <div className="grid gap-6 lg:grid-cols-12">
+        {/* Billing Table - wider area on large screens */}
+        <div className="lg:col-span-8">
+          <BillingTable
+            rows={rows}
+            products={products as any}
+            onRowsChange={setRows}
+            onAddRow={addNewRow}
+            onDeleteRow={deleteRow}
+          />
+        </div>
 
-        {/* Bill Summary */}
-        <BillSummary
-          rows={rows}
-          preview={preview}
-          selectedCustomer={selectedCustomer}
-          couponCode={couponCode}
-          redeemPoints={redeemPoints}
-          paymentMethod={paymentMethod}
-          onApplyDiscounts={handleApplyDiscounts}
-          onClearDiscounts={handleClearDiscounts}
-          onOpenCouponPopup={() => setShowCouponPopup(true)}
-          onOpenRedeemPopup={() => setShowRedeemPopup(true)}
-          onGenerateInvoice={handleGenerateInvoice}
-          isApplyingDiscounts={isApplyingDiscounts}
-          isGeneratingInvoice={isGeneratingInvoice}
-          onPaymentMethodChange={setPaymentMethod}
-          customers={customers}
-          onCustomerSelect={handleCustomerSelect}
-          onClearCustomer={handleClearCustomer}
-          onRefreshCustomers={fetchCustomers} // pass the reusable fetch function
-        />
+        {/* Bill Summary - right sidebar */}
+        <div className="lg:col-span-4">
+          <div className="sticky top-6">
+            <BillSummary
+              rows={rows}
+              preview={preview}
+              selectedCustomer={selectedCustomer}
+              couponCode={couponCode}
+              redeemPoints={redeemPoints}
+              paymentMethod={paymentMethod}
+              onApplyDiscounts={handleApplyDiscounts}
+              onClearDiscounts={handleClearDiscounts}
+              onOpenCouponPopup={() => setShowCouponPopup(true)}
+              onOpenRedeemPopup={() => setShowRedeemPopup(true)}
+              onGenerateInvoice={handleGenerateInvoice}
+              isApplyingDiscounts={isApplyingDiscounts}
+              isGeneratingInvoice={isGeneratingInvoice}
+              onPaymentMethodChange={setPaymentMethod}
+              customers={customers}
+              onCustomerSelect={handleCustomerSelect}
+              onClearCustomer={handleClearCustomer}
+              onRefreshCustomers={fetchCustomers} // pass the reusable fetch function
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

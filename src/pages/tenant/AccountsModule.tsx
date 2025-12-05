@@ -29,38 +29,89 @@ const API = "http://localhost:5000/api/accounts";
 const AccountsModule = () => {
   const [loading, setLoading] = useState(true);
 
-  const [daybook, setDaybook] = useState([]);
-  const [ledger, setLedger] = useState([]);
-  const [trial, setTrial] = useState([]);
-  const [vat, setVat] = useState([]);
-  const [balanceSheet, setBalanceSheet] = useState({});
-  const [pal, setPAL] = useState({});
+  const [daybook, setDaybook] = useState<any[]>([]);
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [daybookPage, setDaybookPage] = useState(1);
+  const [daybookTotalPages, setDaybookTotalPages] = useState(1);
+  const [daybookTotalRecords, setDaybookTotalRecords] = useState(0);
+  const DAYBOOK_PAGE_SIZE = 10;
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+  const [ledgerTotalRecords, setLedgerTotalRecords] = useState(0);
+  const LEDGER_PAGE_SIZE = 10;
+  const [trial, setTrial] = useState<any[]>([]);
+  const [vat, setVat] = useState<any[]>([]);
+  const [balanceSheet, setBalanceSheet] = useState<any>({});
+  const [pal, setPAL] = useState<any>({});
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem("auth_token");
-
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [d, l, t, b, v, p] = await Promise.all([
-        fetch(`${API}/daybook`, { headers }).then((r) => r.json()),
-        fetch(`${API}/ledger`, { headers }).then((r) => r.json()),
+      // Load non-paginated endpoints in parallel
+      const [t, b, v, p] = await Promise.all([
         fetch(`${API}/trial-balance`, { headers }).then((r) => r.json()),
         fetch(`${API}/balance-sheet`, { headers }).then((r) => r.json()),
         fetch(`${API}/vat`, { headers }).then((r) => r.json()),
         fetch(`${API}/pal`, { headers }).then((r) => r.json()),
       ]);
 
-      setDaybook(d.data || []);
-      setLedger(l.data || []);
       setTrial(t.trial_balance || []);
       setVat(v.data || []);
       setBalanceSheet(b || {});
       setPAL(p || {});
+
+      // Load paginated daybook and ledger
+      await Promise.all([loadDaybook(1), loadLedger(1)]);
     } catch (err) {
       console.error("Error loading accounts:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDaybook = async (page = 1) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `${API}/daybook?page=${page}&limit=${DAYBOOK_PAGE_SIZE}`,
+        { headers }
+      );
+      const json = await res.json();
+      setDaybook(json.data || []);
+      setDaybookPage(json.page || page);
+      setDaybookTotalPages(
+        json.totalPages ||
+          Math.max(1, Math.ceil((json.totalRecords || 0) / DAYBOOK_PAGE_SIZE))
+      );
+      setDaybookTotalRecords(json.totalRecords || json.count || 0);
+    } catch (err) {
+      console.error("Error loading daybook:", err);
+      setDaybook([]);
+    }
+  };
+
+  const loadLedger = async (page = 1) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `${API}/ledger?page=${page}&limit=${LEDGER_PAGE_SIZE}`,
+        { headers }
+      );
+      const json = await res.json();
+      setLedger(json.data || []);
+      setLedgerPage(json.page || page);
+      setLedgerTotalPages(
+        json.totalPages ||
+          Math.max(1, Math.ceil((json.totalRecords || 0) / LEDGER_PAGE_SIZE))
+      );
+      setLedgerTotalRecords(json.totalRecords || json.count || 0);
+    } catch (err) {
+      console.error("Error loading ledger:", err);
+      setLedger([]);
     }
   };
 
@@ -261,6 +312,37 @@ const AccountsModule = () => {
               </Table>
             </CardContent>
           </Card>
+
+          {daybookTotalRecords > DAYBOOK_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {Math.max(1, (daybookPage - 1) * DAYBOOK_PAGE_SIZE + 1)}{" "}
+                -{" "}
+                {Math.min(daybookPage * DAYBOOK_PAGE_SIZE, daybookTotalRecords)}{" "}
+                of {daybookTotalRecords}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadDaybook(Math.max(1, daybookPage - 1))}
+                  disabled={daybookPage <= 1}
+                >
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadDaybook(Math.min(daybookTotalPages, daybookPage + 1))
+                  }
+                  disabled={daybookPage >= daybookTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* LEDGER */}
@@ -296,6 +378,35 @@ const AccountsModule = () => {
               </Table>
             </CardContent>
           </Card>
+          {ledgerTotalRecords > LEDGER_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {Math.max(1, (ledgerPage - 1) * LEDGER_PAGE_SIZE + 1)} -{" "}
+                {Math.min(ledgerPage * LEDGER_PAGE_SIZE, ledgerTotalRecords)} of{" "}
+                {ledgerTotalRecords}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadLedger(Math.max(1, ledgerPage - 1))}
+                  disabled={ledgerPage <= 1}
+                >
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadLedger(Math.min(ledgerTotalPages, ledgerPage + 1))
+                  }
+                  disabled={ledgerPage >= ledgerTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* TRIAL BALANCE */}

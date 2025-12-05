@@ -10,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { tenantAPI, moduleAPI } from "@/services/api";
-import { Building2, Save, CheckCircle2 } from "lucide-react";
+import { Building2, Save, CheckCircle2, Edit3 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -68,16 +75,39 @@ const Modules = () => {
     setLoading(true);
 
     try {
-      // Backend returns: { available: [...], enabled: {...} }
-      const response = await moduleAPI.getTenantModules(selectedTenant.id);
+      // If tenant record already contains a modules column as an object map, use it
+      const tenantModules = selectedTenant.modules;
+      let available: string[] = [];
+      let enabled: string[] = [];
 
-      const available: string[] = Array.isArray(response?.available)
-        ? response.available
-        : [];
-      const enabledMap = response?.enabled || {};
+      if (
+        tenantModules &&
+        typeof tenantModules === "object" &&
+        !Array.isArray(tenantModules)
+      ) {
+        available = Object.keys(tenantModules);
+        enabled = available.filter((k) => !!tenantModules[k]);
+      } else {
+        // Fallback to existing API calls
+        const availableFromApi =
+          (await moduleAPI.getModulesByCategory(selectedTenant.category)) || [];
+        const enabledFromApi =
+          (await moduleAPI.getTenantModules(selectedTenant.id)) || [];
 
-      // Convert enabled object map to array of enabled keys
-      const enabled: string[] = available.filter((key) => !!enabledMap[key]);
+        available = availableFromApi;
+        if (Array.isArray(enabledFromApi)) {
+          enabled = enabledFromApi;
+        } else if (enabledFromApi && typeof enabledFromApi === "object") {
+          // if API returned wrapper { available, enabled }
+          if (Array.isArray(enabledFromApi.available)) {
+            available = enabledFromApi.available;
+          }
+          const enabledMap = enabledFromApi.enabled ?? enabledFromApi;
+          if (enabledMap && typeof enabledMap === "object") {
+            enabled = Object.keys(enabledMap).filter((k) => !!enabledMap[k]);
+          }
+        }
+      }
 
       setAvailableModules(available);
       setEnabledModules(enabled);
@@ -91,6 +121,69 @@ const Modules = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Single-module edit dialog state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState<string | null>(null);
+  const [editingEnabled, setEditingEnabled] = useState(false);
+  const [savingModule, setSavingModule] = useState(false);
+
+  const openEditModal = (module: string) => {
+    setEditingModule(module);
+    setEditingEnabled(enabledModules.includes(module));
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingModule(null);
+    setEditingEnabled(false);
+  };
+
+  const handleSaveModuleEdit = async () => {
+    if (!selectedTenant || !editingModule) return;
+    setSavingModule(true);
+    try {
+      const newEnabled = editingEnabled
+        ? Array.from(new Set([...enabledModules, editingModule]))
+        : enabledModules.filter((m) => m !== editingModule);
+
+      const modulesPayload = availableModules.reduce(
+        (acc: Record<string, boolean>, key) => {
+          acc[key] = newEnabled.includes(key);
+          return acc;
+        },
+        {}
+      );
+
+      const resp = await moduleAPI.updateTenantModules(
+        selectedTenant.id,
+        modulesPayload
+      );
+
+      const body = resp?.tenant ?? resp?.data ?? resp;
+      const updatedTenant = body?.tenant ??
+        body ?? { ...selectedTenant, modules: modulesPayload };
+
+      setEnabledModules(newEnabled);
+      setTenants((prev) =>
+        prev.map((t) => (t.id === selectedTenant.id ? updatedTenant : t))
+      );
+      setSelectedTenant(updatedTenant);
+      setHasChanges(false);
+      toast({ title: "Module updated", description: `${editingModule} saved` });
+    } catch (err: any) {
+      console.error("Save module error:", err);
+      toast({
+        title: "Error",
+        description: err?.message ?? "Failed to save module",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingModule(false);
+      closeEditModal();
     }
   };
 
@@ -293,7 +386,7 @@ const Modules = () => {
       </Card>
 
       {/* Module Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
         {availableModules.map((module) => {
           const isEnabled = enabledModules.includes(module);
 
@@ -331,11 +424,79 @@ const Modules = () => {
                     }
                   />
                 </div>
+
+                <div className="mt-3 flex items-center justify-between">
+                  <div>
+                    <Badge
+                      className={
+                        isEnabled ? "bg-primary text-primary-foreground" : ""
+                      }
+                    >
+                      {String(isEnabled)}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEditModal(module)}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* Edit Module Dialog */}
+      <Dialog
+        open={editModalOpen}
+        onOpenChange={(v) => (v ? setEditModalOpen(true) : closeEditModal())}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Module</DialogTitle>
+          </DialogHeader>
+
+          <div className="p-2 space-y-4">
+            <div>
+              <div className="text-sm font-medium">Module</div>
+              <div className="mt-1 font-semibold">{editingModule}</div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm">Enabled</div>
+                <Switch
+                  checked={editingEnabled}
+                  onCheckedChange={(v) => setEditingEnabled(!!v)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={closeEditModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveModuleEdit} disabled={savingModule}>
+                {savingModule ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Summary */}
       <Card>

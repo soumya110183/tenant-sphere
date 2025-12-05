@@ -40,7 +40,7 @@ import BillingPageUAE_TenantStyle from "./pages/billing.js";
 import LoyaltySettings from "./pages/Loyality.js";
 import Coupons from "./pages/Coupon.js";
 import Discounts from "./pages/Discounts.js";
-import Employees from "./pages/Employees.jsx";
+import Employees from "./pages/Employees.js";
 
 const queryClient = new QueryClient();
 
@@ -167,7 +167,7 @@ const App = () => (
                   <Route
                     path="inventory/adjustments"
                     element={
-                      <RoleBasedRoute allowedRoles={["tenant","staff"]}>
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
                         <Inventory />
                       </RoleBasedRoute>
                     }
@@ -182,6 +182,47 @@ const App = () => (
                   />
                   <Route
                     path="report"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  {/* Explicit report subroutes so direct URLs work (tab routing) */}
+                  <Route
+                    path="report/sales"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="report/purchases"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="report/stock"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="report/payments"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="report/analytics"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <ReportsModule />

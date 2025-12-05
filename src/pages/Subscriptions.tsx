@@ -462,7 +462,7 @@ const Subscriptions: React.FC = () => {
                   <CardTitle>Subscription Plans</CardTitle>
                   <div className="mt-2">
                     <CardDescription>
-                      Available plans and included features (loaded from DB)
+                      Available plans and included features
                     </CardDescription>
                   </div>
                 </div>

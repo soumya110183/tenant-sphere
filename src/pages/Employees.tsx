@@ -1,10 +1,11 @@
-// src/pages/Employees.jsx
+// src/pages/Employees.tsx
 import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { employeeService } from "@/services/api";
 import {
   Users,
   Clock,
@@ -38,73 +39,192 @@ import {
   TrendingDown,
 } from "lucide-react";
 
+// Define TypeScript interfaces
+interface Employee {
+  _id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: string;
+  username: string;
+  discountPercent?: number;
+  active: boolean;
+  createdAt?: string;
+}
+
+interface Attendance {
+  _id: string;
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  timeIn: string | null;
+  timeOut: string | null;
+  status: string;
+  hours: number | null;
+}
+
+interface Salary {
+  _id: string;
+  employeeId: string;
+  employeeName: string;
+  month: string;
+  basic: number;
+  allowances: number;
+  deductions: number;
+  total: number;
+  paid: boolean;
+}
+
+interface Discount {
+  _id: string;
+  type: string;
+  name: string;
+  percentage: number;
+  role?: string;
+  employeeId?: string;
+  active: boolean;
+}
+
+interface StatsCardProps {
+  stat: {
+    label: string;
+    value: string | number;
+    icon: React.ComponentType<{ className?: string }>;
+    color?: string;
+  };
+}
+
+interface AlertProps {
+  count: number;
+  type?: "warning" | "danger" | "info";
+}
+
+interface SearchFilterProps {
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  onAdd: () => void;
+}
+
+interface EmployeeModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: (form: any) => void;
+  initial: any;
+  submitting?: boolean;
+}
+
+interface EmployeeTableRowProps {
+  emp: Employee;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+interface EmployeesViewProps {
+  employees: Employee[];
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  openModal: (type: string, item?: Employee) => void;
+  handleDelete: (emp: Employee) => void;
+  isLoading: boolean;
+}
+
+interface AttendanceViewProps {
+  attendance: Attendance[];
+  employees: Employee[];
+}
+
+interface SalariesViewProps {
+  salaries: Salary[];
+  markSalaryPaid: (id: string) => void;
+}
+
+interface DiscountsViewProps {
+  discounts: Discount[];
+  employees: Employee[];
+  updateDiscount: (id: string, updates: Partial<Discount>) => void;
+}
+
+interface TabNavigationProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  counts?: Record<string, number>;
+}
+
 // TabNavigation Component (matching screenshot)
-function TabNavigation({ activeTab, setActiveTab, counts = {} }) {
+function TabNavigation({
+  activeTab,
+  setActiveTab,
+  counts = {},
+}: TabNavigationProps) {
   const tabs = [
-    { id: 'employees', label: 'Employees' },
-    { id: 'attendance', label: 'Attendance' },
-    { id: 'salaries', label: 'Salaries' },
-    { id: 'discounts', label: 'Discounts' }
+    { id: "employees", label: "Employees" },
+    { id: "attendance", label: "Attendance" },
+    { id: "salaries", label: "Salaries" },
+    { id: "discounts", label: "Discounts" },
   ];
 
   return (
     <div className="border-b border-border">
-  <nav className="flex space-x-1 overflow-x-auto py-1">
-    {tabs.map((tab) => {
-      const isActive = activeTab === tab.id;
-      const count = counts[tab.id] || 0;
-      
-      return (
-        <button
-          key={tab.id}
-          className={`
-            group relative flex items-center px-5 py-2 rounded-t-sm transition-all
-            ${isActive
-              ? 'bg-background text-primary border-blue-800 '
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/0'
-            }
-          `}
-          onClick={() => setActiveTab(tab.id)}
-        >
-          <span className="font-medium text-sm">{tab.label}</span>
-          
-          {count > 0 && (
-            <span
+      <nav className="flex space-x-1 overflow-x-auto py-1">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const count = counts[tab.id] || 0;
+
+          return (
+            <button
+              key={tab.id}
               className={`
-                ml-3 px-2.5 py-1 text-sm rounded-full
-                ${isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
+                group relative flex items-center px-5 py-2 rounded-t-sm transition-all
+                ${
+                  isActive
+                    ? "bg-background text-primary border-blue-800 "
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/0"
                 }
               `}
+              onClick={() => setActiveTab(tab.id)}
             >
-              {count}
-            </span>
-          )}
-          
-          {/* Active indicator - Light blue bottom border */}
-          {isActive && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-100"></div>
-          )}
-        </button>
-      );
-    })}
-  </nav>
-</div>
+              <span className="font-medium text-sm">{tab.label}</span>
+
+              {count > 0 && (
+                <span
+                  className={`
+                    ml-3 px-2.5 py-1 text-sm rounded-full
+                    ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }
+                  `}
+                >
+                  {count}
+                </span>
+              )}
+
+              {/* Active indicator - Light blue bottom border */}
+              {isActive && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-100"></div>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 
 /**
  * Stats Card Component (matching inventory pattern)
  */
-function StatsCard({ stat }) {
+function StatsCard({ stat }: StatsCardProps) {
   const Icon = stat.icon;
   return (
     <Card className="rounded-lg">
       <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className={`text-2xl font-bold ${stat.color || "text-primary"}`}>
+            <div
+              className={`text-2xl font-bold ${stat.color || "text-primary"}`}
+            >
               {stat.value}
             </div>
             <div className="text-sm text-muted-foreground mt-1">
@@ -123,35 +243,35 @@ function StatsCard({ stat }) {
 /**
  * Alert Component (matching inventory pattern)
  */
-function Alert({ count, type = "warning" }) {
+function Alert({ count, type = "warning" }: AlertProps) {
   if (count === 0) return null;
-  
+
   const config = {
     warning: {
       bg: "bg-amber-500/10",
       border: "border-amber-500/30",
       text: "text-amber-600",
       icon: AlertTriangle,
-      message: `${count} pending salary payment(s)`
+      message: `${count} pending salary payment(s)`,
     },
     danger: {
       bg: "bg-red-500/10",
       border: "border-red-500/30",
       text: "text-red-600",
       icon: AlertTriangle,
-      message: `${count} critical items need attention`
+      message: `${count} critical items need attention`,
     },
     info: {
       bg: "bg-blue-500/10",
       border: "border-blue-500/30",
       text: "text-blue-600",
       icon: TrendingUp,
-      message: `${count} items require review`
-    }
+      message: `${count} items require review`,
+    },
   };
-  
+
   const { bg, border, text, icon: Icon, message } = config[type];
-  
+
   return (
     <div className={`${bg} ${border} rounded-lg p-4 mb-4`}>
       <div className="flex items-center gap-3">
@@ -159,7 +279,8 @@ function Alert({ count, type = "warning" }) {
           <Icon className="h-5 w-5" />
         </div>
         <div className="text-sm">
-          <span className="font-semibold">{message}.</span> Process before month-end.
+          <span className="font-semibold">{message}.</span> Process before
+          month-end.
         </div>
       </div>
     </div>
@@ -169,7 +290,7 @@ function Alert({ count, type = "warning" }) {
 /**
  * Search Filter Component (matching inventory pattern)
  */
-function SearchFilter({ searchTerm, setSearchTerm, onAdd }) {
+function SearchFilter({ searchTerm, setSearchTerm, onAdd }: SearchFilterProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-3 mb-4">
       <div className="flex-1">
@@ -179,7 +300,9 @@ function SearchFilter({ searchTerm, setSearchTerm, onAdd }) {
             type="text"
             placeholder="Search..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setSearchTerm(e.target.value)
+            }
             className="pl-9 w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
           />
         </div>
@@ -194,41 +317,66 @@ function SearchFilter({ searchTerm, setSearchTerm, onAdd }) {
 /**
  * Employee Form Modal (matching inventory modal pattern)
  */
-function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
-  const [form, setForm] = useState({
+function EmployeeModal({
+  open,
+  onClose,
+  onSave,
+  initial,
+  submitting = false,
+}: EmployeeModalProps) {
+  const [form, setForm] = useState(() => ({
     name: "",
-    email: "",
     phone: "",
-    role: "staff",
-    username: "",
+    position: "staff",
+    salary: "",
+    createLogin: false,
+    email: "",
     password: "",
-    discountPercent: 0,
     active: true,
     ...initial,
-  });
+  }));
 
   useEffect(() => {
     if (initial) {
-      setForm((f) => ({ ...f, ...initial }));
+      setForm((f: any) => ({
+        name: initial.name ?? f.name,
+        phone: initial.phone ?? f.phone,
+        position: (initial.role as any) ?? f.position,
+        salary: (initial as any).salary ?? f.salary ?? "",
+        createLogin: false,
+        email: initial.email ?? "",
+        password: "",
+        active: initial.active ?? true,
+      }));
     }
   }, [initial]);
 
   if (!open) return null;
 
-  function update(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function update(field: string, value: any) {
+    setForm((prev: any) => ({ ...prev, [field]: value }));
   }
 
-  function submit(e) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name || !form.username) {
-      alert("Name and username are required.");
+    if (!form.name || !form.name.trim()) {
+      alert("Name is required.");
       return;
     }
+
+    // If createLogin is checked, require email and password
+    if (form.createLogin && (!form.email || !form.password)) {
+      alert("Email and password are required to create login.");
+      return;
+    }
+
     onSave(form);
   }
 
-  const modalTitle = initial && initial._id ? "Edit Employee" : "Register Employee";
+  const modalTitle =
+    form && initial && (initial as any)._id
+      ? "Edit Employee"
+      : "Register Employee";
 
   return (
     <div
@@ -237,7 +385,7 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
     >
       <div
         className="bg-background rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
           <h2 className="text-lg sm:text-xl font-bold">{modalTitle}</h2>
@@ -248,7 +396,7 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        
+
         <form onSubmit={submit} className="p-4 sm:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -257,7 +405,9 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
               </label>
               <input
                 value={form.name}
-                onChange={(e) => update("name", e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  update("name", e.target.value)
+                }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 placeholder="John Doe"
                 required
@@ -265,43 +415,26 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input
-                value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                type="email"
-                placeholder="john@example.com"
-              />
-            </div>
-
-            <div>
               <label className="block text-sm font-medium mb-1">Phone</label>
               <input
                 value={form.phone}
-                onChange={(e) => update("phone", e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  update("phone", e.target.value)
+                }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 placeholder="+971 50 123 4567"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
+              <label className="block text-sm font-medium mb-1">
+                Position *
+              </label>
               <select
-                value={form.active ? "active" : "inactive"}
-                onChange={(e) => update("active", e.target.value === "active")}
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Role *</label>
-              <select
-                value={form.role}
-                onChange={(e) => update("role", e.target.value)}
+                value={form.position}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  update("position", e.target.value)
+                }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <option value="staff">Staff</option>
@@ -312,61 +445,79 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
 
             <div>
               <label className="block text-sm font-medium mb-1">
-                Username *
+                Salary (monthly)
               </label>
               <input
-                value={form.username}
-                onChange={(e) => update("username", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                placeholder="johndoe"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Discount %
-              </label>
-              <input
-                value={String(form.discountPercent ?? 0)}
-                onChange={(e) =>
-                  update(
-                    "discountPercent",
-                    Math.max(0, Math.min(100, Number(e.target.value)))
-                  )
+                value={form.salary}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  update("salary", e.target.value)
                 }
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 type="number"
                 min="0"
-                max="100"
+                placeholder="0"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+            {/* <div className="flex items-center gap-3">
               <input
-                value={form.password || ""}
-                onChange={(e) => update("password", e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
-                type="password"
-                placeholder={
-                  initial && initial._id
-                    ? "Leave blank to keep current"
-                    : "Enter password"
+                id="createLogin"
+                type="checkbox"
+                checked={!!form.createLogin}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  update("createLogin", e.target.checked)
                 }
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                {initial && initial._id
-                  ? "Only enter if you want to change the password"
-                  : "Minimum 6 characters"}
-              </p>
+               <label htmlFor="createLogin" className="text-sm">
+                Create login for employee (optional)
+              </label> 
             </div>
+
+            {form.createLogin && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Email *
+                  </label>
+                  <input
+                    value={form.email}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      update("email", e.target.value)
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                    type="email"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Password *
+                  </label>
+                  <input
+                    value={form.password || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      update("password", e.target.value)
+                    }
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                    type="password"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+              </>
+            )} */}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
             <Button type="submit" className="flex-1" disabled={submitting}>
               <Save className="h-4 w-4 mr-2" />
-              {submitting ? "Saving..." : (initial && initial._id ? "Update" : "Create")}
+              {submitting
+                ? "Saving..."
+                : initial && initial._id
+                ? "Update"
+                : "Create"}
             </Button>
             <Button
               type="button"
@@ -387,11 +538,7 @@ function EmployeeModal({ open, onClose, onSave, initial, submitting = false }) {
 /**
  * Employee Table Row Component
  */
-function EmployeeTableRow({ 
-  emp, 
-  onEdit, 
-  onDelete,
-}) {
+function EmployeeTableRow({ emp, onEdit, onDelete }: EmployeeTableRowProps) {
   return (
     <tr className="border-b hover:bg-muted/50">
       <td className="py-3 px-2 sm:px-4">
@@ -420,13 +567,21 @@ function EmployeeTableRow({
       </td>
       <td className="py-3 px-2 sm:px-4 text-sm">
         <div>{emp.email || "No email"}</div>
-        <div className="text-xs text-muted-foreground">{emp.phone || "No phone"}</div>
+        <div className="text-xs text-muted-foreground">
+          {emp.phone || "No phone"}
+        </div>
       </td>
       <td className="py-3 px-2 sm:px-4 text-sm font-medium">
         {emp.discountPercent ?? 0}%
       </td>
       <td className="py-3 px-2 sm:px-4">
-        <Badge className={emp.active ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"}>
+        <Badge
+          className={
+            emp.active
+              ? "bg-green-500/10 text-green-500"
+              : "bg-red-500/10 text-red-500"
+          }
+        >
           {emp.active ? (
             <>
               <UserCheck className="h-3 w-3 mr-1 inline" />
@@ -442,10 +597,10 @@ function EmployeeTableRow({
       </td>
       <td className="py-3 px-2 sm:px-4">
         <div className="flex gap-1 sm:gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => onEdit(emp)}>
+          <Button variant="outline" size="sm" onClick={() => onEdit()}>
             <Edit className="h-3 w-3" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onDelete(emp)}>
+          <Button variant="outline" size="sm" onClick={() => onDelete()}>
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -464,10 +619,13 @@ function EmployeesView({
   openModal,
   handleDelete,
   isLoading,
-}) {
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+}: EmployeesViewProps) {
+  const [sortConfig, setSortConfig] = useState<{
+    key: string | null;
+    direction: string;
+  }>({ key: null, direction: "asc" });
 
-  const requestSort = (key) => {
+  const requestSort = (key: string) => {
     let direction = "asc";
     if (sortConfig.key === key && sortConfig.direction === "asc") {
       direction = "desc";
@@ -475,14 +633,17 @@ function EmployeesView({
     setSortConfig({ key, direction });
   };
 
-  const getSortedData = (data) => {
+  const getSortedData = (data: Employee[]) => {
     if (!sortConfig.key) return data;
 
     return [...data].sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
+      const aVal = a[sortConfig.key as keyof Employee];
+      const bVal = b[sortConfig.key as keyof Employee];
+
+      if (aVal < bVal) {
         return sortConfig.direction === "asc" ? -1 : 1;
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
+      if (aVal > bVal) {
         return sortConfig.direction === "asc" ? 1 : -1;
       }
       return 0;
@@ -518,7 +679,7 @@ function EmployeesView({
             <table className="w-full min-w-[800px]">
               <thead>
                 <tr className="border-b">
-                  <th 
+                  <th
                     className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium cursor-pointer"
                     onClick={() => requestSort("name")}
                   >
@@ -532,7 +693,7 @@ function EmployeesView({
                         ))}
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium cursor-pointer"
                     onClick={() => requestSort("role")}
                   >
@@ -549,7 +710,7 @@ function EmployeesView({
                   <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                     Contact
                   </th>
-                  <th 
+                  <th
                     className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium cursor-pointer"
                     onClick={() => requestSort("discountPercent")}
                   >
@@ -582,12 +743,15 @@ function EmployeesView({
                   </tr>
                 ) : sortedEmployees.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                    <td
+                      colSpan={6}
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
                       {searchTerm ? (
                         <>
                           No employees found matching "{searchTerm}".{" "}
-                          <Button 
-                            variant="link" 
+                          <Button
+                            variant="link"
                             onClick={() => setSearchTerm("")}
                             className="text-xs h-auto p-0"
                           >
@@ -621,7 +785,7 @@ function EmployeesView({
 /**
  * Attendance View Component
  */
-function AttendanceView({ attendance, employees }) {
+function AttendanceView({ attendance, employees }: AttendanceViewProps) {
   return (
     <Card>
       <CardHeader>
@@ -660,7 +824,10 @@ function AttendanceView({ attendance, employees }) {
             <tbody>
               {attendance.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                  <td
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground text-sm"
+                  >
                     No attendance records for today.
                   </td>
                 </tr>
@@ -680,7 +847,13 @@ function AttendanceView({ attendance, employees }) {
                       {a.hours ? `${a.hours.toFixed(2)} hrs` : "-"}
                     </td>
                     <td className="py-3 px-2 sm:px-4">
-                      <Badge className={a.status === "in" ? "bg-green-500/10 text-green-500" : "bg-muted text-muted-foreground"}>
+                      <Badge
+                        className={
+                          a.status === "in"
+                            ? "bg-green-500/10 text-green-500"
+                            : "bg-muted text-muted-foreground"
+                        }
+                      >
                         {a.status === "in" ? "In Shift" : "Shift Ended"}
                       </Badge>
                     </td>
@@ -698,7 +871,7 @@ function AttendanceView({ attendance, employees }) {
 /**
  * Salaries View Component
  */
-function SalariesView({ salaries, markSalaryPaid }) {
+function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
   const pendingSalaries = salaries.filter((s) => !s.paid);
   const paidSalaries = salaries.filter((s) => s.paid);
 
@@ -798,7 +971,10 @@ function SalariesView({ salaries, markSalaryPaid }) {
               <tbody>
                 {paidSalaries.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                    <td
+                      colSpan={4}
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
                       No salary history available.
                     </td>
                   </tr>
@@ -833,7 +1009,11 @@ function SalariesView({ salaries, markSalaryPaid }) {
 /**
  * Discounts View Component
  */
-function DiscountsView({ discounts, employees, updateDiscount }) {
+function DiscountsView({
+  discounts,
+  employees,
+  updateDiscount,
+}: DiscountsViewProps) {
   return (
     <Card>
       <CardHeader>
@@ -870,7 +1050,10 @@ function DiscountsView({ discounts, employees, updateDiscount }) {
             <tbody>
               {discounts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                  <td
+                    colSpan={6}
+                    className="text-center py-8 text-muted-foreground text-sm"
+                  >
                     No discount rules configured.
                   </td>
                 </tr>
@@ -893,10 +1076,17 @@ function DiscountsView({ discounts, employees, updateDiscount }) {
                         ? "All Staff"
                         : d.type === "role"
                         ? `${d.role}s`
-                        : employees.find((e) => e._id === d.employeeId)?.name || "Employee"}
+                        : employees.find((e) => e._id === d.employeeId)?.name ||
+                          "Employee"}
                     </td>
                     <td className="py-3 px-2 sm:px-4">
-                      <Badge className={d.active ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"}>
+                      <Badge
+                        className={
+                          d.active
+                            ? "bg-green-500/10 text-green-500"
+                            : "bg-red-500/10 text-red-500"
+                        }
+                      >
                         {d.active ? "Active" : "Inactive"}
                       </Badge>
                     </td>
@@ -905,7 +1095,9 @@ function DiscountsView({ discounts, employees, updateDiscount }) {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => updateDiscount(d._id, { active: !d.active })}
+                          onClick={() =>
+                            updateDiscount(d._id, { active: !d.active })
+                          }
                         >
                           {d.active ? "Deactivate" : "Activate"}
                         </Button>
@@ -923,262 +1115,25 @@ function DiscountsView({ discounts, employees, updateDiscount }) {
 }
 
 /**
- * Mock Data
- */
-const mockEmployees = [
-  {
-    _id: "1",
-    name: "John Smith",
-    email: "john.smith@example.com",
-    phone: "+971 50 123 4567",
-    role: "manager",
-    username: "johnsmith",
-    discountPercent: 10,
-    active: true,
-    createdAt: "2024-01-15",
-  },
-  {
-    _id: "2",
-    name: "Sarah Johnson",
-    email: "sarah.j@example.com",
-    phone: "+971 55 234 5678",
-    role: "staff",
-    username: "sarahj",
-    discountPercent: 5,
-    active: true,
-    createdAt: "2024-02-10",
-  },
-  {
-    _id: "3",
-    name: "Ahmed Hassan",
-    email: "ahmed.h@example.com",
-    phone: "+971 56 345 6789",
-    role: "staff",
-    username: "ahmedh",
-    discountPercent: 8,
-    active: true,
-    createdAt: "2024-03-05",
-  },
-  {
-    _id: "4",
-    name: "Maria Rodriguez",
-    email: "maria.r@example.com",
-    phone: "+971 52 456 7890",
-    role: "admin",
-    username: "mariar",
-    discountPercent: 15,
-    active: false,
-    createdAt: "2024-01-20",
-  },
-  {
-    _id: "5",
-    name: "David Wilson",
-    email: "david.w@example.com",
-    phone: "+971 54 567 8901",
-    role: "staff",
-    username: "davidw",
-    discountPercent: 7,
-    active: true,
-    createdAt: "2024-03-15",
-  },
-];
-
-const mockAttendance = [
-  {
-    _id: "a1",
-    employeeId: "1",
-    employeeName: "John Smith",
-    date: new Date().toISOString(),
-    timeIn: "08:45 AM",
-    timeOut: "17:30 PM",
-    status: "out",
-    hours: 8.75,
-  },
-  {
-    _id: "a2",
-    employeeId: "2",
-    employeeName: "Sarah Johnson",
-    date: new Date().toISOString(),
-    timeIn: "09:00 AM",
-    timeOut: null,
-    status: "in",
-    hours: null,
-  },
-  {
-    _id: "a3",
-    employeeId: "3",
-    employeeName: "Ahmed Hassan",
-    date: new Date().toISOString(),
-    timeIn: "08:30 AM",
-    timeOut: "17:00 PM",
-    status: "out",
-    hours: 8.5,
-  },
-  {
-    _id: "a4",
-    employeeId: "5",
-    employeeName: "David Wilson",
-    date: new Date().toISOString(),
-    timeIn: "09:15 AM",
-    timeOut: null,
-    status: "in",
-    hours: null,
-  },
-];
-
-const mockSalaries = [
-  {
-    _id: "s1",
-    employeeId: "1",
-    employeeName: "John Smith",
-    month: "March 2024",
-    basic: 7000,
-    allowances: 1500,
-    deductions: 0,
-    total: 8500,
-    paid: false,
-  },
-  {
-    _id: "s2",
-    employeeId: "2",
-    employeeName: "Sarah Johnson",
-    month: "March 2024",
-    basic: 5000,
-    allowances: 1000,
-    deductions: 500,
-    total: 6500,
-    paid: false,
-  },
-  {
-    _id: "s3",
-    employeeId: "3",
-    employeeName: "Ahmed Hassan",
-    month: "March 2024",
-    basic: 4800,
-    allowances: 1200,
-    deductions: 0,
-    total: 6000,
-    paid: true,
-  },
-  {
-    _id: "s4",
-    employeeId: "4",
-    employeeName: "Maria Rodriguez",
-    month: "March 2024",
-    basic: 7500,
-    allowances: 1500,
-    deductions: 0,
-    total: 9000,
-    paid: false,
-  },
-];
-
-const mockDiscounts = [
-  {
-    _id: "d1",
-    type: "global",
-    name: "Staff Discount",
-    percentage: 5,
-    active: true,
-  },
-  {
-    _id: "d2",
-    type: "role",
-    name: "Manager Discount",
-    percentage: 10,
-    role: "manager",
-    active: true,
-  },
-  {
-    _id: "d3",
-    type: "employee",
-    name: "John's Special Discount",
-    employeeId: "1",
-    percentage: 15,
-    active: true,
-  },
-];
-
-/**
- * Mock API Functions
- */
-const mockApi = {
-  getEmployees: () => Promise.resolve({ data: [...mockEmployees] }),
-
-  createEmployee: (payload) => {
-    const newEmployee = {
-      ...payload,
-      _id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    mockEmployees.push(newEmployee);
-    return Promise.resolve({ data: newEmployee });
-  },
-
-  updateEmployee: (id, payload) => {
-    const index = mockEmployees.findIndex((emp) => emp._id === id);
-    if (index !== -1) {
-      mockEmployees[index] = { ...mockEmployees[index], ...payload };
-    }
-    return Promise.resolve({ data: mockEmployees[index] });
-  },
-
-  deleteEmployee: (id) => {
-    const index = mockEmployees.findIndex((emp) => emp._id === id);
-    if (index !== -1) {
-      mockEmployees.splice(index, 1);
-    }
-    return Promise.resolve({ data: { success: true } });
-  },
-
-  getAttendance: () => Promise.resolve({ data: [...mockAttendance] }),
-
-  getSalaries: () => Promise.resolve({ data: [...mockSalaries] }),
-
-  getPendingSalaries: () =>
-    Promise.resolve({
-      data: mockSalaries.filter((s) => !s.paid),
-    }),
-
-  markSalaryPaid: (id) => {
-    const salary = mockSalaries.find((s) => s._id === id);
-    if (salary) {
-      salary.paid = true;
-    }
-    return Promise.resolve({ data: salary });
-  },
-
-  getDiscounts: () => Promise.resolve({ data: [...mockDiscounts] }),
-
-  updateDiscount: (id, payload) => {
-    const discount = mockDiscounts.find((d) => d._id === id);
-    if (discount) {
-      Object.assign(discount, payload);
-    }
-    return Promise.resolve({ data: discount });
-  },
-};
-
-/**
  * Main Employees Component
  */
 export default function Employees() {
-  const [activeTab, setActiveTab] = useState("employees");
-  const [employees, setEmployees] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [salaries, setSalaries] = useState([]);
-  const [discounts, setDiscounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("employees");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [salaries, setSalaries] = useState<Salary[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [kpiCounts, setKpiCounts] = useState({
     total: 0,
     activeShifts: 0,
     pendingSalaries: 0,
     staffDiscountAvg: 0,
   });
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     fetchAll();
@@ -1187,34 +1142,55 @@ export default function Employees() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [empRes, attRes, salRes, discRes] = await Promise.all([
-        mockApi.getEmployees(),
-        mockApi.getAttendance(),
-        mockApi.getSalaries(),
-        mockApi.getDiscounts(),
-      ]);
+      // Fetch from real API
+      const empRes = await employeeService.getAll();
+      const empData = Array.isArray(empRes?.data)
+        ? empRes.data
+        : empRes
+        ? [empRes]
+        : [];
 
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Normalize employee data (map backend fields to frontend interface)
+      const normalizedEmployees = empData.map((emp: any) => ({
+        _id: emp.id || emp._id,
+        name: emp.full_name || emp.name,
+        email: emp.email || "",
+        phone: emp.phone || "",
+        role: emp.position || emp.role || "staff",
+        username:
+          emp.username ||
+          emp.full_name?.toLowerCase().replace(/\s+/g, "") ||
+          "",
+        discountPercent:
+          emp.salary?.discount_percent || emp.discountPercent || 0,
+        active:
+          emp.is_active !== undefined ? emp.is_active : emp.active ?? true,
+        createdAt: emp.created_at || emp.createdAt,
+      }));
 
-      setEmployees(empRes.data);
-      setAttendance(attRes.data);
-      setSalaries(salRes.data);
-      setDiscounts(discRes.data);
+      setEmployees(normalizedEmployees);
 
-      // Compute KPIs
-      const activeShifts = attRes.data.filter((a) => a.status === "in").length;
-      const pendingSalaries = salRes.data.filter((s) => !s.paid).length;
+      // TODO: Fetch from real APIs for attendance, salaries, discounts
+      // For now using empty arrays - these would come from separate endpoints
+      setAttendance([]);
+      setSalaries([]);
+      setDiscounts([]);
+
+      // Compute KPIs based on available data
+      const activeShifts = 0; // Would come from attendance API
+      const pendingSalaries = 0; // Would come from salaries API
       const avgDiscount =
-        empRes.data.length === 0
+        normalizedEmployees.length === 0
           ? 0
           : Math.round(
-              empRes.data.reduce((s, e) => s + (e.discountPercent || 0), 0) /
-                empRes.data.length
+              normalizedEmployees.reduce(
+                (s: number, e: any) => s + (e.discountPercent || 0),
+                0
+              ) / normalizedEmployees.length
             );
 
       setKpiCounts({
-        total: empRes.data.length,
+        total: normalizedEmployees.length,
         activeShifts,
         pendingSalaries,
         staffDiscountAvg: avgDiscount,
@@ -1227,55 +1203,78 @@ export default function Employees() {
     }
   }
 
-  function openModal(type, item = null) {
+  function openModal(type: string, item: Employee | null = null) {
     setEditing(item);
     setModalOpen(true);
   }
 
-  async function handleSave(payload) {
+  async function handleSave(payload: any) {
     setSubmitting(true);
     try {
+      // Normalize form data to backend format
+      const normalized: any = {
+        full_name: payload.name,
+        phone: payload.phone,
+        position: payload.position || payload.role,
+        salary: payload.salary ? Number(payload.salary) : undefined,
+        // create login only when requested
+        create_login: payload.createLogin ? true : false,
+      };
+
+      if (payload.createLogin) {
+        normalized.email = payload.email;
+        normalized.password = payload.password;
+      }
+
       if (payload._id) {
-        await mockApi.updateEmployee(payload._id, payload);
+        // Update existing employee
+        await employeeService.update(payload._id, normalized);
       } else {
-        await mockApi.createEmployee(payload);
+        // Create new employee
+        await employeeService.create(normalized);
       }
       setModalOpen(false);
       await fetchAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving employee:", err);
-      alert("Failed to save employee.");
+      alert(
+        `Failed to save employee: ${err.response?.data?.message || err.message}`
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDelete(emp) {
+  async function handleDelete(emp: Employee) {
     if (!confirm(`Delete ${emp.name}? This action cannot be undone.`)) return;
     try {
-      await mockApi.deleteEmployee(emp._id);
+      await employeeService.delete(emp._id);
       await fetchAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting employee:", err);
-      alert("Delete failed.");
+      alert(`Delete failed: ${err.response?.data?.message || err.message}`);
     }
   }
 
-  async function markSalaryPaid(salaryId) {
+  async function markSalaryPaid(salaryId: string) {
     try {
-      await mockApi.markSalaryPaid(salaryId);
+      // TODO: Implement salary payment API call
+      // await salaryService.markAsPaid(salaryId);
+      console.warn("markSalaryPaid: API endpoint not yet implemented");
       await fetchAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error marking salary as paid:", err);
       alert("Failed to mark salary as paid.");
     }
   }
 
-  async function updateDiscount(id, updates) {
+  async function updateDiscount(id: string, updates: Partial<Discount>) {
     try {
-      await mockApi.updateDiscount(id, updates);
+      // TODO: Implement discount update API call
+      // await employeeDiscountService.updateRule(id, updates);
+      console.warn("updateDiscount: API endpoint not yet implemented");
       await fetchAll();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating discount:", err);
       alert("Failed to update discount.");
     }
@@ -1313,7 +1312,10 @@ export default function Employees() {
       label: "Pending Salaries",
       value: kpiCounts.pendingSalaries,
       icon: CreditCard,
-      color: kpiCounts.pendingSalaries > 0 ? "text-amber-600" : "text-muted-foreground",
+      color:
+        kpiCounts.pendingSalaries > 0
+          ? "text-amber-600"
+          : "text-muted-foreground",
     },
   ];
 
@@ -1368,17 +1370,11 @@ export default function Employees() {
         )}
 
         {activeTab === "attendance" && (
-          <AttendanceView
-            attendance={attendance}
-            employees={employees}
-          />
+          <AttendanceView attendance={attendance} employees={employees} />
         )}
 
         {activeTab === "salaries" && (
-          <SalariesView
-            salaries={salaries}
-            markSalaryPaid={markSalaryPaid}
-          />
+          <SalariesView salaries={salaries} markSalaryPaid={markSalaryPaid} />
         )}
 
         {activeTab === "discounts" && (

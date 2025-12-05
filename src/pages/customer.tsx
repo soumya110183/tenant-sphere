@@ -498,16 +498,18 @@ const CustomerPage: FC = () => {
 
       {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
 
-      <div className="flex justify-between gap-3 flex-col sm:flex-row">
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            placeholder="Search customers..."
-            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm"
-            value={q}
+      
+
+        <div className="flex justify-between gap-3 flex-col sm:flex-row">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    placeholder="Search customers..."
+                    className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
+                    value={q}
             onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
+                  />
+                </div>
 
         <Button onClick={() => openCreate()}>
           <Plus className="h-4 w-4 mr-2" /> Add Customer
