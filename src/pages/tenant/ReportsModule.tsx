@@ -39,6 +39,7 @@ import {
 } from "recharts";
 
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useReports } from "@/hooks/useReports";
 import { pdfReportService } from "@/services/api";
 
@@ -225,6 +226,59 @@ const ReportsModule = () => {
       console.warn("Failed to derive revenueData from salesSeries", err);
     }
   }, [salesSeries]);
+
+  // Router sync for tabs
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getInitialTab = () => {
+    const path = location.pathname || "";
+    if (path.includes("/report/sales")) return "sales";
+    if (path.includes("/report/purchases")) return "purchases";
+    if (path.includes("/report/stock")) return "stock";
+    if (path.includes("/report/payments")) return "payments";
+    if (path.includes("/report/analytics")) return "analytics";
+    // default to daily-summary
+    return "daily-summary";
+  };
+
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
+
+  useEffect(() => {
+    const tabRoutes: Record<string, string> = {
+      "daily-summary": "/report",
+      sales: "/report/sales",
+      purchases: "/report/purchases",
+      stock: "/report/stock",
+      payments: "/report/payments",
+      analytics: "/report/analytics",
+    };
+    const currentRoute = tabRoutes[activeTab] || "/report";
+    if (location.pathname !== currentRoute) {
+      navigate(currentRoute, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Keep activeTab in sync when user navigates (back/forward)
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (path.includes("/report/sales") && activeTab !== "sales")
+      setActiveTab("sales");
+    else if (path.includes("/report/purchases") && activeTab !== "purchases")
+      setActiveTab("purchases");
+    else if (path.includes("/report/stock") && activeTab !== "stock")
+      setActiveTab("stock");
+    else if (path.includes("/report/payments") && activeTab !== "payments")
+      setActiveTab("payments");
+    else if (path.includes("/report/analytics") && activeTab !== "analytics")
+      setActiveTab("analytics");
+    else if (
+      (path === "/report" || path === "/report/") &&
+      activeTab !== "daily-summary"
+    )
+      setActiveTab("daily-summary");
+  }, [location.pathname]);
 
   // Handle PDF downloads
   const handleDownloadPDF = async (reportType: string) => {
@@ -466,8 +520,12 @@ const ReportsModule = () => {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="daily-summary" className="space-y-4">
+      {/* Tabs (route-aware) */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(String(v))}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="daily-summary">Daily Summary</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>

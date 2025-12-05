@@ -114,7 +114,7 @@ export default function BillSummary({
   const calculateIncludedTax = () =>
     rows.reduce(
       (s, r) =>
-        s + (Number(r.price) * (Number(r.tax) / 100)) * Number(r.qty || 0),
+        s + Number(r.price) * (Number(r.tax) / 100) * Number(r.qty || 0),
       0
     );
 
@@ -127,9 +127,30 @@ export default function BillSummary({
   const uiCouponDiscountTotal = preview?.coupon_discount_total ?? 0;
   const uiMembershipDiscountTotal = preview?.membership_discount_total ?? 0;
 
-  const numericRedeem = redeemPoints === "" ? 0 : Math.max(0, Number(redeemPoints || 0));
-  const maxRedeemAllowed = selectedCustomer?.loyalty_points != null ? Number(selectedCustomer.loyalty_points) : 0;
-  const clampedRedeem = numericRedeem > maxRedeemAllowed ? maxRedeemAllowed : numericRedeem;
+  /**
+   * Numeric, non-negative representation of `redeemPoints`.
+   *
+   * - If `redeemPoints` is an empty string, this value is 0.
+   * - Otherwise, `redeemPoints` is coerced to a number and clamped to a minimum of 0.
+   *
+   * This ensures downstream calculations receive a valid non-negative number even when
+   * `redeemPoints` is missing, an empty string, or a negative numeric string.
+   *
+   * @example
+   * // redeemPoints = ""   => numericRedeem = 0
+   * // redeemPoints = "25" => numericRedeem = 25
+   * // redeemPoints = "-5" => numericRedeem = 0
+   *
+   * @type {number}
+   */
+  const numericRedeem =
+    redeemPoints === "" ? 0 : Math.max(0, Number(redeemPoints || 0));
+  const maxRedeemAllowed =
+    selectedCustomer?.loyalty_points != null
+      ? Number(selectedCustomer.loyalty_points)
+      : 0;
+  const clampedRedeem =
+    numericRedeem > maxRedeemAllowed ? maxRedeemAllowed : numericRedeem;
   const payableAfterRedeem = Math.max(uiBaseTotal - clampedRedeem, 0);
 
   // === Add Customer modal state ===
@@ -159,7 +180,8 @@ export default function BillSummary({
     const errs: Record<string, string> = {};
     if (!form.name || !form.name.trim()) errs.name = "Name is required";
     if (!form.phone || !form.phone.trim()) errs.phone = "Phone is required";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Invalid email";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      errs.email = "Invalid email";
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -194,7 +216,8 @@ export default function BillSummary({
 
       const json = await res.json();
       if (!res.ok) {
-        const errMsg = json?.error || json?.message || "Failed to create customer";
+        const errMsg =
+          json?.error || json?.message || "Failed to create customer";
         if (json?.errors && typeof json.errors === "object") {
           setFormErrors(json.errors);
         } else {
@@ -218,7 +241,10 @@ export default function BillSummary({
 
       setModalOpen(false);
       resetForm();
-      toast({ title: "Customer added", description: `${newCustomer.name} created` });
+      toast({
+        title: "Customer added",
+        description: `${newCustomer.name} created`,
+      });
 
       // select new customer in parent flow
       onCustomerSelect(newCustomer);
@@ -281,7 +307,11 @@ export default function BillSummary({
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </div>
-              {formErrors.name && <div className="text-red-600 text-sm mt-1">{formErrors.name}</div>}
+              {formErrors.name && (
+                <div className="text-red-600 text-sm mt-1">
+                  {formErrors.name}
+                </div>
+              )}
             </div>
 
             <div>
@@ -297,11 +327,17 @@ export default function BillSummary({
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
               </div>
-              {formErrors.phone && <div className="text-red-600 text-sm mt-1">{formErrors.phone}</div>}
+              {formErrors.phone && (
+                <div className="text-red-600 text-sm mt-1">
+                  {formErrors.phone}
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Alternate Phone</label>
+              <label className="block text-sm font-medium mb-1">
+                Alternate Phone
+              </label>
               <div className="flex items-center border rounded-md px-2">
                 <Phone className="h-4 w-4 text-gray-400" />
                 <input
@@ -309,7 +345,9 @@ export default function BillSummary({
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                   placeholder="Enter alternate phone"
                   value={form.alternatePhone}
-                  onChange={(e) => setForm({ ...form, alternatePhone: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, alternatePhone: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -327,7 +365,11 @@ export default function BillSummary({
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
               </div>
-              {formErrors.email && <div className="text-red-600 text-sm mt-1">{formErrors.email}</div>}
+              {formErrors.email && (
+                <div className="text-red-600 text-sm mt-1">
+                  {formErrors.email}
+                </div>
+              )}
             </div>
 
             <div>
@@ -340,7 +382,9 @@ export default function BillSummary({
                   placeholder="Enter address"
                   rows={3}
                   value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, address: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -351,14 +395,20 @@ export default function BillSummary({
                 disabled={saving}
                 className="w-full px-3 py-2 border rounded-md text-sm bg-transparent"
                 value={form.isActive ? "Active" : "Inactive"}
-                onChange={(e) => setForm({ ...form, isActive: e.target.value === "Active" })}
+                onChange={(e) =>
+                  setForm({ ...form, isActive: e.target.value === "Active" })
+                }
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
             </div>
 
-            <Button onClick={handleCreateCustomer} className="w-full" disabled={saving}>
+            <Button
+              onClick={handleCreateCustomer}
+              className="w-full"
+              disabled={saving}
+            >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -386,8 +436,9 @@ export default function BillSummary({
 
       <CardContent className="space-y-4">
         {/* Customer Search Section (top) */}
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
+        <div className="flex gap-2 items-start">
+          {/* keep left column at least input-height so popups overlay instead of pushing layout */}
+          <div className="flex-1 min-h-[40px] relative">
             {/* Prefer your existing CustomerSearch component. If it's not available or path differs,
                 update the import above or replace this block with your own search UI. */}
             {typeof CustomerSearch === "function" ? (
@@ -400,18 +451,32 @@ export default function BillSummary({
             ) : (
               <>
                 <Label>Customer</Label>
-                <Input value={selectedCustomer?.name ?? ""} readOnly placeholder="Select or add customer" />
+                <Input
+                  value={selectedCustomer?.name ?? ""}
+                  readOnly
+                  placeholder="Select or add customer"
+                />
               </>
             )}
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => setModalOpen(true)} className="whitespace-nowrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setModalOpen(true)}
+            className="whitespace-nowrap self-start mt-1"
+          >
             Add Customer
           </Button>
         </div>
 
         {selectedCustomer && (
-          <Button variant="outline" size="sm" onClick={onOpenRedeemPopup} className="w-full">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenRedeemPopup}
+            className="w-full"
+          >
             <Coins className="h-3 w-3 mr-1" />
             Redeem Points
           </Button>
@@ -423,8 +488,17 @@ export default function BillSummary({
         <div>
           <Label>Coupon Code</Label>
           <div className="flex gap-2 mt-1">
-            <Input value={couponCode} placeholder="Enter coupon code" className="flex-1" readOnly />
-            <Button variant="outline" onClick={onOpenCouponPopup} className="whitespace-nowrap">
+            <Input
+              value={couponCode}
+              placeholder="Enter coupon code"
+              className="flex-1"
+              readOnly
+            />
+            <Button
+              variant="outline"
+              onClick={onOpenCouponPopup}
+              className="whitespace-nowrap"
+            >
               <Tag className="h-4 w-4 mr-1" />
               Browse
             </Button>
@@ -439,7 +513,11 @@ export default function BillSummary({
             >
               {isApplyingDiscounts ? "Applying..." : "Apply Discounts"}
             </Button>
-            <Button variant="outline" onClick={onClearDiscounts} className="flex-1">
+            <Button
+              variant="outline"
+              onClick={onClearDiscounts}
+              className="flex-1"
+            >
               Clear
             </Button>
           </div>
@@ -448,7 +526,9 @@ export default function BillSummary({
             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
               <div className="flex justify-between items-center">
                 <span className="font-medium">Applied Coupon:</span>
-                <span className="text-blue-700 font-semibold">{couponCode}</span>
+                <span className="text-blue-700 font-semibold">
+                  {couponCode}
+                </span>
               </div>
             </div>
           )}
@@ -518,7 +598,10 @@ export default function BillSummary({
           {preview?.preview_loyalty_points != null && (
             <p className="text-xs text-muted-foreground mt-1">
               Will earn approx{" "}
-              <span className="font-semibold">{preview.preview_loyalty_points}</span> points (before redeem).
+              <span className="font-semibold">
+                {preview.preview_loyalty_points}
+              </span>{" "}
+              points (before redeem).
             </p>
           )}
         </div>

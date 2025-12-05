@@ -57,7 +57,11 @@ type FieldErrors = Record<string, string>;
 const Tenants = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [filteredTenants, setFilteredTenants] = useState<Tenant[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [searchQuery, setSearchQuery] = useState("");
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,15 +86,12 @@ const Tenants = () => {
     loadTenants();
   }, []);
 
+  // When searchQuery changes, reset to page 1 and request data from server.
   useEffect(() => {
-    const filtered = tenants.filter(
-      (tenant) =>
-        tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tenant.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tenant.email.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredTenants(filtered);
-  }, [searchQuery, tenants]);
+    setCurrentPage(1);
+    loadTenants(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   /**
    * parseApiError
@@ -172,18 +173,26 @@ const Tenants = () => {
     }
   };
 
-  const loadTenants = async () => {
+  const loadTenants = async (page = currentPage) => {
     try {
       setLoading(true);
       setGeneralError(null);
-      const resp = await tenantAPI.getTenants();
-      const list = Array.isArray(resp?.data)
-        ? resp.data
-        : Array.isArray(resp)
-        ? resp
-        : [];
+      const params: Record<string, any> = { page, limit: PAGE_SIZE };
+      if (searchQuery && searchQuery.trim()) params.search = searchQuery.trim();
+
+      const resp = await tenantAPI.getTenants(params);
+
+      // backend expected shape: { success, page, limit, totalRecords, totalPages, data }
+      const list = Array.isArray(resp?.data) ? resp.data : [];
       setTenants(list);
       setFilteredTenants(list);
+
+      setCurrentPage(resp?.page || page);
+      setTotalPages(
+        resp?.totalPages ||
+          Math.max(1, Math.ceil((resp?.totalRecords || 0) / PAGE_SIZE))
+      );
+      setTotalRecords(resp?.totalRecords || 0);
     } catch (error: any) {
       console.error("Load tenants error:", error);
       const parsed = await parseApiError(error);
@@ -365,6 +374,12 @@ const Tenants = () => {
         return "bg-gray-500/10 text-gray-500";
     }
   };
+  // compute display bounds for pagination to avoid JSX parse issues
+  const displayStart = Math.min(
+    (currentPage - 1) * PAGE_SIZE + 1,
+    totalRecords || 0
+  );
+  const displayEnd = Math.min(currentPage * PAGE_SIZE, totalRecords || 0);
 
   return (
     <div className="space-y-6 p-6">
@@ -636,79 +651,119 @@ const Tenants = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredTenants.map((tenant) => (
-            <Card key={tenant.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
-                      <Building2 className="h-6 w-6 text-white" />
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredTenants.map((tenant) => (
+              <Card
+                key={tenant.id}
+                className="hover:shadow-md transition-shadow"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                        <Building2 className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">{tenant.name}</CardTitle>
+                        <p className="text-sm text-gray-500 capitalize">
+                          {tenant.category}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-lg">{tenant.name}</CardTitle>
-                      <p className="text-sm text-gray-500 capitalize">
-                        {tenant.category}
-                      </p>
-                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(tenant)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(tenant.id)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Plan</span>
+                    <Badge variant="outline" className="capitalize">
+                      {tenant.plan}
+                    </Badge>
                   </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEdit(tenant)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(tenant.id)}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Plan</span>
-                  <Badge variant="outline" className="capitalize">
-                    {tenant.plan}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Status</span>
-                  <Badge className={getStatusColor(tenant.status)}>
-                    {tenant.status}
-                  </Badge>
-                </div>
-
-                <div className="pt-3 border-t space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-3 w-3 text-gray-400" />
-                    <span className="text-gray-500 truncate">
-                      {tenant.email}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Status</span>
+                    <Badge className={getStatusColor(tenant.status)}>
+                      {tenant.status}
+                    </Badge>
                   </div>
-                  {tenant.phone && (
+
+                  <div className="pt-3 border-t space-y-2">
                     <div className="flex items-center gap-2 text-sm">
-                      <Phone className="h-3 w-3 text-gray-400" />
-                      <span className="text-gray-500">{tenant.phone}</span>
+                      <Mail className="h-3 w-3 text-gray-400" />
+                      <span className="text-gray-500 truncate">
+                        {tenant.email}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    {tenant.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-3 w-3 text-gray-400" />
+                        <span className="text-gray-500">{tenant.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Server-driven Pagination controls */}
+          {totalRecords > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadTenants(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Prev
+                </Button>
+
+                <span className="text-sm text-gray-500">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadTenants(Math.min(currentPage + 1, totalPages))
+                  }
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Showing {displayStart}-{displayEnd} of {totalRecords}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {filteredTenants.length === 0 && !loading && (
