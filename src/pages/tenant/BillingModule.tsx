@@ -420,12 +420,17 @@ const SupermarketBilling = () => {
         title: "Invoice Created",
         description: `Invoice ${json.invoice.invoice_number} generated`,
       });
-      generatePDFBill(
-        json.invoice.invoice_number,
-        json.items || [],
-        json.invoice.final_amount,
-        paymentMethod
-      );
+      if (json.invoice?.pdf_url) {
+  window.open(json.invoice.pdf_url, "_blank");
+} else {
+  // Fallback to local JS PDF
+  generatePDFBill(
+    json.invoice.invoice_number,
+    json.items || [],
+    json.invoice.final_amount,
+    paymentMethod
+  );
+}
 
       // Reset state
       setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);

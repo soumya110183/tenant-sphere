@@ -50,6 +50,7 @@ interface Employee {
   discountPercent?: number;
   active: boolean;
   createdAt?: string;
+  salary?: number;
 }
 
 interface Attendance {
@@ -67,12 +68,8 @@ interface Salary {
   _id: string;
   employeeId: string;
   employeeName: string;
-  month: string;
-  basic: number;
-  allowances: number;
-  deductions: number;
-  total: number;
-  paid: boolean;
+  monthlySalary: number;
+  active: boolean;
 }
 
 interface Discount {
@@ -872,81 +869,16 @@ function AttendanceView({ attendance, employees }: AttendanceViewProps) {
  * Salaries View Component
  */
 function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
-  const pendingSalaries = salaries.filter((s) => !s.paid);
-  const paidSalaries = salaries.filter((s) => s.paid);
+  const activeSalaries = salaries.filter((s) => s.active);
+  const inactiveSalaries = salaries.filter((s) => !s.active);
 
   return (
     <div className="space-y-6">
-      {pendingSalaries.length > 0 && (
-        <Card className="border-red-500/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <CreditCard className="h-5 w-5 text-red-500" />
-              Pending Salaries ({pendingSalaries.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                      Employee
-                    </th>
-                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                      Month
-                    </th>
-                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                      Total
-                    </th>
-                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                      Status
-                    </th>
-                    <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingSalaries.map((s) => (
-                    <tr key={s._id} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                        {s.employeeName}
-                      </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">{s.month}</td>
-                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
-                        AED {s.total.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-2 sm:px-4">
-                        <Badge className="bg-amber-500/10 text-amber-500">
-                          Pending
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-2 sm:px-4">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            size="sm"
-                            className="gap-1 bg-green-600 hover:bg-green-700"
-                            onClick={() => markSalaryPaid(s._id)}
-                          >
-                            <CheckCircle className="h-3 w-3" /> Mark Paid
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <DollarSign className="h-5 w-5 text-primary" />
-            Salary History ({paidSalaries.length})
+            Employee Salaries ({activeSalaries.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -958,41 +890,51 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
                     Employee
                   </th>
                   <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Month
-                  </th>
-                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                    Total
+                    Monthly Salary
                   </th>
                   <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                     Status
                   </th>
+                  <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {paidSalaries.length === 0 ? (
+                {activeSalaries.length === 0 ? (
                   <tr>
                     <td
                       colSpan={4}
                       className="text-center py-8 text-muted-foreground text-sm"
                     >
-                      No salary history available.
+                      No active employees with salary configured.
                     </td>
                   </tr>
                 ) : (
-                  paidSalaries.map((s) => (
+                  activeSalaries.map((s) => (
                     <tr key={s._id} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-2 sm:px-4 font-medium text-sm">
                         {s.employeeName}
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-sm">{s.month}</td>
                       <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
-                        AED {s.total.toLocaleString()}
+                        AED {s.monthlySalary.toLocaleString()}
                       </td>
                       <td className="py-3 px-2 sm:px-4">
                         <Badge className="bg-green-500/10 text-green-500">
-                          <CheckCircle className="h-3 w-3 mr-1 inline" />
-                          Paid
+                          <UserCheck className="h-3 w-3 mr-1 inline" />
+                          Active
                         </Badge>
+                      </td>
+                      <td className="py-3 px-2 sm:px-4">
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            className="gap-1 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => markSalaryPaid(s._id)}
+                          >
+                            <CreditCard className="h-3 w-3" /> Process Payment
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1002,6 +944,54 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
           </div>
         </CardContent>
       </Card>
+
+      {inactiveSalaries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <UserX className="h-5 w-5 text-muted-foreground" />
+              Inactive Employees ({inactiveSalaries.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Employee
+                    </th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Monthly Salary
+                    </th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inactiveSalaries.map((s) => (
+                    <tr key={s._id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                        {s.employeeName}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                        AED {s.monthlySalary.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4">
+                        <Badge className="bg-red-500/10 text-red-500">
+                          <UserX className="h-3 w-3 mr-1 inline" />
+                          Inactive
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1166,19 +1156,31 @@ export default function Employees() {
         active:
           emp.is_active !== undefined ? emp.is_active : emp.active ?? true,
         createdAt: emp.created_at || emp.createdAt,
+        salary: emp.salary ?? 0, // Include salary from backend
       }));
 
       setEmployees(normalizedEmployees);
 
-      // TODO: Fetch from real APIs for attendance, salaries, discounts
-      // For now using empty arrays - these would come from separate endpoints
+      // Extract salary data from employee records
+      // New backend returns salary directly in employees table
+      const normalizedSalaries: Salary[] = normalizedEmployees
+        .filter((e: any) => e.salary !== null && e.salary !== undefined)
+        .map((e: any) => ({
+          _id: `${e._id}-salary`,
+          employeeId: e._id,
+          employeeName: e.name,
+          monthlySalary: Number(e.salary || 0),
+          active: e.active,
+        }));
+
+      // TODO: Replace placeholders when attendance/discount endpoints are ready
       setAttendance([]);
-      setSalaries([]);
+      setSalaries(normalizedSalaries);
       setDiscounts([]);
 
       // Compute KPIs based on available data
       const activeShifts = 0; // Would come from attendance API
-      const pendingSalaries = 0; // Would come from salaries API
+      const pendingSalaries = 0; // Salary payments tracked separately via SalaryController
       const avgDiscount =
         normalizedEmployees.length === 0
           ? 0
@@ -1257,15 +1259,11 @@ export default function Employees() {
   }
 
   async function markSalaryPaid(salaryId: string) {
-    try {
-      // TODO: Implement salary payment API call
-      // await salaryService.markAsPaid(salaryId);
-      console.warn("markSalaryPaid: API endpoint not yet implemented");
-      await fetchAll();
-    } catch (err: any) {
-      console.error("Error marking salary as paid:", err);
-      alert("Failed to mark salary as paid.");
-    }
+    // Salaries are now managed via SalaryController endpoints
+    // This function is deprecated; use a separate Pay Salary modal instead
+    alert(
+      "Salary payments are managed separately. Use the Salaries module to process payments."
+    );
   }
 
   async function updateDiscount(id: string, updates: Partial<Discount>) {
@@ -1284,7 +1282,7 @@ export default function Employees() {
   const tabCounts = {
     employees: employees.length,
     attendance: attendance.length,
-    salaries: salaries.filter((s) => !s.paid).length,
+    salaries: salaries.length,
     discounts: discounts.length,
   };
 
