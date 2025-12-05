@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 // Type definitions for sales returns to improve clarity & future refactors
 interface RawSalesReturn {
@@ -44,6 +45,9 @@ interface RawPurchaseReturn {
   product_id: number;
   created_at?: string;
   products?: { name?: string; sku?: string; category?: string };
+  total_refund?: number;
+  refund_amount?: number;
+  amount?: number;
 }
 
 interface UIPurchaseReturn {
@@ -416,12 +420,16 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.quantity || 0}
+                      value={formData.quantity ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          quantity: parseInt(e.target.value) || 0,
+                          quantity:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -434,12 +442,16 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.reorderLevel || 0}
+                      value={formData.reorderLevel ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          reorderLevel: parseInt(e.target.value) || 0,
+                          reorderLevel:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -452,12 +464,16 @@ const Modal = ({
                       type="number"
                       required
                       min="0"
+                      step="1"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={formData.maxStock || 0}
+                      value={formData.maxStock ?? ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          maxStock: parseInt(e.target.value) || 0,
+                          maxStock:
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 0,
                         })
                       }
                     />
@@ -621,12 +637,16 @@ const Modal = ({
                         type="number"
                         required
                         min="1"
+                        step="1"
                         placeholder="Qty"
                         className="px-3 py-2 border rounded-md bg-background text-sm"
                         value={sp.qty}
                         onChange={(e) => {
                           const updated = [...saleProducts];
-                          updated[idx].qty = parseInt(e.target.value) || 1;
+                          updated[idx].qty =
+                            e.target.value === ""
+                              ? ""
+                              : parseInt(e.target.value) || 1;
                           setSaleProducts(updated);
                         }}
                       />
@@ -779,16 +799,19 @@ const Modal = ({
                                     type="number"
                                     min="1"
                                     max={qtySold}
+                                    step="1"
                                     disabled={!isSelected}
-                                    value={returnItem?.qty || 1}
+                                    value={returnItem?.qty ?? ""}
                                     onChange={(e) => {
                                       const updated = [...returnItems];
                                       const value =
-                                        parseInt(e.target.value) || 1;
-                                      updated[returnItemIndex].qty = Math.min(
-                                        value,
-                                        qtySold
-                                      );
+                                        e.target.value === ""
+                                          ? ""
+                                          : parseInt(e.target.value) || 1;
+                                      updated[returnItemIndex].qty =
+                                        value === ""
+                                          ? ""
+                                          : Math.min(value, qtySold);
                                       setReturnItems(updated);
                                     }}
                                     placeholder="Qty"
@@ -1056,13 +1079,20 @@ const Modal = ({
                               type="number"
                               min={1}
                               max={maxReturn || 1}
+                              step="1"
                               disabled={!ri.productId}
                               className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                              value={ri.qty}
+                              value={ri.qty ?? ""}
                               onChange={(e) => {
-                                const val = parseInt(e.target.value) || 1;
+                                const val =
+                                  e.target.value === ""
+                                    ? ""
+                                    : parseInt(e.target.value) || 1;
                                 const upd = [...returnItems];
-                                upd[idx].qty = Math.min(val, maxReturn || 1);
+                                upd[idx].qty =
+                                  val === ""
+                                    ? ""
+                                    : Math.min(val, maxReturn || 1);
                                 setReturnItems(upd);
                               }}
                             />
@@ -1285,12 +1315,16 @@ const Modal = ({
                     type="number"
                     required
                     min="1"
+                    step="1"
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                    value={formData.quantity || 0}
+                    value={formData.quantity ?? ""}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        quantity: parseInt(e.target.value) || 0,
+                        quantity:
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value) || 0,
                       })
                     }
                   />
@@ -1530,13 +1564,7 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
             <ShoppingCart className="h-5 w-5 text-primary" />
             Sales Transactions ({sales.length})
           </CardTitle>
-          <Button
-            onClick={() => openModal("sale")}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Sale
-          </Button>
+          
         </div>
       </CardHeader>
       <CardContent>
@@ -1921,17 +1949,38 @@ const AdjustmentsView = ({ stockAdjustments, openModal }) => (
 // Main Component
 const GroceryInventory = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Read tab from URL parameter on mount
+  // Read tab from URL path
   const getInitialTab = () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    // Valid tabs: stock, sales, purchases, returns, adjustments
-    const validTabs = ["stock", "sales", "purchases", "returns", "adjustments"];
-    return validTabs.includes(tabParam) ? tabParam : "stock";
+    const path = location.pathname;
+    // Valid tabs: stock, sales, purchases, sales returns, purchase returns, adjustments
+    if (path.includes("/inventory/sales-returns")) return "sales returns";
+    if (path.includes("/inventory/purchase-returns")) return "purchase returns";
+    if (path.includes("/inventory/sales")) return "sales";
+    if (path.includes("/inventory/purchases")) return "purchases";
+    if (path.includes("/inventory/adjustments")) return "adjustments";
+    return "stock"; // default to stock
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab());
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const tabRoutes = {
+      stock: "/inventory",
+      sales: "/inventory/sales",
+      purchases: "/inventory/purchases",
+      "sales returns": "/inventory/sales-returns",
+      "purchase returns": "/inventory/purchase-returns",
+      adjustments: "/inventory/adjustments",
+    };
+    const currentRoute = tabRoutes[activeTab] || "/inventory";
+    if (location.pathname !== currentRoute) {
+      navigate(currentRoute, { replace: true });
+    }
+  }, [activeTab, navigate, location.pathname]);
   const [products, setProducts] = useState([]);
   const [baseInventory, setBaseInventory] = useState([]); // raw inventory snapshot prior to derived adjustments
   const [isLoading, setIsLoading] = useState(true);
@@ -1940,6 +1989,19 @@ const GroceryInventory = () => {
   const [purchases, setPurchases] = useState([]);
   const [sales, setSales] = useState([]);
   const [salesReturns, setSalesReturns] = useState([]);
+  const [salesReturnsPage, setSalesReturnsPage] = useState(1);
+  const [salesReturnsTotalPages, setSalesReturnsTotalPages] = useState(1);
+  const [salesReturnsTotalRecords, setSalesReturnsTotalRecords] = useState(0);
+  const SALES_RETURNS_PAGE_SIZE = 10;
+  const [purchasesPage, setPurchasesPage] = useState(1);
+  const [purchasesTotalPages, setPurchasesTotalPages] = useState(1);
+  const [purchasesTotalRecords, setPurchasesTotalRecords] = useState(0);
+  const PURCHASES_PAGE_SIZE = 10;
+  const [purchaseReturnsPage, setPurchaseReturnsPage] = useState(1);
+  const [purchaseReturnsTotalPages, setPurchaseReturnsTotalPages] = useState(1);
+  const [purchaseReturnsTotalRecords, setPurchaseReturnsTotalRecords] =
+    useState(0);
+  const PURCHASE_RETURNS_PAGE_SIZE = 10;
   const [purchaseReturns, setPurchaseReturns] = useState<UIPurchaseReturn[]>(
     []
   );
@@ -1973,21 +2035,53 @@ const GroceryInventory = () => {
       });
     }
   };
-  const loadPurchases = async () => {
+  const loadPurchases = async (page = 1) => {
     try {
-      const response = await purchaseService.getAll();
+      const tenantId = localStorage.getItem("tenant_id");
+      const params: Record<string, any> = { page, limit: PURCHASES_PAGE_SIZE };
+      if (tenantId) params.tenant_id = tenantId;
+
+      const response = await purchaseService.getAll(params);
       console.log("Purchases API response:", response);
 
-      // Based on your response structure: { success: true, data: [...] }
-      if (
-        response.data &&
-        response.data.success &&
-        Array.isArray(response.data.data)
-      ) {
-        setPurchases(response.data.data);
-      } else {
-        console.error("Unexpected purchases response structure:", response);
-        setPurchases([]);
+      const apiData = response?.data;
+      let rawData: any[] = [];
+
+      if (apiData && Array.isArray(apiData.data)) {
+        rawData = apiData.data;
+      } else if (apiData && Array.isArray(apiData.purchases)) {
+        rawData = apiData.purchases;
+      } else if (Array.isArray(apiData)) {
+        rawData = apiData;
+      }
+
+      // If backend already formatted items as in your controller, use them directly
+      const formatted = rawData.map((p: any) => ({
+        id: p.id,
+        invoice_number: p.invoice_number || p.invoiceNo || p.invoice_number,
+        supplier_id: p.supplier_id || p.supplierId,
+        total_amount: p.total_amount || p.total || 0,
+        created_at: p.created_at || p.date,
+        items: p.items || p.purchase_items || p.purchase_items || [],
+        items_count:
+          p.items_count ?? (p.purchase_items ? p.purchase_items.length : 0),
+      }));
+
+      setPurchases(formatted);
+
+      const total = apiData?.totalRecords ?? apiData?.count ?? 0;
+      const totalPages =
+        apiData?.totalPages ??
+        Math.max(1, Math.ceil((total || 0) / PURCHASES_PAGE_SIZE));
+      setPurchasesPage(apiData?.page || page);
+      setPurchasesTotalPages(totalPages);
+      setPurchasesTotalRecords(total || 0);
+
+      if (formatted.length === 0) {
+        toast({
+          title: "No Purchases",
+          description: "Fetched 0 purchase records.",
+        });
       }
     } catch (error) {
       console.error("Error loading purchases:", error);
@@ -2061,9 +2155,16 @@ const GroceryInventory = () => {
     }
   };
 
-  const loadSalesReturns = async () => {
+  const loadSalesReturns = async (page = 1) => {
     try {
-      const response = await salesReturnService.getAll();
+      const params: Record<string, any> = {
+        page,
+        limit: SALES_RETURNS_PAGE_SIZE,
+      };
+      const tenantId = localStorage.getItem("tenant_id");
+      if (tenantId) params.tenant_id = tenantId;
+
+      const response = await salesReturnService.getAll(params);
       const status = response?.status;
       console.log("Sales Returns API status:", status);
       console.log("Sales Returns full Axios response:", response);
@@ -2115,7 +2216,7 @@ const GroceryInventory = () => {
         try {
           const token = localStorage.getItem("auth_token");
           const fallbackResp = await fetch(
-            "http://localhost:5000/api/sales_returns",
+            "https://billingbackend-1vei.onrender.com/api/sales_returns",
             {
               headers: {
                 "Content-Type": "application/json",
@@ -2213,6 +2314,15 @@ const GroceryInventory = () => {
       console.log("Sales Returns formatted (UI) objects:", formattedData);
       setSalesReturns(formattedData);
 
+      // set pagination metadata if provided by backend
+      const total = apiData?.totalRecords ?? apiData?.count ?? 0;
+      const totalPages =
+        apiData?.totalPages ??
+        Math.max(1, Math.ceil((total || 0) / SALES_RETURNS_PAGE_SIZE));
+      setSalesReturnsPage(apiData?.page || page);
+      setSalesReturnsTotalPages(totalPages);
+      setSalesReturnsTotalRecords(total || 0);
+
       // Optional: toast when empty to guide debugging
       if (formattedData.length === 0) {
         toast({
@@ -2241,10 +2351,14 @@ const GroceryInventory = () => {
     }
   };
 
-  const loadPurchaseReturns = async () => {
+  const loadPurchaseReturns = async (page = 1) => {
     try {
       const tenantId = localStorage.getItem("tenant_id");
-      const params = tenantId ? { tenant_id: tenantId } : {};
+      const params: Record<string, any> = {
+        page,
+        limit: PURCHASE_RETURNS_PAGE_SIZE,
+      };
+      if (tenantId) params.tenant_id = tenantId;
 
       const response = await purchaseReturnService.getAll(params);
       console.log("Purchase Returns API Response:", response);
@@ -2271,6 +2385,12 @@ const GroceryInventory = () => {
           ret.products?.name ||
           ret.select_product ||
           `Product #${ret.product_id}`;
+
+        // Get amount from backend fields
+        const amount = Number(
+          ret.total_refund || ret.refund_amount || ret.amount || 0
+        );
+
         return {
           id: ret.id,
           supplierId: ret.Suppliers_id || null,
@@ -2283,7 +2403,7 @@ const GroceryInventory = () => {
           quantity: ret.quantity,
           reason: ret.reason || "N/A",
           refundMethod: ret.refund_method || "N/A",
-          amountAdjusted: 0, // Backend doesn't provide; calculate if needed
+          amountAdjusted: amount,
           items: [
             {
               name: productName,
@@ -2297,6 +2417,15 @@ const GroceryInventory = () => {
 
       console.log("Purchase Returns Formatted Data:", formattedData);
       setPurchaseReturns(formattedData);
+
+      // Set pagination metadata if available from backend
+      const total = apiData?.totalRecords ?? apiData?.count ?? 0;
+      const totalPages =
+        apiData?.totalPages ??
+        Math.max(1, Math.ceil((total || 0) / PURCHASE_RETURNS_PAGE_SIZE));
+      setPurchaseReturnsPage(apiData?.page || page);
+      setPurchaseReturnsTotalPages(totalPages);
+      setPurchaseReturnsTotalRecords(total || 0);
 
       if (formattedData.length === 0) {
         toast({
@@ -3168,21 +3297,330 @@ const GroceryInventory = () => {
             handleDelete={handleDelete}
           />
         )}
+        {activeTab === "purchases" &&
+          purchasesTotalRecords > PURCHASES_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4 mb-6">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadPurchases(Math.max(1, purchasesPage - 1))}
+                  disabled={purchasesPage === 1}
+                >
+                  Prev
+                </Button>
 
-        {activeTab === "returns" && (
-          <ReturnsView
-            salesReturns={salesReturns}
-            purchaseReturns={purchaseReturns}
-            openModal={openModal}
-          />
+                <span className="text-sm text-gray-500">
+                  Page {purchasesPage} of {purchasesTotalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadPurchases(
+                      Math.min(purchasesPage + 1, purchasesTotalPages)
+                    )
+                  }
+                  disabled={purchasesPage >= purchasesTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Showing{" "}
+                {Math.min(
+                  (purchasesPage - 1) * PURCHASES_PAGE_SIZE + 1,
+                  purchasesTotalRecords
+                )}
+                -
+                {Math.min(
+                  purchasesPage * PURCHASES_PAGE_SIZE,
+                  purchasesTotalRecords
+                )}{" "}
+                of {purchasesTotalRecords}
+              </div>
+            </div>
+          )}
+
+        {activeTab === "sales returns" && (
+          <>
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                    <RotateCcw className="h-5 w-5 text-primary" />
+                    Sales Returns ({salesReturns.length})
+                  </CardTitle>
+                  <Button
+                    onClick={() => openModal("salesReturn")}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Sales Return
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Date
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Invoice ID
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Products
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Refund Type
+                        </th>
+                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Total Refund
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesReturns.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="text-center py-8 text-muted-foreground"
+                          >
+                            No sales returns found
+                          </td>
+                        </tr>
+                      ) : (
+                        salesReturns.map((ret) => (
+                          <tr
+                            key={ret.id}
+                            className="border-b hover:bg-muted/50"
+                          >
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              {ret.date}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              #{ret.originalSaleId}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              {ret.items.map((item, idx) => (
+                                <div key={idx}>
+                                  {item.name} (x{item.qty})
+                                </div>
+                              ))}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm capitalize">
+                              {ret.refundType}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-right text-sm font-medium">
+                              AED {ret.totalRefund.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Sales Returns Pagination */}
+            {salesReturnsTotalRecords > SALES_RETURNS_PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadSalesReturns(Math.max(1, salesReturnsPage - 1))
+                    }
+                    disabled={salesReturnsPage === 1}
+                  >
+                    Prev
+                  </Button>
+
+                  <span className="text-sm text-gray-500">
+                    Page {salesReturnsPage} of {salesReturnsTotalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadSalesReturns(
+                        Math.min(salesReturnsPage + 1, salesReturnsTotalPages)
+                      )
+                    }
+                    disabled={salesReturnsPage >= salesReturnsTotalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Showing{" "}
+                  {Math.min(
+                    (salesReturnsPage - 1) * SALES_RETURNS_PAGE_SIZE + 1,
+                    salesReturnsTotalRecords
+                  )}
+                  -
+                  {Math.min(
+                    salesReturnsPage * SALES_RETURNS_PAGE_SIZE,
+                    salesReturnsTotalRecords
+                  )}{" "}
+                  of {salesReturnsTotalRecords}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {activeTab === "adjustments" && (
+        {activeTab === "purchase returns" && (
+          <>
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                    <RotateCcw className="h-5 w-5 text-primary" />
+                    Purchase Returns ({purchaseReturns.length})
+                  </CardTitle>
+                  <Button
+                    onClick={() => openModal("purchaseReturn")}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Purchase Return
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Date
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Supplier
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Products
+                        </th>
+                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Refund Method
+                        </th>
+                        <th className="text-right py-3 px-2 sm:px-4 font-semibold text-sm">
+                          Amount
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {purchaseReturns.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="text-center py-8 text-muted-foreground"
+                          >
+                            No purchase returns found
+                          </td>
+                        </tr>
+                      ) : (
+                        purchaseReturns.map((ret) => (
+                          <tr
+                            key={ret.id}
+                            className="border-b hover:bg-muted/50"
+                          >
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              {ret.date}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              {ret.supplierName}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm">
+                              {ret.items.map((item, idx) => (
+                                <div key={idx}>
+                                  {item.name} (x{item.qty})
+                                </div>
+                              ))}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-sm capitalize">
+                              {ret.refundMethod}
+                            </td>
+                            <td className="py-3 px-2 sm:px-4 text-right text-sm font-medium">
+                              AED {ret.amountAdjusted.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Purchase Returns Pagination */}
+            {purchaseReturnsTotalRecords > PURCHASE_RETURNS_PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadPurchaseReturns(Math.max(1, purchaseReturnsPage - 1))
+                    }
+                    disabled={purchaseReturnsPage === 1}
+                  >
+                    Prev
+                  </Button>
+
+                  <span className="text-sm text-gray-500">
+                    Page {purchaseReturnsPage} of {purchaseReturnsTotalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadPurchaseReturns(
+                        Math.min(
+                          purchaseReturnsPage + 1,
+                          purchaseReturnsTotalPages
+                        )
+                      )
+                    }
+                    disabled={purchaseReturnsPage >= purchaseReturnsTotalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Showing{" "}
+                  {Math.min(
+                    (purchaseReturnsPage - 1) * PURCHASE_RETURNS_PAGE_SIZE + 1,
+                    purchaseReturnsTotalRecords
+                  )}
+                  -
+                  {Math.min(
+                    purchaseReturnsPage * PURCHASE_RETURNS_PAGE_SIZE,
+                    purchaseReturnsTotalRecords
+                  )}{" "}
+                  of {purchaseReturnsTotalRecords}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* {activeTab === "adjustments" && (
           <AdjustmentsView
             stockAdjustments={stockAdjustments}
             openModal={openModal}
           />
-        )}
+        )} */}
       </div>
 
       <Modal

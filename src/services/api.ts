@@ -5,8 +5,8 @@ import { report } from "process";
 
 // Base URLs
 // const API_URL = "https://billingbackend-1vei.onrender.com";
-//const API_URL = "https://billingbackend-1vei.onrender.com";
-const API_URL = "http://localhost:5000";
+// const API_URL = "https://billingbackend-1vei.onrender.com";
+const API_URL = "https://billingbackend-1vei.onrender.com"; // Update with your backend URL
 // Alias to maintain legacy references expecting API_BASE
 const API_BASE = API_URL;
 
@@ -32,7 +32,9 @@ api.interceptors.request.use((config) => {
 // TENANT API
 // ===============================
 export const tenantAPI = {
-  getTenants: async () => (await api.get("/api/tenants")).data,
+  // Accept optional params: { page, limit, search }
+  getTenants: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenants", { params })).data,
 
   getTenant: async (id) => (await api.get(`/api/tenants/${id}`)).data,
 
@@ -124,11 +126,13 @@ export const authAPI = {
 // MODULE API
 // ===============================
 export const moduleAPI = {
+  // Backend mount: /api/modules with routes ":id/modules"
+  // Final paths: GET/PUT /api/modules/:id/modules
   getTenantModules: async (tenantId) =>
-    (await api.get(`/api/tenants/${tenantId}/modules`)).data,
+    (await api.get(`/api/modules/${tenantId}/modules`)).data,
 
   updateTenantModules: async (tenantId, modules) =>
-    (await api.put(`/api/tenants/${tenantId}`, { modules })).data,
+    (await api.put(`/api/modules/${tenantId}/modules`, { modules })).data,
 };
 
 // ===============================
@@ -174,6 +178,24 @@ export const reportsAPI = {
     // cleanup
     window.URL.revokeObjectURL(url);
   },
+};
+
+// ===============================
+// TENANT REPORT API (backend: /api/tenantreport)
+// ===============================
+export const tenantReportAPI = {
+  getSummary: async () => (await api.get("/api/tenantreport/summary")).data,
+  getSalesChart: async () =>
+    (await api.get("/api/tenantreport/sales-chart")).data,
+  getPurchaseChart: async () =>
+    (await api.get("/api/tenantreport/purchase-chart")).data,
+  getStockReport: async () =>
+    (await api.get("/api/tenantreport/stock-report")).data,
+  getProfitReport: async () =>
+    (await api.get("/api/tenantreport/profit-report")).data,
+  getPaymentSummary: async () =>
+    (await api.get("/api/tenantreport/payment-summary")).data,
+  getAnalytics: async () => (await api.get("/api/tenantreport/analytics")).data,
 };
 
 // tenantAPI report
@@ -720,7 +742,9 @@ export const walletAPI = {
 
 // In your services/api.js
 export const purchaseService = {
-  getAll: () => api.get("api/purchases"),
+  // Accept optional pagination params: { page, limit, tenant_id }
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("api/purchases", { params }),
   getById: (id) => api.get(`api/purchases/${id}`),
   create: (data) => api.post("api/purchases", data),
   update: (id, data) => api.put(`api/purchases/${id}`, data),
@@ -738,7 +762,9 @@ export const invoiceService = {
 
 // services/api.js - Add sales return service
 export const salesReturnService = {
-  getAll: () => api.get("/api/sales_returns"),
+  // Accept optional params: { page, limit, invoice_id }
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/sales_returns", { params }),
   getById: (id) => api.get(`/api/sales_returns/${id}`),
   create: (data) => api.post("/api/sales_returns", data),
   update: (id, data) => api.put(`/api/sales_returns/${id}`, data),
@@ -803,4 +829,61 @@ export const supplierService = {
 
   // Delete supplier
   delete: async (id) => (await api.delete(`/api/suppliers/${id}`)).data,
+};
+
+// ===============================
+// EMPLOYEE API
+// ===============================
+export const employeeService = {
+  // Get all employees
+  getAll: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/employees", { params })).data,
+
+  // Get single employee details (with salary + attendance)
+  getOne: async (id) => (await api.get(`/api/employees/${id}`)).data,
+
+  // Create new employee
+  create: async (data) => (await api.post("/api/employees", data)).data,
+
+  // Update employee
+  update: async (id, data) =>
+    (await api.put(`/api/employees/${id}`, data)).data,
+
+  // Delete employee
+  delete: async (id) => (await api.delete(`/api/employees/${id}`)).data,
+};
+
+// ===============================
+// EMPLOYEE SALARY API
+// ===============================
+export const salaryService = {
+  // Pay salary for an employee
+  pay: async (data) => (await api.post("/api/employees/salary/pay", data)).data,
+
+  // Get salary history for all employees (scoped by tenant via verifyToken)
+  getAll: async () => (await api.get("/api/employees/salary")).data,
+
+  // Get salary history for a single employee
+  getByEmployee: async (employeeId) =>
+    (await api.get(`/api/employees/salary/${employeeId}`)).data,
+};
+
+// ===============================
+// EMPLOYEE DISCOUNT API
+// ===============================
+export const employeeDiscountService = {
+  // Set employee discount rule
+  setRule: async (data) =>
+    (await api.post("/api/employees/discount/rule", data)).data,
+
+  // Get active discount rule
+  getRule: async () => (await api.get("/api/employees/discount/rule")).data,
+
+  // Apply employee discount during billing
+  apply: async (data) =>
+    (await api.post("/api/employees/discount/apply", data)).data,
+
+  // Get employee discount usage history
+  getUsage: async (employee_id) =>
+    (await api.get(`/api/employees/discount/usage/${employee_id}`)).data,
 };

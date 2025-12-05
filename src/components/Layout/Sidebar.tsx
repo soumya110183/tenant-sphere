@@ -88,6 +88,10 @@ const tenantNavigation = [
     ],
   },
   {
+    category: "Employees Management",
+    items: [{ name: "Employees", href: "/employees", icon: Store }],
+  },
+  {
     category: "System",
     items: [{ name: "Settings", href: "/settings", icon: Settings }],
   },
@@ -99,15 +103,9 @@ const staffNavigation = [
     category: "Daily Operations",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Billing", href: "/billing", icon: ShoppingCart },
-      { name: "Inventorys", href: "/inventorys", icon: Package },
-    ],
-  },
-  {
-    category: "Tasks & Management",
-    items: [
-      { name: "Tasks", href: "/tasks", icon: ClipboardList },
-      { name: "Customers", href: "/customers", icon: UserCheck },
+      { name: "Billing", href: "/billings", icon: ShoppingCart },
+      { name: "Inventorys", href: "/inventory", icon: Package },
+      { name: "Stocks", href: "/stock", icon: ClipboardList },
     ],
   },
   {
@@ -148,7 +146,8 @@ export const Sidebar = () => {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground transition-colors"
+          className="p-2 rounded-lg bg-sidebar-accent text-sidebar-foreground"
+          aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />

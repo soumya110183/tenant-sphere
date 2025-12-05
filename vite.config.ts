@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   // Proxy backend report requests to avoid CORS during local development
-  // Requests to /reports/* will be forwarded to http://localhost:5000/reports/*
+  // Requests to /reports/* will be forwarded to https://billingbackend-1vei.onrender.com/reports/*
   // This keeps frontend fetches relative (no CORS) and preserves cookies when needed.
    },
   plugins: [react(), mode === "development" && componentTagger()].filter(

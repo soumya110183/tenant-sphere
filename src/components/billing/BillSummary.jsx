@@ -35,4 +35,4 @@ export const BillSummary = ({ subtotal, tax, total, redeem, finalPayable }) => {
   );
 };
 
-export default BillSummary;
+export default BillSummarysss;

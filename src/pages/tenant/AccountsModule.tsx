@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -20,41 +21,49 @@ import {
   Scale,
   Receipt,
   DollarSign,
+  Loader2,
 } from "lucide-react";
 
-const API = "http://localhost:5000/api/accounts";
+const API = "https://billingbackend-1vei.onrender.com/api/accounts";
 
 const AccountsModule = () => {
   const [loading, setLoading] = useState(true);
 
-  const [daybook, setDaybook] = useState([]);
-  const [ledger, setLedger] = useState([]);
-  const [trial, setTrial] = useState([]);
-  const [vat, setVat] = useState([]);
-  const [balanceSheet, setBalanceSheet] = useState({});
-  const [pal, setPAL] = useState({});
+  const [daybook, setDaybook] = useState<any[]>([]);
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [daybookPage, setDaybookPage] = useState(1);
+  const [daybookTotalPages, setDaybookTotalPages] = useState(1);
+  const [daybookTotalRecords, setDaybookTotalRecords] = useState(0);
+  const DAYBOOK_PAGE_SIZE = 10;
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+  const [ledgerTotalRecords, setLedgerTotalRecords] = useState(0);
+  const LEDGER_PAGE_SIZE = 10;
+  const [trial, setTrial] = useState<any[]>([]);
+  const [vat, setVat] = useState<any[]>([]);
+  const [balanceSheet, setBalanceSheet] = useState<any>({});
+  const [pal, setPAL] = useState<any>({});
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem("auth_token");
-
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [d, l, t, b, v, p] = await Promise.all([
-        fetch(`${API}/daybook`, { headers }).then((r) => r.json()),
-        fetch(`${API}/ledger`, { headers }).then((r) => r.json()),
+      // Load non-paginated endpoints in parallel
+      const [t, b, v, p] = await Promise.all([
         fetch(`${API}/trial-balance`, { headers }).then((r) => r.json()),
         fetch(`${API}/balance-sheet`, { headers }).then((r) => r.json()),
         fetch(`${API}/vat`, { headers }).then((r) => r.json()),
         fetch(`${API}/pal`, { headers }).then((r) => r.json()),
       ]);
 
-      setDaybook(d.data || []);
-      setLedger(l.data || []);
       setTrial(t.trial_balance || []);
       setVat(v.data || []);
       setBalanceSheet(b || {});
       setPAL(p || {});
+
+      // Load paginated daybook and ledger
+      await Promise.all([loadDaybook(1), loadLedger(1)]);
     } catch (err) {
       console.error("Error loading accounts:", err);
     } finally {
@@ -62,12 +71,134 @@ const AccountsModule = () => {
     }
   };
 
+  const loadDaybook = async (page = 1) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `${API}/daybook?page=${page}&limit=${DAYBOOK_PAGE_SIZE}`,
+        { headers }
+      );
+      const json = await res.json();
+      setDaybook(json.data || []);
+      setDaybookPage(json.page || page);
+      setDaybookTotalPages(
+        json.totalPages ||
+          Math.max(1, Math.ceil((json.totalRecords || 0) / DAYBOOK_PAGE_SIZE))
+      );
+      setDaybookTotalRecords(json.totalRecords || json.count || 0);
+    } catch (err) {
+      console.error("Error loading daybook:", err);
+      setDaybook([]);
+    }
+  };
+
+  const loadLedger = async (page = 1) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await fetch(
+        `${API}/ledger?page=${page}&limit=${LEDGER_PAGE_SIZE}`,
+        { headers }
+      );
+      const json = await res.json();
+      setLedger(json.data || []);
+      setLedgerPage(json.page || page);
+      setLedgerTotalPages(
+        json.totalPages ||
+          Math.max(1, Math.ceil((json.totalRecords || 0) / LEDGER_PAGE_SIZE))
+      );
+      setLedgerTotalRecords(json.totalRecords || json.count || 0);
+    } catch (err) {
+      console.error("Error loading ledger:", err);
+      setLedger([]);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getInitialTab = () => {
+    const path = location.pathname || "";
+    // Support both /account (mounted route) and /accounts (older URLs)
+    if (
+      path.includes("/account/balance-sheet") ||
+      path.includes("/accounts/balance-sheet")
+    )
+      return "balance";
+    if (path.includes("/account/ledger") || path.includes("/accounts/ledger"))
+      return "ledger";
+    if (
+      path.includes("/account/trial-balance") ||
+      path.includes("/accounts/trial-balance")
+    )
+      return "trial";
+    if (path.includes("/account/vat") || path.includes("/accounts/vat"))
+      return "vat";
+    if (path.includes("/account/pal") || path.includes("/accounts/pal"))
+      return "pal";
+    if (path.includes("/account/daybook") || path.includes("/accounts/daybook"))
+      return "daybook";
+    // default route is /account (mounted in App.tsx) — accept /accounts too
+    if (
+      path === "/account" ||
+      path.startsWith("/account") ||
+      path === "/accounts" ||
+      path.startsWith("/accounts")
+    )
+      return "daybook";
+    return "daybook";
+  };
+
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
+
+  useEffect(() => {
+    const tabRoutes: Record<string, string> = {
+      // Primary (mounted) path is /account — keep /accounts as legacy accepted path in getInitialTab
+      daybook: "/account",
+      ledger: "/account/ledger",
+      trial: "/account/trial-balance",
+      balance: "/account/balance-sheet",
+      vat: "/account/vat",
+      pal: "/account/pal",
+    };
+    const currentRoute = tabRoutes[activeTab] || "/accounts";
+    if (location.pathname !== currentRoute) {
+      navigate(currentRoute, { replace: true });
+    }
+  }, [activeTab, navigate, location.pathname]);
+
+  // Keep activeTab in sync when the user navigates (back/forward or external link)
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (path.includes("/accounts/balance-sheet") && activeTab !== "balance")
+      setActiveTab("balance");
+    else if (path.includes("/accounts/ledger") && activeTab !== "ledger")
+      setActiveTab("ledger");
+    else if (path.includes("/accounts/trial-balance") && activeTab !== "trial")
+      setActiveTab("trial");
+    else if (path.includes("/accounts/vat") && activeTab !== "vat")
+      setActiveTab("vat");
+    else if (path.includes("/accounts/pal") && activeTab !== "pal")
+      setActiveTab("pal");
+    else if (
+      (path === "/accounts" || path.includes("/accounts/daybook")) &&
+      activeTab !== "daybook"
+    )
+      setActiveTab("daybook");
+  }, [location.pathname]);
+
   if (loading)
-    return <div className="p-8 text-xl text-center">Loading Accounts…</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading Accounts…</p>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -136,7 +267,7 @@ const AccountsModule = () => {
       </div>
 
       {/* TABS */}
-      <Tabs defaultValue="daybook">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))}>
         <TabsList>
           <TabsTrigger value="daybook">Daybook</TabsTrigger>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>
@@ -181,6 +312,37 @@ const AccountsModule = () => {
               </Table>
             </CardContent>
           </Card>
+
+          {daybookTotalRecords > DAYBOOK_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {Math.max(1, (daybookPage - 1) * DAYBOOK_PAGE_SIZE + 1)}{" "}
+                -{" "}
+                {Math.min(daybookPage * DAYBOOK_PAGE_SIZE, daybookTotalRecords)}{" "}
+                of {daybookTotalRecords}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadDaybook(Math.max(1, daybookPage - 1))}
+                  disabled={daybookPage <= 1}
+                >
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadDaybook(Math.min(daybookTotalPages, daybookPage + 1))
+                  }
+                  disabled={daybookPage >= daybookTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* LEDGER */}
@@ -216,6 +378,35 @@ const AccountsModule = () => {
               </Table>
             </CardContent>
           </Card>
+          {ledgerTotalRecords > LEDGER_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {Math.max(1, (ledgerPage - 1) * LEDGER_PAGE_SIZE + 1)} -{" "}
+                {Math.min(ledgerPage * LEDGER_PAGE_SIZE, ledgerTotalRecords)} of{" "}
+                {ledgerTotalRecords}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadLedger(Math.max(1, ledgerPage - 1))}
+                  disabled={ledgerPage <= 1}
+                >
+                  Prev
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    loadLedger(Math.min(ledgerTotalPages, ledgerPage + 1))
+                  }
+                  disabled={ledgerPage >= ledgerTotalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* TRIAL BALANCE */}

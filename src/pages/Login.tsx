@@ -79,7 +79,7 @@ const Login = () => {
           </div>
           <CardTitle className="text-3xl font-bold">TenantSphere</CardTitle>
           <CardDescription>
-            Super Admin Dashboard - Sign in to manage your tenants
+            
           </CardDescription>
         </CardHeader>
         
@@ -125,7 +125,7 @@ const Login = () => {
                 <span className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or quick demo as</span>
+                <span className="bg-card px-2 text-muted-foreground"></span>
               </div>
             </div>
 
