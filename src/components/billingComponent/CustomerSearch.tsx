@@ -117,7 +117,7 @@ export const CustomerSearch = ({
               {selectedCustomer.loyalty_points || 0}
             </span>
           </div>
-          <div classname="flex justify-between">
+          <div className="flex justify-between">
             <span className="font-medium">Tier:</span>
             <span>{selectedCustomer.membership_tier || "Bronze"}</span>
           </div>

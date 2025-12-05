@@ -33,7 +33,7 @@ import {
 // Use environment API base if provided, otherwise default to local backend
 const API_BASE =
   (import.meta as any)?.env?.VITE_API_URL ??
-  "https://billingbackend-1vei.onrender.com";
+  "http://localhost:5000";
 
 type ID = string | number;
 
@@ -524,8 +524,13 @@ const CustomerPage: FC = () => {
 
         <CardContent>
           {loadingList ? (
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+            <div className="flex items-center justify-center h-[40vh]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-4 text-muted-foreground">
+                  Loading customers...
+                </p>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">

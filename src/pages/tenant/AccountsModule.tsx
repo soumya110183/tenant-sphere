@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -20,9 +21,10 @@ import {
   Scale,
   Receipt,
   DollarSign,
+  Loader2,
 } from "lucide-react";
 
-const API = "https://billingbackend-1vei.onrender.com/api/accounts";
+const API = "http://localhost:5000/api/accounts";
 
 const AccountsModule = () => {
   const [loading, setLoading] = useState(true);
@@ -66,8 +68,86 @@ const AccountsModule = () => {
     fetchData();
   }, []);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getInitialTab = () => {
+    const path = location.pathname || "";
+    // Support both /account (mounted route) and /accounts (older URLs)
+    if (
+      path.includes("/account/balance-sheet") ||
+      path.includes("/accounts/balance-sheet")
+    )
+      return "balance";
+    if (path.includes("/account/ledger") || path.includes("/accounts/ledger"))
+      return "ledger";
+    if (
+      path.includes("/account/trial-balance") ||
+      path.includes("/accounts/trial-balance")
+    )
+      return "trial";
+    if (path.includes("/account/vat") || path.includes("/accounts/vat"))
+      return "vat";
+    if (path.includes("/account/pal") || path.includes("/accounts/pal"))
+      return "pal";
+    if (path.includes("/account/daybook") || path.includes("/accounts/daybook"))
+      return "daybook";
+    // default route is /account (mounted in App.tsx) — accept /accounts too
+    if (
+      path === "/account" ||
+      path.startsWith("/account") ||
+      path === "/accounts" ||
+      path.startsWith("/accounts")
+    )
+      return "daybook";
+    return "daybook";
+  };
+
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
+
+  useEffect(() => {
+    const tabRoutes: Record<string, string> = {
+      // Primary (mounted) path is /account — keep /accounts as legacy accepted path in getInitialTab
+      daybook: "/account",
+      ledger: "/account/ledger",
+      trial: "/account/trial-balance",
+      balance: "/account/balance-sheet",
+      vat: "/account/vat",
+      pal: "/account/pal",
+    };
+    const currentRoute = tabRoutes[activeTab] || "/accounts";
+    if (location.pathname !== currentRoute) {
+      navigate(currentRoute, { replace: true });
+    }
+  }, [activeTab, navigate, location.pathname]);
+
+  // Keep activeTab in sync when the user navigates (back/forward or external link)
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (path.includes("/accounts/balance-sheet") && activeTab !== "balance")
+      setActiveTab("balance");
+    else if (path.includes("/accounts/ledger") && activeTab !== "ledger")
+      setActiveTab("ledger");
+    else if (path.includes("/accounts/trial-balance") && activeTab !== "trial")
+      setActiveTab("trial");
+    else if (path.includes("/accounts/vat") && activeTab !== "vat")
+      setActiveTab("vat");
+    else if (path.includes("/accounts/pal") && activeTab !== "pal")
+      setActiveTab("pal");
+    else if (
+      (path === "/accounts" || path.includes("/accounts/daybook")) &&
+      activeTab !== "daybook"
+    )
+      setActiveTab("daybook");
+  }, [location.pathname]);
+
   if (loading)
-    return <div className="p-8 text-xl text-center">Loading Accounts…</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading Accounts…</p>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -136,7 +216,7 @@ const AccountsModule = () => {
       </div>
 
       {/* TABS */}
-      <Tabs defaultValue="daybook">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))}>
         <TabsList>
           <TabsTrigger value="daybook">Daybook</TabsTrigger>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>

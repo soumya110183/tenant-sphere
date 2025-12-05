@@ -404,13 +404,9 @@ const TenantDashboard = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card
   className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
-  onClick={() => (window.location.href = "/inventory")}
+  onClick={() => (window.location.href = "/inventory/sales")}
   title="Click to view low stock inventory"
 >
-
-
-
-
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Today's Sales
@@ -475,7 +471,7 @@ const TenantDashboard = () => {
 
         <Card
            className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
-          onClick={() => (window.location.href = "/inventory?tab=sales")}
+          onClick={() => (window.location.href = "/inventory/sales")}
           title="Click to view sales in inventory"
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2">

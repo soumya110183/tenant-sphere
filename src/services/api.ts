@@ -4,8 +4,8 @@ import reportsData from "@/data/reports.json";
 import { report } from "process";
 
 // Base URLs
-// const API_URL = "https://billingbackend-1vei.onrender.com";
-//const API_URL = "https://billingbackend-1vei.onrender.com";
+// const API_URL = "http://localhost:5000";
+// const API_URL = "http://localhost:5000";
 const API_URL = "http://localhost:5000"; // Update with your backend URL
 // Alias to maintain legacy references expecting API_BASE
 const API_BASE = API_URL;
@@ -176,6 +176,24 @@ export const reportsAPI = {
     // cleanup
     window.URL.revokeObjectURL(url);
   },
+};
+
+// ===============================
+// TENANT REPORT API (backend: /api/tenantreport)
+// ===============================
+export const tenantReportAPI = {
+  getSummary: async () => (await api.get("/api/tenantreport/summary")).data,
+  getSalesChart: async () =>
+    (await api.get("/api/tenantreport/sales-chart")).data,
+  getPurchaseChart: async () =>
+    (await api.get("/api/tenantreport/purchase-chart")).data,
+  getStockReport: async () =>
+    (await api.get("/api/tenantreport/stock-report")).data,
+  getProfitReport: async () =>
+    (await api.get("/api/tenantreport/profit-report")).data,
+  getPaymentSummary: async () =>
+    (await api.get("/api/tenantreport/payment-summary")).data,
+  getAnalytics: async () => (await api.get("/api/tenantreport/analytics")).data,
 };
 
 // tenantAPI report

@@ -1,12 +1,12 @@
 import { BillingTable } from "@/components/billingComponent/BillingTable";
-import { BillSummary } from "@/components/billingComponent/BillSummary";
+import BillSummary from "@/components/billingComponent/BillSummary";
 import { CouponPopup } from "@/components/billingComponent/CouponPopup";
 import { generatePDFBill } from "@/components/billingComponent/functions/generatePDFBill";
 import { HeldBillsPopup } from "@/components/billingComponent/HeldBillsPopup";
 import { HoldBillSection } from "@/components/billingComponent/HoldBillSection";
 import { RedeemPointsPopup } from "@/components/billingComponent/RedeemPointsPopup";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 const API_BASE = "http://localhost:5000";
 
@@ -19,16 +19,18 @@ type Product = {
   sku: string;
   barcode: string;
   selling_price: number;
- tax: number;
+  tax: number;
   quantity: number;
 };
 
 type Customer = {
-  id: number;
+  id: number | string;
   name: string;
   phone: string;
   loyalty_points: number;
   membership_tier: string;
+  email?: string;
+  address?: string;
 };
 
 type BillRow = {
@@ -55,46 +57,6 @@ type HeldBill = {
   total: number;
 };
 
-// =============================================
-// HELD BILLS POPUP COMPONENT
-// =============================================
-
-
-
-// =============================================
-// BILLING TABLE COMPONENT
-// =============================================
-
-
-
-// =============================================
-// CUSTOMER SEARCH COMPONENT
-// =============================================
-
-
-
-// =============================================
-// BILL SUMMARY COMPONENT (UPDATED WITH CUSTOMER SEARCH)
-// =============================================
-
-
-
-// =============================================
-// HOLD BILL COMPONENT
-// =============================================
-
-
-
-// =============================================
-// PDF GENERATION FUNCTION
-// =============================================
-
-
-
-// =============================================
-// MAIN COMPONENT
-// =============================================
-
 const SupermarketBilling = () => {
   const { toast } = useToast();
 
@@ -103,7 +65,7 @@ const SupermarketBilling = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [rows, setRows] = useState<BillRow[]>([
-    { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }
+    { code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 },
   ]);
 
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -120,25 +82,26 @@ const SupermarketBilling = () => {
   const [billName, setBillName] = useState("");
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
 
-  // Data fetching effects
+  // Data fetching: products
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const token = localStorage.getItem("auth_token");
         const res = await fetch(`${API_BASE}/api/inventory`, {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: token ? `Bearer ${token}` : "",
             "Content-Type": "application/json",
           },
         });
         const json = await res.json();
         console.log("Fetched products:", json.data);
         if (res.ok) setProducts(json.data || []);
-        else toast({
-          title: "Failed to load products",
-          description: json.error || "Please check your token or server",
-          variant: "destructive",
-        });
+        else
+          toast({
+            title: "Failed to load products",
+            description: json.error || "Please check your token or server",
+            variant: "destructive",
+          });
       } catch (err: any) {
         console.error("Error fetching products:", err);
         toast({
@@ -151,41 +114,48 @@ const SupermarketBilling = () => {
     fetchProducts();
   }, [toast]);
 
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        const token = localStorage.getItem("auth_token");
-        const res = await fetch(`${API_BASE}/api/customers`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const json = await res.json();
-        if (res.ok && json.success) setCustomers(json.data || []);
-        else toast({
-          title: "Failed to load customers",
-          description: json.error || "Please check your token or server",
-          variant: "destructive",
-        });
-      } catch (err: any) {
-        console.error("Error fetching customers:", err);
+  // Data fetching: customers (refactored into reusable function)
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/customers`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json();
+      if (res.ok && (json.success || Array.isArray(json))) {
+        // support both { success: true, data: [...] } and plain array responses
+        setCustomers(json.data ?? (Array.isArray(json) ? json : []));
+      } else {
         toast({
-          title: "Error fetching customers",
-          description: err.message,
+          title: "Failed to load customers",
+          description: json.error || json.message || "Please check your token or server",
           variant: "destructive",
         });
       }
-    };
-    fetchCustomers();
+    } catch (err: any) {
+      console.error("Error fetching customers:", err);
+      toast({
+        title: "Error fetching customers",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
   }, [toast]);
 
   useEffect(() => {
-  if (rows.some(r => r.name && r.product_id)) {
-    handleApplyDiscounts();
-  }
-}, [rows, selectedCustomer, couponCode]);
+    fetchCustomers();
+  }, [fetchCustomers]);
 
+  // Auto preview when rows/customer/coupon change
+  useEffect(() => {
+    if (rows.some((r) => r.name && r.product_id)) {
+      handleApplyDiscounts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, selectedCustomer, couponCode]);
 
   // Row management
   const addNewRow = () => {
@@ -243,7 +213,7 @@ const SupermarketBilling = () => {
       const res = await fetch(`${API_BASE}/api/invoices/preview`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: token ? `Bearer ${token}` : "",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -306,7 +276,7 @@ const SupermarketBilling = () => {
 
   // Bill holding management
   const handleHoldBill = () => {
-    if (rows.length === 0 || !rows.some(row => row.name && row.qty)) {
+    if (rows.length === 0 || !rows.some((row) => row.name && row.qty)) {
       toast({
         title: "Cannot Hold Bill",
         description: "Add at least one item to hold the bill",
@@ -325,12 +295,11 @@ const SupermarketBilling = () => {
       redeemPoints,
       preview,
       previewItems,
-     subtotal: preview?.subtotal || 0,
-total: preview?.total || 0
-
+      subtotal: preview?.subtotal || 0,
+      total: preview?.total || 0,
     };
 
-    setHeldBills(prev => [billData, ...prev]);
+    setHeldBills((prev) => [billData, ...prev]);
     setBillName("");
     toast({
       title: "Bill Held",
@@ -353,7 +322,7 @@ total: preview?.total || 0
     setPreview(bill.preview);
     setPreviewItems(bill.previewItems);
     setSelectedCustomer(bill.customer);
-    setHeldBills(prev => prev.filter(b => b.id !== bill.id));
+    setHeldBills((prev) => prev.filter((b) => b.id !== bill.id));
     setShowHeldBills(false);
     toast({
       title: "Bill Restored",
@@ -363,7 +332,7 @@ total: preview?.total || 0
 
   const handleDeleteHeldBill = (billId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setHeldBills(prev => prev.filter(bill => bill.id !== billId));
+    setHeldBills((prev) => prev.filter((bill) => bill.id !== billId));
     toast({
       title: "Bill Deleted",
       description: "Held bill has been removed",
@@ -375,7 +344,7 @@ total: preview?.total || 0
     setIsGeneratingInvoice(true);
     const validItems = rows.filter((r) => r.name && r.product_id);
     console.log("Generating invoice with items:", validItems);
-    
+
     if (validItems.length === 0) {
       toast({
         title: "No items",
@@ -389,7 +358,9 @@ total: preview?.total || 0
     // Stock validation
     for (const item of validItems) {
       const product = products.find((p) => p.name === item.name);
-      if (product && item.qty > product.quantity) {
+      const itemQty =
+        typeof item.qty === "number" ? item.qty : Number(item.qty || 0);
+      if (product && itemQty > product.quantity) {
         toast({
           title: "Insufficient Stock",
           description: `${product.name} has only ${product.quantity} left.`,
@@ -401,9 +372,13 @@ total: preview?.total || 0
     }
 
     // Redeem validation
-    const numericRedeem = redeemPoints === "" ? 0 : Math.max(0, Number(redeemPoints || 0));
-    const maxRedeemAllowed = selectedCustomer?.loyalty_points != null ? Number(selectedCustomer.loyalty_points) : 0;
-    
+    const numericRedeem =
+      redeemPoints === "" ? 0 : Math.max(0, Number(redeemPoints || 0));
+    const maxRedeemAllowed =
+      selectedCustomer?.loyalty_points != null
+        ? Number(selectedCustomer.loyalty_points)
+        : 0;
+
     if (selectedCustomer && numericRedeem > maxRedeemAllowed) {
       toast({
         title: "Invalid redeem",
@@ -419,7 +394,7 @@ total: preview?.total || 0
       const res = await fetch(`${API_BASE}/api/billing`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: token ? `Bearer ${token}` : "",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -443,14 +418,12 @@ total: preview?.total || 0
         title: "Invoice Created",
         description: `Invoice ${json.invoice.invoice_number} generated`,
       });
-generatePDFBill(
-  json.invoice.invoice_number,
-  json.items || [],
-  json.invoice.final_amount,
-  paymentMethod
-);
-
-
+      generatePDFBill(
+        json.invoice.invoice_number,
+        json.items || [],
+        json.invoice.final_amount,
+        paymentMethod
+      );
 
       // Reset state
       setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
@@ -532,7 +505,7 @@ generatePDFBill(
           onDeleteRow={deleteRow}
         />
 
-        {/* Bill Summary - NOW INCLUDES CUSTOMER SEARCH */}
+        {/* Bill Summary */}
         <BillSummary
           rows={rows}
           preview={preview}
@@ -551,6 +524,7 @@ generatePDFBill(
           customers={customers}
           onCustomerSelect={handleCustomerSelect}
           onClearCustomer={handleClearCustomer}
+          onRefreshCustomers={fetchCustomers} // pass the reusable fetch function
         />
       </div>
     </div>

@@ -127,7 +127,47 @@ const App = () => (
                   <Route
                     path="inventory"
                     element={
-                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventory/sales"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventory/purchases"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventory/sales-returns"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventory/purchase-returns"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <Inventory />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="inventory/adjustments"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant","staff"]}>
                         <Inventory />
                       </RoleBasedRoute>
                     }
@@ -156,18 +196,108 @@ const App = () => (
                       </RoleBasedRoute>
                     }
                   />
+                  {/* Explicit subroutes for Accounts (tab-based routing) */}
                   <Route
-                    path="billings"
+                    path="account/ledger"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
-                        <BillingModule />
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="account/trial-balance"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="account/balance-sheet"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="account/vat"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="account/pal"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  {/* Legacy plural paths to support older links */}
+                  <Route
+                    path="accounts"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="accounts/ledger"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="accounts/trial-balance"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="accounts/balance-sheet"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="accounts/vat"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="accounts/pal"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <AccountsModule />
                       </RoleBasedRoute>
                     }
                   />
                   <Route
                     path="billings"
                     element={
-                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
+                        <BillingModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="billingsss"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
                         <BillingPageUAE_TenantStyle />
                       </RoleBasedRoute>
                     }
@@ -175,7 +305,7 @@ const App = () => (
                   <Route
                     path="stock"
                     element={
-                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                      <RoleBasedRoute allowedRoles={["tenant", "staff"]}>
                         <ProductCatalog />
                       </RoleBasedRoute>
                     }

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 type DiscountRule = {
   id: number;
@@ -34,10 +34,8 @@ export default function Discounts() {
   const [loading, setLoading] = useState(false);
 
   // FORM STATES
-  const [type, setType] = useState<"percentage" | "fixed" | "seasonal">(
-    "percentage"
-  );
-  const [applyTo, setApplyTo] = useState<ApplyTo>("bill"); // NEW: scope
+  const [type, setType] = useState<"percentage" | "fixed" | "seasonal">("percentage");
+  const [applyTo, setApplyTo] = useState<ApplyTo>("bill"); 
   const [discountPercent, setDiscountPercent] = useState("");
   const [discountAmount, setDiscountAmount] = useState("");
   const [minBill, setMinBill] = useState("");
@@ -64,14 +62,12 @@ export default function Discounts() {
 
     const json = await res.json();
     if (json.success) {
-      // ignore coupons here (you said coupons have separate menu)
-      setDiscounts(
-        (json.data as DiscountRule[]).filter((d) => d.type !== "coupon")
-      );
+      // Exclude coupons (they have a separate UI)
+      setDiscounts(json.data.filter((d: DiscountRule) => d.type !== "coupon"));
     }
   };
 
-  // Fetch products to support product & category discounts
+  // Fetch products
   const fetchProducts = async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) return;
@@ -81,92 +77,86 @@ export default function Discounts() {
     });
 
     const json = await res.json();
-    console.log("Products API Response:", json);
 
     const list: Product[] = json.data || [];
-
-    // Set products directly
     setProducts(list);
 
-    // Derive categories
     const cats = Array.from(
       new Set(
-        list
-          .map((p) => p.category)
-          .filter((c): c is string => !!c && c.trim().length > 0)
+        list.map((p) => p.category).filter((c): c is string => !!c?.trim())
       )
     ).sort();
 
     setCategories(cats);
   };
 
-  // Create rule
+  // Convert UI type → Backend type
+  const resolveBackendType = () => {
+    if (applyTo === "bill") return "bill";
+    if (applyTo === "product") return "item";
+    if (applyTo === "category") return "item"; // category creates multiple item rules
+    return "bill";
+  };
+
+  // Create discount
   const createDiscount = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("auth_token");
-      if (!token) {
-        alert("Not authenticated");
-        return;
-      }
+      if (!token) return alert("Not authenticated");
 
-      // basic validation
-      if (type === "percentage" || type === "seasonal") {
-        if (!discountPercent) {
-          alert("Please enter discount percent");
-          return;
-        }
-      }
-      if (type === "fixed" && !discountAmount) {
-        alert("Please enter discount amount");
-        return;
-      }
-      if (type === "seasonal" && (!startDate || !endDate)) {
-        alert("Please select start and end dates");
-        return;
-      }
+      // VALIDATIONS
+      if ((type === "percentage" || type === "seasonal") && !discountPercent)
+        return alert("Enter discount percent");
 
-      if (applyTo === "product" && !selectedProductId) {
-        alert("Please select a product for product-wise discount");
-        return;
-      }
+      if (type === "fixed" && !discountAmount)
+        return alert("Enter discount amount");
 
-      if (applyTo === "category" && !selectedCategory) {
-        alert("Please select a category for category-wise discount");
-        return;
-      }
+      if (type === "seasonal" && (!startDate || !endDate))
+        return alert("Select start & end date");
+
+      if (applyTo === "product" && !selectedProductId)
+        return alert("Select a product");
+
+      if (applyTo === "category" && !selectedCategory)
+        return alert("Select a category");
+
+      const backendType = resolveBackendType();
 
       const headers = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       };
 
-      // Base payload (used for all variants)
+      // Base payload
       const basePayload: any = {
-        type,
+        type: backendType,
         is_active: true,
         description: description || null,
         min_bill_amount: minBill ? Number(minBill) : null,
       };
 
-      if (type === "percentage") {
+      // Set discount value
+      if (type === "percentage" || type === "seasonal") {
         basePayload.discount_percent = Number(discountPercent);
-      } else if (type === "fixed") {
+      }
+
+      if (type === "fixed") {
         basePayload.discount_amount = Number(discountAmount);
-      } else if (type === "seasonal") {
-        basePayload.discount_percent = Number(discountPercent);
+      }
+
+      if (type === "seasonal") {
         basePayload.start_date = startDate;
         basePayload.end_date = endDate;
       }
 
-      // BILL-WIDE or SINGLE PRODUCT
+      // BILL-WIDE or SINGLE PRODUCT DISCOUNT
       if (applyTo === "bill" || applyTo === "product") {
         const payload = { ...basePayload };
 
-        if (applyTo === "product" && selectedProductId) {
+        if (applyTo === "product") {
           payload.product_id = Number(selectedProductId);
         } else {
-          // bill-wide: no product_id
           payload.product_id = null;
         }
 
@@ -177,21 +167,14 @@ export default function Discounts() {
         });
 
         const json = await res.json();
-        if (!json.success) {
-          throw new Error(json.error || "Failed to create discount");
-        }
+        if (!json.success) throw new Error(json.error);
       }
 
-      // CATEGORY-WISE → fan-out to all products in that category
-      if (applyTo === "category" && selectedCategory) {
+      // CATEGORY-WISE — create rule per product
+      if (applyTo === "category") {
         const productsInCategory = products.filter(
           (p) => p.category === selectedCategory
         );
-
-        if (productsInCategory.length === 0) {
-          alert("No products found in this category");
-          return;
-        }
 
         await Promise.all(
           productsInCategory.map((p) =>
@@ -211,7 +194,7 @@ export default function Discounts() {
       resetForm();
     } catch (err: any) {
       console.error("Create discount error:", err);
-      alert(err?.message || "Something went wrong while creating discount");
+      alert(err.message || "Error creating discount");
     } finally {
       setLoading(false);
     }
@@ -243,7 +226,6 @@ export default function Discounts() {
     setSelectedProductId("");
   };
 
-  // Helper to show product name in list
   const getProductName = (product_id?: number | null) => {
     if (!product_id) return null;
     const p = products.find((prod) => prod.id === product_id);
@@ -257,9 +239,10 @@ export default function Discounts() {
         <CardHeader>
           <CardTitle>Create Discount Rule</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-4">
+          {/* TYPE + APPLY TO */}
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Type Select */}
             <div>
               <Label>Discount Type</Label>
               <select
@@ -273,7 +256,6 @@ export default function Discounts() {
               </select>
             </div>
 
-            {/* Apply To */}
             <div>
               <Label>Apply To</Label>
               <select
@@ -288,7 +270,7 @@ export default function Discounts() {
             </div>
           </div>
 
-          {/* Percentage */}
+          {/* Discount Fields */}
           {(type === "percentage" || type === "seasonal") && (
             <div>
               <Label>Discount Percent (%)</Label>
@@ -303,7 +285,6 @@ export default function Discounts() {
             </div>
           )}
 
-          {/* Fixed */}
           {type === "fixed" && (
             <div>
               <Label>Discount Amount</Label>
@@ -317,7 +298,6 @@ export default function Discounts() {
             </div>
           )}
 
-          {/* Seasonal Dates */}
           {type === "seasonal" && (
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -329,7 +309,6 @@ export default function Discounts() {
                   className="mt-1"
                 />
               </div>
-
               <div>
                 <Label>End Date</Label>
                 <Input
@@ -342,7 +321,7 @@ export default function Discounts() {
             </div>
           )}
 
-          {/* Category Select */}
+          {/* Category */}
           {applyTo === "category" && (
             <div>
               <Label>Category</Label>
@@ -353,19 +332,13 @@ export default function Discounts() {
               >
                 <option value="">Select Category</option>
                 {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
+                  <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                This will create discount rules for all current products in this
-                category.
-              </p>
             </div>
           )}
 
-          {/* Product Select */}
+          {/* Product */}
           {applyTo === "product" && (
             <div>
               <Label>Product</Label>
@@ -384,7 +357,7 @@ export default function Discounts() {
             </div>
           )}
 
-          {/* Min bill */}
+          {/* Min Bill */}
           <div>
             <Label>Minimum Bill Amount (optional)</Label>
             <Input
@@ -403,16 +376,16 @@ export default function Discounts() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1"
-              placeholder="e.g. Weekend sale, Festive offer..."
+              placeholder="e.g. Weekend sale, Festival offer"
             />
           </div>
 
-          {/* Actions */}
+          {/* Buttons */}
           <div className="flex gap-3">
             <Button onClick={createDiscount} disabled={loading}>
               {loading ? "Saving..." : "Create Rule"}
             </Button>
-            <Button variant="outline" type="button" onClick={resetForm}>
+            <Button variant="outline" onClick={resetForm}>
               Reset
             </Button>
           </div>
@@ -427,9 +400,7 @@ export default function Discounts() {
 
         <CardContent className="space-y-3">
           {discounts.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No discount rules created yet.
-            </p>
+            <p className="text-sm text-muted-foreground">No discount rules created yet.</p>
           )}
 
           {discounts.map((d) => {
@@ -439,38 +410,24 @@ export default function Discounts() {
             return (
               <div
                 key={d.id}
-                className="border rounded-lg p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                className="border p-3 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between gap-2"
               >
                 <div className="space-y-1">
                   <p className="font-semibold capitalize">
                     {d.type} Discount{" "}
                     {isBillWide ? (
-                      <span className="text-xs text-muted-foreground">
-                        (Entire Bill)
-                      </span>
+                      <span className="text-xs text-muted-foreground">(Entire Bill)</span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
-                        (Product: {productName})
-                      </span>
+                      <span className="text-xs text-muted-foreground">({productName})</span>
                     )}
                   </p>
 
                   <p className="text-xs text-muted-foreground">
-                    {d.discount_percent
-                      ? `${d.discount_percent}%`
-                      : d.discount_amount
-                      ? `₹${d.discount_amount}`
-                      : null}
-                    {d.min_bill_amount
-                      ? ` • Min Bill: ₹${d.min_bill_amount}`
-                      : ""}
+                    {d.discount_percent ? `${d.discount_percent}%` : d.discount_amount ? `₹${d.discount_amount}` : ""}
+                    {d.min_bill_amount ? ` • Min Bill: ₹${d.min_bill_amount}` : ""}
                   </p>
 
-                  {d.description && (
-                    <p className="text-xs text-muted-foreground">
-                      {d.description}
-                    </p>
-                  )}
+                  {d.description && <p className="text-xs text-muted-foreground">{d.description}</p>}
 
                   <Badge variant={d.is_active ? "default" : "secondary"}>
                     {d.is_active ? "Active" : "Inactive"}
@@ -478,10 +435,7 @@ export default function Discounts() {
                 </div>
 
                 {d.is_active && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => deactivateRule(d.id)}
-                  >
+                  <Button variant="destructive" onClick={() => deactivateRule(d.id)}>
                     Deactivate
                   </Button>
                 )}
