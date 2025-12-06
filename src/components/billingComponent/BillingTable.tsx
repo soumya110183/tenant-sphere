@@ -390,14 +390,14 @@ export const BillingTable = ({
                         placeholder="Enter name, barcode, or SKU"
                       />
 
-                      <button
+                      {/* <button
                         type="button"
                         title="Scan barcode"
                         onClick={() => openScannerForRow(i)}
                         className="ml-2 absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded bg-transparent hover:bg-muted/50"
                       >
                         <Camera className="h-4 w-4 text-muted-foreground" />
-                      </button>
+                      </button> */}
 
                       {showSuggestions && currentInputIndex === i && (
                         <>

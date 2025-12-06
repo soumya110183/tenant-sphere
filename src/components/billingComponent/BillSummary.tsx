@@ -137,6 +137,8 @@ export default function BillSummary({
   const uiBillDiscountTotal = preview?.bill_discount_total ?? 0;
   const uiCouponDiscountTotal = preview?.coupon_discount_total ?? 0;
   const uiMembershipDiscountTotal = preview?.membership_discount_total ?? 0;
+  const uiEmployeeDiscount =
+    preview?.employee_discount_preview?.discount_this_bill ?? 0;
 
   /**
    * Numeric, non-negative representation of `redeemPoints`.
@@ -861,6 +863,13 @@ export default function BillSummary({
             <div className="flex justify-between text-green-700">
               <span>Membership Discount</span>
               <span>-AED {uiMembershipDiscountTotal.toFixed(2)}</span>
+            </div>
+          )}
+
+          {uiEmployeeDiscount > 0 && (
+            <div className="flex justify-between text-green-700">
+              <span>Staff Discount</span>
+              <span>-AED {Number(uiEmployeeDiscount).toFixed(2)}</span>
             </div>
           )}
 
