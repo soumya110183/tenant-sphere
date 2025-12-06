@@ -5,7 +5,11 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { employeeService } from "@/services/api";
+import {
+  employeeService,
+  employeeDiscountService,
+  salaryService,
+} from "@/services/api";
 import {
   Users,
   Clock,
@@ -72,6 +76,19 @@ interface Salary {
   active: boolean;
 }
 
+interface SalaryPayment {
+  id: string;
+  employee_id: string;
+  employee_name?: string;
+  month: string;
+  salary_amount: number;
+  deductions: number;
+  bonuses: number;
+  net_salary: number;
+  payment_method: string;
+  created_at?: string;
+}
+
 interface Discount {
   _id: string;
   type: string;
@@ -80,6 +97,14 @@ interface Discount {
   role?: string;
   employeeId?: string;
   active: boolean;
+}
+
+interface DiscountRule {
+  id?: string;
+  discount_percent: number;
+  max_discount_amount?: number;
+  monthly_limit?: number;
+  is_active: boolean;
 }
 
 interface StatsCardProps {
@@ -133,12 +158,14 @@ interface AttendanceViewProps {
 interface SalariesViewProps {
   salaries: Salary[];
   markSalaryPaid: (id: string) => void;
+  salaryPayments?: SalaryPayment[];
 }
 
 interface DiscountsViewProps {
   discounts: Discount[];
-  employees: Employee[];
-  updateDiscount: (id: string, updates: Partial<Discount>) => void;
+  rule: DiscountRule | null;
+  onOpenRuleModal: () => void;
+  isLoadingRule?: boolean;
 }
 
 interface TabNavigationProps {
@@ -155,7 +182,7 @@ function TabNavigation({
 }: TabNavigationProps) {
   const tabs = [
     { id: "employees", label: "Employees" },
-    { id: "attendance", label: "Attendance" },
+    // { id: "attendance", label: "Attendance" },
     { id: "salaries", label: "Salaries" },
     { id: "discounts", label: "Discounts" },
   ];
@@ -563,7 +590,6 @@ function EmployeeTableRow({ emp, onEdit, onDelete }: EmployeeTableRowProps) {
         </Badge>
       </td>
       <td className="py-3 px-2 sm:px-4 text-sm">
-        <div>{emp.email || "No email"}</div>
         <div className="text-xs text-muted-foreground">
           {emp.phone || "No phone"}
         </div>
@@ -868,7 +894,11 @@ function AttendanceView({ attendance, employees }: AttendanceViewProps) {
 /**
  * Salaries View Component
  */
-function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
+function SalariesView({
+  salaries,
+  markSalaryPaid,
+  salaryPayments = [],
+}: SalariesViewProps) {
   const activeSalaries = salaries.filter((s) => s.active);
   const inactiveSalaries = salaries.filter((s) => !s.active);
 
@@ -930,7 +960,7 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
                           <Button
                             size="sm"
                             className="gap-1 bg-blue-600 hover:bg-blue-700"
-                            onClick={() => markSalaryPaid(s._id)}
+                            onClick={() => markSalaryPaid(s.employeeId)}
                           >
                             <CreditCard className="h-3 w-3" /> Process Payment
                           </Button>
@@ -992,6 +1022,407 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Salary Payments History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <FileText className="h-5 w-5 text-primary" />
+            Salary Payments History ({salaryPayments.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Employee
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Month
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Net Salary
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Method
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {salaryPayments.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
+                      No salary payments yet.
+                    </td>
+                  </tr>
+                ) : (
+                  salaryPayments.map((p) => (
+                    <tr key={p.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                        {p.employee_name || p.employee_id}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">{p.month}</td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                        AED {Number(p.net_salary).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.payment_method}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.created_at
+                          ? new Date(p.created_at).toLocaleString()
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Discount Rule Modal Component
+ */
+function DiscountRuleModal({
+  open,
+  onClose,
+  onSave,
+  initial,
+  submitting = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (rule: DiscountRule) => void;
+  initial: DiscountRule | null;
+  submitting?: boolean;
+}) {
+  const [form, setForm] = useState<DiscountRule>(() => ({
+    discount_percent: 0,
+    max_discount_amount: undefined,
+    monthly_limit: undefined,
+    is_active: true,
+    ...initial,
+  }));
+
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        discount_percent: initial.discount_percent ?? 0,
+        max_discount_amount: initial.max_discount_amount,
+        monthly_limit: initial.monthly_limit,
+        is_active: initial.is_active ?? true,
+      });
+    }
+  }, [initial]);
+
+  if (!open) return null;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (form.discount_percent < 0) {
+      alert("Discount percent must be >= 0");
+      return;
+    }
+    onSave(form);
+  }
+
+  const modalTitle = initial?.id
+    ? "Edit Discount Rule"
+    : "Create Discount Rule";
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
+          <h2 className="text-lg sm:text-xl font-bold">{modalTitle}</h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="p-4 sm:p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Discount Percentage (%) *
+            </label>
+            <input
+              type="number"
+              value={form.discount_percent}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  discount_percent: Number(e.target.value),
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              placeholder="e.g., 10"
+              min="0"
+              step="0.01"
+              required
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              Percentage discount per employee bill
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Max Discount Per Bill (optional)
+            </label>
+            <input
+              type="number"
+              value={form.max_discount_amount ?? ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  max_discount_amount: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              placeholder="e.g., 50"
+              min="0"
+              step="0.01"
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              Cap the maximum discount per single bill
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Monthly Limit (optional)
+            </label>
+            <input
+              type="number"
+              value={form.monthly_limit ?? ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  monthly_limit: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              placeholder="e.g., 200"
+              min="0"
+              step="0.01"
+            />
+            <div className="text-xs text-muted-foreground mt-1">
+              Total discount allowance per employee per month
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+            <Button type="submit" className="flex-1" disabled={submitting}>
+              <Save className="h-4 w-4 mr-2" />
+              {submitting ? "Saving..." : "Save Rule"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 sm:flex-none"
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pay Salary Modal
+ */
+function PaySalaryModal({
+  open,
+  onClose,
+  employee,
+  onSubmit,
+  submitting = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  employee: { id: string; name?: string } | null;
+  onSubmit: (payload: {
+    employee_id: string;
+    month: string;
+    salary_amount: number;
+    deductions?: number;
+    bonuses?: number;
+    payment_method: string;
+  }) => Promise<void>;
+  submitting?: boolean;
+}) {
+  const [form, setForm] = useState(() => ({
+    month: new Date().toISOString().slice(0, 7), // yyyy-mm for month input
+    salary_amount: 0,
+    deductions: 0,
+    bonuses: 0,
+    payment_method: "cash",
+  }));
+
+  useEffect(() => {
+    if (!open) return;
+    // if employee exists, try to prefill salary_amount from main employees list via DOM not available here,
+    // caller should set defaults if needed. Keep it simple: leave at 0 and rely on user.
+  }, [open, employee]);
+
+  if (!open) return null;
+
+  function update(field: string, value: any) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!employee) return alert("No employee selected");
+    try {
+      await onSubmit({
+        employee_id: employee.id,
+        month: form.month,
+        salary_amount: Number(form.salary_amount || 0),
+        deductions: Number(form.deductions || 0),
+        bonuses: Number(form.bonuses || 0),
+        payment_method: form.payment_method,
+      });
+    } catch (err: any) {
+      console.error("Pay salary error:", err);
+      alert(err?.message || "Failed to process payment");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
+          <h2 className="text-lg sm:text-xl font-bold">
+            Pay Salary {employee?.name ? `— ${employee.name}` : ""}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="p-4 sm:p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Month *</label>
+            <input
+              type="month"
+              value={form.month}
+              onChange={(e) => update("month", e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Salary Amount *
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.salary_amount}
+                onChange={(e) => update("salary_amount", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Deductions
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.deductions}
+                onChange={(e) => update("deductions", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Bonuses</label>
+              <input
+                type="number"
+                min="0"
+                value={form.bonuses}
+                onChange={(e) => update("bonuses", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Payment Method
+              </label>
+              <select
+                value={form.payment_method}
+                onChange={(e) => update("payment_method", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+            <Button type="submit" className="flex-1" disabled={submitting}>
+              <Save className="h-4 w-4 mr-2" />
+              {submitting ? "Processing..." : "Pay Salary"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 sm:flex-none"
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1001,106 +1432,63 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
  */
 function DiscountsView({
   discounts,
-  employees,
-  updateDiscount,
+  rule,
+  onOpenRuleModal,
+  isLoadingRule = false,
 }: DiscountsViewProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-          <Tag className="h-5 w-5 text-primary" />
-          Discount Rules ({discounts.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Type
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Name
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Discount
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Applicable To
-                </th>
-                <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Status
-                </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {discounts.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="text-center py-8 text-muted-foreground text-sm"
-                  >
-                    No discount rules configured.
-                  </td>
-                </tr>
-              ) : (
-                discounts.map((d) => (
-                  <tr key={d._id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      <Badge className="bg-muted text-muted-foreground">
-                        {d.type.charAt(0).toUpperCase() + d.type.slice(1)}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                      {d.name}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 font-bold text-lg text-primary">
-                      {d.percentage}%
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-sm">
-                      {d.type === "global"
-                        ? "All Staff"
-                        : d.type === "role"
-                        ? `${d.role}s`
-                        : employees.find((e) => e._id === d.employeeId)?.name ||
-                          "Employee"}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4">
-                      <Badge
-                        className={
-                          d.active
-                            ? "bg-green-500/10 text-green-500"
-                            : "bg-red-500/10 text-red-500"
-                        }
-                      >
-                        {d.active ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className="flex gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            updateDiscount(d._id, { active: !d.active })
-                          }
-                        >
-                          {d.active ? "Deactivate" : "Activate"}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base sm:text-lg">Discount Rules</CardTitle>
+          <Button
+            size="sm"
+            onClick={onOpenRuleModal}
+            disabled={isLoadingRule}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            {rule ? "Edit Rule" : "Create Rule"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {rule ? (
+            <div className="space-y-2 p-3 bg-white rounded-lg">
+              <div className="text-sm">
+                <span className="font-medium">Discount:</span>{" "}
+                {rule.discount_percent}%
+              </div>
+              {rule.max_discount_amount !== undefined &&
+                rule.max_discount_amount !== null && (
+                  <div className="text-sm">
+                    <span className="font-medium">Max per Bill:</span>{" "}
+                    {rule.max_discount_amount}
+                  </div>
+                )}
+              {rule.monthly_limit !== undefined &&
+                rule.monthly_limit !== null && (
+                  <div className="text-sm">
+                    <span className="font-medium">Monthly Limit:</span>{" "}
+                    {rule.monthly_limit}
+                  </div>
+                )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="mb-4">No discount rules configured yet.</p>
+              <Button
+                onClick={onOpenRuleModal}
+                disabled={isLoadingRule}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Create Your First Rule
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1113,10 +1501,21 @@ export default function Employees() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [salaries, setSalaries] = useState<Salary[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [discountRule, setDiscountRule] = useState<DiscountRule | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingRule, setLoadingRule] = useState<boolean>(false);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [ruleModalOpen, setRuleModalOpen] = useState<boolean>(false);
+  const [payModalOpen, setPayModalOpen] = useState<boolean>(false);
+  const [payingEmployee, setPayingEmployee] = useState<{
+    id: string;
+    name?: string;
+  } | null>(null);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submittingRule, setSubmittingRule] = useState<boolean>(false);
+  const [paying, setPaying] = useState<boolean>(false);
+  const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
   const [kpiCounts, setKpiCounts] = useState({
     total: 0,
     activeShifts: 0,
@@ -1177,6 +1576,40 @@ export default function Employees() {
       setAttendance([]);
       setSalaries(normalizedSalaries);
       setDiscounts([]);
+
+      // Fetch salary payments history
+      try {
+        const spJson = await salaryService.getAll();
+        const payments = (spJson || []).map((p: any) => ({
+          id: p.id || p._id || `${p.employee_id}-${p.month}`,
+          employee_id: p.employee_id,
+          employee_name:
+            p.employee_name ||
+            normalizedEmployees.find((e: any) => e._id === p.employee_id)
+              ?.name ||
+            undefined,
+          month: p.month,
+          salary_amount: Number(p.salary_amount || 0),
+          deductions: Number(p.deductions || 0),
+          bonuses: Number(p.bonuses || 0),
+          net_salary: Number(p.net_salary || 0),
+          payment_method: p.payment_method,
+          created_at: p.created_at || p.created_at,
+        }));
+        setSalaryPayments(payments);
+      } catch (e) {
+        console.warn("Failed to fetch salary payments:", e);
+        setSalaryPayments([]);
+      }
+
+      // Fetch discount rule
+      try {
+        const ruleRes = await employeeDiscountService.getRule();
+        setDiscountRule(ruleRes?.data || null);
+      } catch (err) {
+        console.warn("Failed to fetch discount rule:", err);
+        setDiscountRule(null);
+      }
 
       // Compute KPIs based on available data
       const activeShifts = 0; // Would come from attendance API
@@ -1259,11 +1692,10 @@ export default function Employees() {
   }
 
   async function markSalaryPaid(salaryId: string) {
-    // Salaries are now managed via SalaryController endpoints
-    // This function is deprecated; use a separate Pay Salary modal instead
-    alert(
-      "Salary payments are managed separately. Use the Salaries module to process payments."
-    );
+    // Open pay salary modal for the given employee id
+    const emp = employees.find((e) => e._id === salaryId);
+    setPayingEmployee(emp ? { id: emp._id, name: emp.name } : { id: salaryId });
+    setPayModalOpen(true);
   }
 
   async function updateDiscount(id: string, updates: Partial<Discount>) {
@@ -1275,6 +1707,64 @@ export default function Employees() {
     } catch (err: any) {
       console.error("Error updating discount:", err);
       alert("Failed to update discount.");
+    }
+  }
+
+  async function handleSaveDiscountRule(ruleData: DiscountRule) {
+    setSubmittingRule(true);
+    try {
+      await employeeDiscountService.setRule({
+        discount_percent: ruleData.discount_percent,
+        max_discount_amount: ruleData.max_discount_amount || null,
+        monthly_limit: ruleData.monthly_limit || null,
+      });
+      setRuleModalOpen(false);
+      await fetchAll();
+      alert("Discount rule saved successfully.");
+    } catch (err: any) {
+      console.error("Error saving discount rule:", err);
+      alert(
+        `Failed to save discount rule: ${
+          err.response?.data?.message || err.message
+        }`
+      );
+    } finally {
+      setSubmittingRule(false);
+    }
+  }
+
+  async function handlePaySalarySubmit(payload: {
+    employee_id: string;
+    month: string;
+    salary_amount: number;
+    deductions?: number;
+    bonuses?: number;
+    payment_method: string;
+  }) {
+    setPaying(true);
+    try {
+      const resp = await salaryService.pay({
+        employee_id: payload.employee_id,
+        month: payload.month,
+        salary_amount: payload.salary_amount,
+        deductions: payload.deductions || 0,
+        bonuses: payload.bonuses || 0,
+        payment_method: payload.payment_method,
+      });
+      // salaryService returns data via axios wrapper
+      alert(resp?.message || "Salary paid successfully");
+      setPayModalOpen(false);
+      setPayingEmployee(null);
+      await fetchAll();
+    } catch (err: any) {
+      console.error("Payment error:", err);
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to process salary payment";
+      alert(msg);
+    } finally {
+      setPaying(false);
     }
   }
 
@@ -1372,14 +1862,19 @@ export default function Employees() {
         )}
 
         {activeTab === "salaries" && (
-          <SalariesView salaries={salaries} markSalaryPaid={markSalaryPaid} />
+          <SalariesView
+            salaries={salaries}
+            markSalaryPaid={markSalaryPaid}
+            salaryPayments={salaryPayments}
+          />
         )}
 
         {activeTab === "discounts" && (
           <DiscountsView
             discounts={discounts}
-            employees={employees}
-            updateDiscount={updateDiscount}
+            rule={discountRule}
+            onOpenRuleModal={() => setRuleModalOpen(true)}
+            isLoadingRule={loadingRule}
           />
         )}
       </div>
@@ -1390,6 +1885,25 @@ export default function Employees() {
         onSave={handleSave}
         initial={editing || {}}
         submitting={submitting}
+      />
+
+      <PaySalaryModal
+        open={payModalOpen}
+        onClose={() => {
+          setPayModalOpen(false);
+          setPayingEmployee(null);
+        }}
+        employee={payingEmployee}
+        onSubmit={handlePaySalarySubmit}
+        submitting={paying}
+      />
+
+      <DiscountRuleModal
+        open={ruleModalOpen}
+        onClose={() => setRuleModalOpen(false)}
+        onSave={handleSaveDiscountRule}
+        initial={discountRule}
+        submitting={submittingRule}
       />
     </div>
   );
