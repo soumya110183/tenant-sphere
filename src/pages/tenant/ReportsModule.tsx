@@ -527,12 +527,18 @@ const ReportsModule = () => {
         className="space-y-4"
       >
         <TabsList>
-          <TabsTrigger value="daily-summary">Daily Summary</TabsTrigger>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="stock">Stock</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="daily-summary" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Daily Summary</TabsTrigger>
+          <TabsTrigger value="sales" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Sales</TabsTrigger>
+          <TabsTrigger value="purchases" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Purchases</TabsTrigger>
+          <TabsTrigger value="stock" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Stock</TabsTrigger>
+          <TabsTrigger value="payments" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Payments</TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Analytics</TabsTrigger>
         </TabsList>
 
         {/* DAILY SUMMARY TABLE */}

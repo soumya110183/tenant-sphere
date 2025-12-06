@@ -269,12 +269,18 @@ const AccountsModule = () => {
       {/* TABS */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))}>
         <TabsList>
-          <TabsTrigger value="daybook">Daybook</TabsTrigger>
-          <TabsTrigger value="ledger">Ledger</TabsTrigger>
-          <TabsTrigger value="trial">Trial Balance</TabsTrigger>
-          <TabsTrigger value="balance">Balance Sheet</TabsTrigger>
-          <TabsTrigger value="vat">VAT</TabsTrigger>
-          <TabsTrigger value="pal">Profit & Loss</TabsTrigger>
+          <TabsTrigger value="daybook" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Daybook</TabsTrigger>
+          <TabsTrigger value="ledger" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Ledger</TabsTrigger>
+          <TabsTrigger value="trial" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Trial Balance</TabsTrigger>
+          <TabsTrigger value="balance" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Balance Sheet</TabsTrigger>
+          <TabsTrigger value="vat" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >VAT</TabsTrigger>
+          <TabsTrigger value="pal" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+  >Profit & Loss</TabsTrigger>
         </TabsList>
 
         {/* DAYBOOK */}
