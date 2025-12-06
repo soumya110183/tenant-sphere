@@ -5,7 +5,11 @@ import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { employeeService, employeeDiscountService } from "@/services/api";
+import {
+  employeeService,
+  employeeDiscountService,
+  salaryService,
+} from "@/services/api";
 import {
   Users,
   Clock,
@@ -70,6 +74,19 @@ interface Salary {
   employeeName: string;
   monthlySalary: number;
   active: boolean;
+}
+
+interface SalaryPayment {
+  id: string;
+  employee_id: string;
+  employee_name?: string;
+  month: string;
+  salary_amount: number;
+  deductions: number;
+  bonuses: number;
+  net_salary: number;
+  payment_method: string;
+  created_at?: string;
 }
 
 interface Discount {
@@ -141,6 +158,7 @@ interface AttendanceViewProps {
 interface SalariesViewProps {
   salaries: Salary[];
   markSalaryPaid: (id: string) => void;
+  salaryPayments?: SalaryPayment[];
 }
 
 interface DiscountsViewProps {
@@ -572,7 +590,6 @@ function EmployeeTableRow({ emp, onEdit, onDelete }: EmployeeTableRowProps) {
         </Badge>
       </td>
       <td className="py-3 px-2 sm:px-4 text-sm">
-        <div>{emp.email || "No email"}</div>
         <div className="text-xs text-muted-foreground">
           {emp.phone || "No phone"}
         </div>
@@ -877,7 +894,11 @@ function AttendanceView({ attendance, employees }: AttendanceViewProps) {
 /**
  * Salaries View Component
  */
-function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
+function SalariesView({
+  salaries,
+  markSalaryPaid,
+  salaryPayments = [],
+}: SalariesViewProps) {
   const activeSalaries = salaries.filter((s) => s.active);
   const inactiveSalaries = salaries.filter((s) => !s.active);
 
@@ -939,7 +960,7 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
                           <Button
                             size="sm"
                             className="gap-1 bg-blue-600 hover:bg-blue-700"
-                            onClick={() => markSalaryPaid(s._id)}
+                            onClick={() => markSalaryPaid(s.employeeId)}
                           >
                             <CreditCard className="h-3 w-3" /> Process Payment
                           </Button>
@@ -1001,6 +1022,73 @@ function SalariesView({ salaries, markSalaryPaid }: SalariesViewProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Salary Payments History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <FileText className="h-5 w-5 text-primary" />
+            Salary Payments History ({salaryPayments.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Employee
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Month
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Net Salary
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Method
+                  </th>
+                  <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {salaryPayments.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="text-center py-8 text-muted-foreground text-sm"
+                    >
+                      No salary payments yet.
+                    </td>
+                  </tr>
+                ) : (
+                  salaryPayments.map((p) => (
+                    <tr key={p.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                        {p.employee_name || p.employee_id}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">{p.month}</td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                        AED {Number(p.net_salary).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.payment_method}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.created_at
+                          ? new Date(p.created_at).toLocaleString()
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -1171,6 +1259,175 @@ function DiscountRuleModal({
 }
 
 /**
+ * Pay Salary Modal
+ */
+function PaySalaryModal({
+  open,
+  onClose,
+  employee,
+  onSubmit,
+  submitting = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  employee: { id: string; name?: string } | null;
+  onSubmit: (payload: {
+    employee_id: string;
+    month: string;
+    salary_amount: number;
+    deductions?: number;
+    bonuses?: number;
+    payment_method: string;
+  }) => Promise<void>;
+  submitting?: boolean;
+}) {
+  const [form, setForm] = useState(() => ({
+    month: new Date().toISOString().slice(0, 7), // yyyy-mm for month input
+    salary_amount: 0,
+    deductions: 0,
+    bonuses: 0,
+    payment_method: "cash",
+  }));
+
+  useEffect(() => {
+    if (!open) return;
+    // if employee exists, try to prefill salary_amount from main employees list via DOM not available here,
+    // caller should set defaults if needed. Keep it simple: leave at 0 and rely on user.
+  }, [open, employee]);
+
+  if (!open) return null;
+
+  function update(field: string, value: any) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!employee) return alert("No employee selected");
+    try {
+      await onSubmit({
+        employee_id: employee.id,
+        month: form.month,
+        salary_amount: Number(form.salary_amount || 0),
+        deductions: Number(form.deductions || 0),
+        bonuses: Number(form.bonuses || 0),
+        payment_method: form.payment_method,
+      });
+    } catch (err: any) {
+      console.error("Pay salary error:", err);
+      alert(err?.message || "Failed to process payment");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
+          <h2 className="text-lg sm:text-xl font-bold">
+            Pay Salary {employee?.name ? `— ${employee.name}` : ""}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="p-4 sm:p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Month *</label>
+            <input
+              type="month"
+              value={form.month}
+              onChange={(e) => update("month", e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Salary Amount *
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.salary_amount}
+                onChange={(e) => update("salary_amount", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Deductions
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.deductions}
+                onChange={(e) => update("deductions", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Bonuses</label>
+              <input
+                type="number"
+                min="0"
+                value={form.bonuses}
+                onChange={(e) => update("bonuses", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Payment Method
+              </label>
+              <select
+                value={form.payment_method}
+                onChange={(e) => update("payment_method", e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+            <Button type="submit" className="flex-1" disabled={submitting}>
+              <Save className="h-4 w-4 mr-2" />
+              {submitting ? "Processing..." : "Pay Salary"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 sm:flex-none"
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Discounts View Component
  */
 function DiscountsView({
@@ -1204,14 +1461,14 @@ function DiscountsView({
               {rule.max_discount_amount !== undefined &&
                 rule.max_discount_amount !== null && (
                   <div className="text-sm">
-                    <span className="font-medium">Max per Bill:</span> PKR{" "}
+                    <span className="font-medium">Max per Bill:</span>{" "}
                     {rule.max_discount_amount}
                   </div>
                 )}
               {rule.monthly_limit !== undefined &&
                 rule.monthly_limit !== null && (
                   <div className="text-sm">
-                    <span className="font-medium">Monthly Limit:</span> PKR{" "}
+                    <span className="font-medium">Monthly Limit:</span>{" "}
                     {rule.monthly_limit}
                   </div>
                 )}
@@ -1249,9 +1506,16 @@ export default function Employees() {
   const [loadingRule, setLoadingRule] = useState<boolean>(false);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [ruleModalOpen, setRuleModalOpen] = useState<boolean>(false);
+  const [payModalOpen, setPayModalOpen] = useState<boolean>(false);
+  const [payingEmployee, setPayingEmployee] = useState<{
+    id: string;
+    name?: string;
+  } | null>(null);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submittingRule, setSubmittingRule] = useState<boolean>(false);
+  const [paying, setPaying] = useState<boolean>(false);
+  const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
   const [kpiCounts, setKpiCounts] = useState({
     total: 0,
     activeShifts: 0,
@@ -1312,6 +1576,31 @@ export default function Employees() {
       setAttendance([]);
       setSalaries(normalizedSalaries);
       setDiscounts([]);
+
+      // Fetch salary payments history
+      try {
+        const spJson = await salaryService.getAll();
+        const payments = (spJson || []).map((p: any) => ({
+          id: p.id || p._id || `${p.employee_id}-${p.month}`,
+          employee_id: p.employee_id,
+          employee_name:
+            p.employee_name ||
+            normalizedEmployees.find((e: any) => e._id === p.employee_id)
+              ?.name ||
+            undefined,
+          month: p.month,
+          salary_amount: Number(p.salary_amount || 0),
+          deductions: Number(p.deductions || 0),
+          bonuses: Number(p.bonuses || 0),
+          net_salary: Number(p.net_salary || 0),
+          payment_method: p.payment_method,
+          created_at: p.created_at || p.created_at,
+        }));
+        setSalaryPayments(payments);
+      } catch (e) {
+        console.warn("Failed to fetch salary payments:", e);
+        setSalaryPayments([]);
+      }
 
       // Fetch discount rule
       try {
@@ -1403,11 +1692,10 @@ export default function Employees() {
   }
 
   async function markSalaryPaid(salaryId: string) {
-    // Salaries are now managed via SalaryController endpoints
-    // This function is deprecated; use a separate Pay Salary modal instead
-    alert(
-      "Salary payments are managed separately. Use the Salaries module to process payments."
-    );
+    // Open pay salary modal for the given employee id
+    const emp = employees.find((e) => e._id === salaryId);
+    setPayingEmployee(emp ? { id: emp._id, name: emp.name } : { id: salaryId });
+    setPayModalOpen(true);
   }
 
   async function updateDiscount(id: string, updates: Partial<Discount>) {
@@ -1442,6 +1730,41 @@ export default function Employees() {
       );
     } finally {
       setSubmittingRule(false);
+    }
+  }
+
+  async function handlePaySalarySubmit(payload: {
+    employee_id: string;
+    month: string;
+    salary_amount: number;
+    deductions?: number;
+    bonuses?: number;
+    payment_method: string;
+  }) {
+    setPaying(true);
+    try {
+      const resp = await salaryService.pay({
+        employee_id: payload.employee_id,
+        month: payload.month,
+        salary_amount: payload.salary_amount,
+        deductions: payload.deductions || 0,
+        bonuses: payload.bonuses || 0,
+        payment_method: payload.payment_method,
+      });
+      // salaryService returns data via axios wrapper
+      alert(resp?.message || "Salary paid successfully");
+      setPayModalOpen(false);
+      setPayingEmployee(null);
+      await fetchAll();
+    } catch (err: any) {
+      console.error("Payment error:", err);
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to process salary payment";
+      alert(msg);
+    } finally {
+      setPaying(false);
     }
   }
 
@@ -1539,7 +1862,11 @@ export default function Employees() {
         )}
 
         {activeTab === "salaries" && (
-          <SalariesView salaries={salaries} markSalaryPaid={markSalaryPaid} />
+          <SalariesView
+            salaries={salaries}
+            markSalaryPaid={markSalaryPaid}
+            salaryPayments={salaryPayments}
+          />
         )}
 
         {activeTab === "discounts" && (
@@ -1558,6 +1885,17 @@ export default function Employees() {
         onSave={handleSave}
         initial={editing || {}}
         submitting={submitting}
+      />
+
+      <PaySalaryModal
+        open={payModalOpen}
+        onClose={() => {
+          setPayModalOpen(false);
+          setPayingEmployee(null);
+        }}
+        employee={payingEmployee}
+        onSubmit={handlePaySalarySubmit}
+        submitting={paying}
       />
 
       <DiscountRuleModal

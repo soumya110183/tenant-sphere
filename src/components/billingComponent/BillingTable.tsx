@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { MinusCircle } from "lucide-react";
+import { MinusCircle, Camera } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -60,6 +60,14 @@ export const BillingTable = ({
     left: number;
     width: number;
   } | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannerIndex, setScannerIndex] = useState<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<any>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState<string>("");
+  const [useManual, setUseManual] = useState<boolean>(false);
 
   const getMatchingProducts = (term: string) => {
     if (!term || term.length < 1) return [];
@@ -136,8 +144,149 @@ export const BillingTable = ({
       updated[index].product_id = null;
     }
 
+    // If the user pasted/scanned a barcode (likely numeric or longer), try to auto-select by barcode
+    if (!exactMatch && value && value.length >= 6) {
+      const byBarcode = products.find(
+        (p) =>
+          p.barcode === value ||
+          p.sku === value ||
+          String(p.product_id) === value
+      );
+      if (byBarcode) {
+        updated[index].code = byBarcode.name;
+        updated[index].name = byBarcode.name;
+        updated[index].price = Number(byBarcode.selling_price || 0);
+        updated[index].tax = Number(byBarcode.tax || 0);
+        updated[index].product_id = byBarcode.product_id;
+        updated[index].total = (updated[index].qty || 0) * updated[index].price;
+      }
+    }
+
     onRowsChange(updated);
   };
+
+  // Open scanner modal for a given row
+  function openScannerForRow(index: number) {
+    setScannerIndex(index);
+    setShowScanner(true);
+  }
+
+  async function startCameraAndDetect(onDetected: (code: string) => void) {
+    // Use BarcodeDetector API when available
+    try {
+      const BarcodeDetectorClass = (window as any).BarcodeDetector;
+      if (!BarcodeDetectorClass)
+        throw new Error("BarcodeDetector not supported");
+
+      detectorRef.current = new BarcodeDetectorClass({
+        formats: [
+          "ean_13",
+          "ean_8",
+          "code_128",
+          "upc_a",
+          "upc_e",
+          "code_39",
+          "code_93",
+        ],
+      });
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      let running = true;
+
+      const loop = async () => {
+        if (!running) return;
+        try {
+          if (!videoRef.current) return;
+          const detections = await detectorRef.current.detect(videoRef.current);
+          if (detections && detections.length) {
+            const code =
+              detections[0].rawValue ||
+              detections[0].raw_string ||
+              detections[0].value;
+            if (code) {
+              running = false;
+              onDetected(String(code));
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore intermittent detection errors
+        }
+        setTimeout(loop, 300);
+      };
+
+      loop();
+
+      return () => {
+        running = false;
+        try {
+          stream.getTracks().forEach((t) => t.stop());
+        } catch (e) {}
+        if (videoRef.current) {
+          try {
+            videoRef.current.pause();
+            videoRef.current.srcObject = null;
+          } catch (e) {}
+        }
+      };
+    } catch (err) {
+      // BarcodeDetector not supported or camera failed
+      throw err;
+    }
+  }
+
+  // Clean up camera when modal closes
+  async function stopCamera() {
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      }
+      detectorRef.current = null;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Start scanner when modal opens
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    if (showScanner && scannerIndex !== null) {
+      startCameraAndDetect(async (code: string) => {
+        // fill the input with detected code and run change handler
+        handleItemCodeChange(scannerIndex, String(code));
+        setShowScanner(false);
+        setScannerIndex(null);
+        if (cleanup) cleanup();
+      })
+        .then((c) => {
+          cleanup = c;
+        })
+        .catch((err) => {
+          console.warn("Scanner start failed:", err);
+          // Show error in modal and allow retry or manual entry
+          const msg = err?.message || String(err);
+          setScannerError(msg);
+        });
+    }
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showScanner, scannerIndex]);
 
   const handleSuggestionClick = (product: Product) => {
     if (currentInputIndex === null) return;
@@ -209,49 +358,86 @@ export const BillingTable = ({
   }, [showSuggestions, currentInputIndex]);
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>Billing Table</CardTitle>
-      </CardHeader>
+    <>
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>Billing Table</CardTitle>
+        </CardHeader>
 
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Item Code / Name</TableHead>
-              <TableHead>Qty</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Action</TableHead>
-            </TableRow>
-          </TableHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item Code / Name</TableHead>
+                <TableHead>Qty</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
 
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="relative">
-                    <Input
-                      ref={(el) => (inputRefs.current[i] = el!)}
-                      value={r.code}
-                      onChange={(e) => handleItemCodeChange(i, e.target.value)}
-                      placeholder="Enter name, barcode, or SKU"
-                    />
+            <TableBody>
+              {rows.map((r, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className="relative">
+                      <Input
+                        ref={(el) => (inputRefs.current[i] = el!)}
+                        value={r.code}
+                        onChange={(e) =>
+                          handleItemCodeChange(i, e.target.value)
+                        }
+                        placeholder="Enter name, barcode, or SKU"
+                      />
 
-                    {showSuggestions && currentInputIndex === i && (
-                      <>
-                        {portalPos ? (
-                          createPortal(
+                      <button
+                        type="button"
+                        title="Scan barcode"
+                        onClick={() => openScannerForRow(i)}
+                        className="ml-2 absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded bg-transparent hover:bg-muted/50"
+                      >
+                        <Camera className="h-4 w-4 text-muted-foreground" />
+                      </button>
+
+                      {showSuggestions && currentInputIndex === i && (
+                        <>
+                          {portalPos ? (
+                            createPortal(
+                              <div
+                                ref={suggestionRef}
+                                className="bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+                                style={{
+                                  position: "absolute",
+                                  top: portalPos.top,
+                                  left: portalPos.left,
+                                  width: portalPos.width,
+                                  zIndex: 9999,
+                                }}
+                              >
+                                {suggestions.map((p) => (
+                                  <div
+                                    key={p.inventory_id}
+                                    className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
+                                    onClick={() => handleSuggestionClick(p)}
+                                  >
+                                    <div className="font-medium text-sm">
+                                      {p.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {p.sku && `SKU: ${p.sku} • `}
+                                      {p.barcode && `Barcode: ${p.barcode} • `}
+                                      Stock: {p.quantity} • AED{" "}
+                                      {p.selling_price}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>,
+                              document.body
+                            )
+                          ) : (
                             <div
                               ref={suggestionRef}
-                              className="bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
-                              style={{
-                                position: "absolute",
-                                top: portalPos.top,
-                                left: portalPos.left,
-                                width: portalPos.width,
-                                zIndex: 9999,
-                              }}
+                              className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1"
                             >
                               {suggestions.map((p) => (
                                 <div
@@ -269,75 +455,163 @@ export const BillingTable = ({
                                   </div>
                                 </div>
                               ))}
-                            </div>,
-                            document.body
-                          )
-                        ) : (
-                          <div
-                            ref={suggestionRef}
-                            className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1"
-                          >
-                            {suggestions.map((p) => (
-                              <div
-                                key={p.inventory_id}
-                                className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                                onClick={() => handleSuggestionClick(p)}
-                              >
-                                <div className="font-medium text-sm">
-                                  {p.name}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {p.sku && `SKU: ${p.sku} • `}
-                                  {p.barcode && `Barcode: ${p.barcode} • `}
-                                  Stock: {p.quantity} • AED {p.selling_price}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </TableCell>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
 
-                <TableCell>
-                  <Input
-                    type="number"
-                    value={r.qty}
-                    onChange={(e) => handleQtyChange(i, e.target.value)}
-                    onBlur={() => {
-                      if (!rows[i].qty || rows[i].qty === 0) {
-                        const updated = [...rows];
-                        updated[i].qty = 1;
-                        updated[i].total = updated[i].price;
-                        onRowsChange(updated);
-                      }
-                    }}
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={r.qty}
+                      onChange={(e) => handleQtyChange(i, e.target.value)}
+                      onBlur={() => {
+                        if (!rows[i].qty || rows[i].qty === 0) {
+                          const updated = [...rows];
+                          updated[i].qty = 1;
+                          updated[i].total = updated[i].price;
+                          onRowsChange(updated);
+                        }
+                      }}
+                    />
+                  </TableCell>
+
+                  <TableCell>AED {r.price.toFixed(2)}</TableCell>
+                  <TableCell>AED {Number(r.total).toFixed(2)}</TableCell>
+
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDeleteRow(i)}
+                      disabled={rows.length === 1}
+                    >
+                      <MinusCircle className="h-5 w-5 text-red-500" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <Button variant="outline" onClick={onAddRow} className="mt-4">
+            + Add Row
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Scanner Modal */}
+      {showScanner && scannerIndex !== null && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={async () => {
+            setShowScanner(false);
+            setScannerIndex(null);
+            await stopCamera();
+          }}
+        >
+          <div
+            className="bg-background rounded-lg w-full max-w-lg p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold">Scan Barcode</h3>
+              <div>
+                <button
+                  onClick={async () => {
+                    setShowScanner(false);
+                    setScannerIndex(null);
+                    await stopCamera();
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="w-full h-64 bg-black flex items-center justify-center rounded">
+              {!useManual && !scannerError && (
+                <video ref={videoRef} className="w-full h-full object-cover" />
+              )}
+
+              {scannerError && (
+                <div className="text-sm text-center text-red-300 p-4">
+                  {`Scanner error: ${scannerError}`}
+                </div>
+              )}
+
+              {useManual && (
+                <div className="w-full p-4">
+                  <label className="block text-sm font-medium mb-1">
+                    Enter barcode manually
+                  </label>
+                  <input
+                    className="w-full px-3 py-2 border rounded bg-background text-sm"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    placeholder="Scan or paste barcode here"
                   />
-                </TableCell>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="flex-1 text-sm text-muted-foreground">
+                Point the camera at a barcode. If unsupported or denied, use
+                manual entry.
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    // Retry camera start
+                    setScannerError(null);
+                    setUseManual(false);
+                    try {
+                      await startCameraAndDetect(async (code: string) => {
+                        if (scannerIndex !== null)
+                          handleItemCodeChange(scannerIndex, String(code));
+                        setShowScanner(false);
+                        setScannerIndex(null);
+                      });
+                    } catch (e: any) {
+                      setScannerError(e?.message || String(e));
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
 
-                <TableCell>AED {r.price.toFixed(2)}</TableCell>
-                <TableCell>AED {Number(r.total).toFixed(2)}</TableCell>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setUseManual((s) => !s);
+                    setScannerError(null);
+                  }}
+                >
+                  {useManual ? "Use Camera" : "Use Manual"}
+                </Button>
 
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDeleteRow(i)}
-                    disabled={rows.length === 1}
-                  >
-                    <MinusCircle className="h-5 w-5 text-red-500" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        <Button variant="outline" onClick={onAddRow} className="mt-4">
-          + Add Row
-        </Button>
-      </CardContent>
-    </Card>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (manualCode && scannerIndex !== null) {
+                      handleItemCodeChange(scannerIndex, manualCode);
+                      setManualCode("");
+                      setShowScanner(false);
+                      setScannerIndex(null);
+                    }
+                  }}
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
