@@ -62,7 +62,11 @@ const SupermarketBilling = () => {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [employees, setEmployees] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
+  const [selectedEmployee, setSelectedEmployee] = useState<Customer | null>(
     null
   );
 
@@ -148,8 +152,40 @@ const SupermarketBilling = () => {
     }
   }, [toast]);
 
+  // Data fetching: employees
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/employees`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json();
+      if (res.ok) {
+        // support both { data: [...] } and plain array
+        setEmployees(json.data ?? (Array.isArray(json) ? json : []));
+      } else {
+        toast({
+          title: "Failed to load staff",
+          description: json.error || json.message,
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      console.error("Error fetching employees:", err);
+      toast({
+        title: "Error fetching staff",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
   useEffect(() => {
     fetchCustomers();
+    fetchEmployees();
   }, [fetchCustomers]);
 
   // Auto preview when rows/customer/coupon change
@@ -157,8 +193,9 @@ const SupermarketBilling = () => {
     if (rows.some((r) => r.name && r.product_id)) {
       handleApplyDiscounts();
     }
+    // Re-run preview when selected employee changes as well
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedCustomer, couponCode]);
+  }, [rows, selectedCustomer, couponCode, selectedEmployee]);
 
   // Row management
   const addNewRow = () => {
@@ -179,6 +216,14 @@ const SupermarketBilling = () => {
     setRedeemPoints("");
     setPreview(null);
     setPreviewItems([]);
+  };
+
+  const handleEmployeeSelect = (employee: Customer) => {
+    setSelectedEmployee(employee);
+  };
+
+  const handleClearEmployee = () => {
+    setSelectedEmployee(null);
   };
 
   const handleClearCustomer = () => {
@@ -223,6 +268,7 @@ const SupermarketBilling = () => {
           items: itemsPayload,
           customer_id: selectedCustomer?.id || null,
           coupon_code: couponCode || null,
+          employee_id: selectedEmployee?.id || null,
         }),
       });
 
@@ -403,6 +449,7 @@ const SupermarketBilling = () => {
         body: JSON.stringify({
           payment_method: paymentMethod,
           customer_id: selectedCustomer?.id || null,
+          employee_id: selectedEmployee?.id || null,
           redeem_points: numericRedeem,
           coupon_code: couponCode || null,
           items: validItems.map((r) => ({
@@ -414,26 +461,58 @@ const SupermarketBilling = () => {
         }),
       });
 
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Invoice creation failed");
+      // Inspect content type and handle accordingly
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        // Try to read text or json error
+        let errText = "Invoice creation failed";
+        try {
+          if (contentType.includes("application/json")) {
+            const j = await res.json();
+            errText = j?.error || j?.message || JSON.stringify(j);
+          } else {
+            errText = await res.text();
+          }
+        } catch (e) {
+          // fallback
+          errText = String(e || "Invoice creation failed");
+        }
+        throw new Error(errText || "Invoice creation failed");
+      }
+
+      // Success - server may return JSON (with invoice data) or a PDF blob
+      if (contentType.includes("application/json")) {
+        const json = await res.json();
+        // If backend returns invoice with pdf_url, open it
+        if (json?.invoice?.pdf_url) {
+          window.open(json.invoice.pdf_url, "_blank");
+        } else if (json?.invoice) {
+          // fallback: generate client-side PDF if helper exists
+          try {
+            generatePDFBill(
+              json.invoice.invoice_number,
+              json.items || [],
+              json.invoice.final_amount,
+              paymentMethod
+            );
+          } catch (e) {
+            console.warn("Could not generate PDF locally:", e);
+          }
+        }
+      } else {
+        // treat as blob (PDF or octet-stream)
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      }
 
       toast({
         title: "Invoice Created",
-        description: `Invoice ${json.invoice.invoice_number} generated`,
+        description: "Receipt opened",
       });
-      if (json.invoice?.pdf_url) {
-  window.open(json.invoice.pdf_url, "_blank");
-} else {
-  // Fallback to local JS PDF
-  generatePDFBill(
-    json.invoice.invoice_number,
-    json.items || [],
-    json.invoice.final_amount,
-    paymentMethod
-  );
-}
 
-      // Reset state
+      // reset UI
       setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
       setPreview(null);
       setPreviewItems([]);
@@ -441,7 +520,6 @@ const SupermarketBilling = () => {
       setRedeemPoints("");
       setSelectedCustomer(null);
     } catch (err: any) {
-      console.error(err);
       toast({
         title: "Error",
         description: err.message,
@@ -451,7 +529,6 @@ const SupermarketBilling = () => {
       setIsGeneratingInvoice(false);
     }
   };
-
   // Helper functions
   const calculateSubtotal = () =>
     rows.reduce((sum, r) => sum + (Number(r.total) || 0), 0);
@@ -539,6 +616,11 @@ const SupermarketBilling = () => {
               onCustomerSelect={handleCustomerSelect}
               onClearCustomer={handleClearCustomer}
               onRefreshCustomers={fetchCustomers} // pass the reusable fetch function
+              employees={employees}
+              selectedEmployee={selectedEmployee}
+              onEmployeeSelect={handleEmployeeSelect}
+              onClearEmployee={handleClearEmployee}
+              onRefreshEmployees={fetchEmployees}
             />
           </div>
         </div>

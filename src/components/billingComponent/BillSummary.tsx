@@ -86,10 +86,15 @@ export default function BillSummary({
   onCustomerSelect,
   onClearCustomer,
   onRefreshCustomers, // optional: parent can pass to refresh global customers list
+  employees = [],
+  selectedEmployee,
+  onEmployeeSelect,
+  onClearEmployee,
+  onRefreshEmployees,
 }: {
   rows: BillRow[];
   preview: any;
-  selectedCustomer: Customer | null;
+  selectedCustomer: any | null;
   couponCode: string;
   redeemPoints: number | "";
   paymentMethod: string;
@@ -101,10 +106,15 @@ export default function BillSummary({
   isApplyingDiscounts: boolean;
   isGeneratingInvoice: boolean;
   onPaymentMethodChange: (method: string) => void;
-  customers: Customer[];
-  onCustomerSelect: (customer: Customer) => void;
+  customers: any[];
+  onCustomerSelect: (customer: any) => void;
   onClearCustomer: () => void;
   onRefreshCustomers?: () => Promise<void> | void;
+  employees?: any[];
+  selectedEmployee?: any | null;
+  onEmployeeSelect?: (employee: any) => void;
+  onClearEmployee?: () => void;
+  onRefreshEmployees?: () => Promise<void> | void;
 }) {
   const { toast } = useToast();
 
@@ -127,6 +137,8 @@ export default function BillSummary({
   const uiBillDiscountTotal = preview?.bill_discount_total ?? 0;
   const uiCouponDiscountTotal = preview?.coupon_discount_total ?? 0;
   const uiMembershipDiscountTotal = preview?.membership_discount_total ?? 0;
+  const uiEmployeeDiscount =
+    preview?.employee_discount_preview?.discount_this_bill ?? 0;
 
   /**
    * Numeric, non-negative representation of `redeemPoints`.
@@ -166,6 +178,18 @@ export default function BillSummary({
     address: "",
     isActive: true,
   });
+
+  // Employee modal state
+  const [empModalOpen, setEmpModalOpen] = useState(false);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [empForm, setEmpForm] = useState({
+    name: "",
+    phone: "",
+    position: "staff",
+    salary: "",
+    active: true,
+  });
+  const [empPickerOpen, setEmpPickerOpen] = useState(false);
 
   const resetForm = () =>
     setForm({
@@ -428,6 +452,188 @@ export default function BillSummary({
     );
   };
 
+  const EmployeeModal = () => {
+    if (!empModalOpen) return null;
+    return (
+      <div
+        className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
+        onClick={() => setEmpModalOpen(false)}
+      >
+        <div
+          className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center border-b p-4">
+            <h2 className="font-bold text-lg">Add Staff</h2>
+            <button disabled={empSaving} onClick={() => setEmpModalOpen(false)}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Full name *
+              </label>
+              <div className="flex items-center border rounded-md px-2">
+                <User className="h-4 w-4 text-gray-400" />
+                <input
+                  required
+                  disabled={empSaving}
+                  className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                  placeholder="Enter staff name"
+                  value={empForm.name}
+                  onChange={(e) =>
+                    setEmpForm({ ...empForm, name: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Phone</label>
+              <div className="flex items-center border rounded-md px-2">
+                <Phone className="h-4 w-4 text-gray-400" />
+                <input
+                  disabled={empSaving}
+                  className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                  placeholder="Enter phone number"
+                  value={empForm.phone}
+                  onChange={(e) =>
+                    setEmpForm({ ...empForm, phone: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Position</label>
+              <input
+                disabled={empSaving}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                value={empForm.position}
+                onChange={(e) =>
+                  setEmpForm({ ...empForm, position: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Salary (monthly)
+              </label>
+              <input
+                disabled={empSaving}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                value={empForm.salary}
+                onChange={(e) =>
+                  setEmpForm({ ...empForm, salary: e.target.value })
+                }
+                type="number"
+                min="0"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+              <Button
+                onClick={async () => {
+                  // create employee
+                  if (!empForm.name || !empForm.name.trim()) {
+                    toast({
+                      title: "Name required",
+                      description: "Enter staff name",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setEmpSaving(true);
+                  try {
+                    const token = localStorage.getItem("auth_token");
+                    const res = await fetch(`${API_BASE}/api/employees`, {
+                      method: "POST",
+                      headers: {
+                        Authorization: token ? `Bearer ${token}` : "",
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        full_name: empForm.name,
+                        phone: empForm.phone || undefined,
+                        position: empForm.position || "staff",
+                        salary: empForm.salary
+                          ? Number(empForm.salary)
+                          : undefined,
+                        is_active: empForm.active ?? true,
+                      }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok)
+                      throw new Error(
+                        json?.error || json?.message || "Failed to create staff"
+                      );
+                    const created = json?.data ?? json;
+                    setEmpModalOpen(false);
+                    setEmpForm({
+                      name: "",
+                      phone: "",
+                      position: "staff",
+                      salary: "",
+                      active: true,
+                    });
+                    toast({
+                      title: "Staff added",
+                      description: `${
+                        created.full_name || created.name
+                      } created`,
+                    });
+                    if (onEmployeeSelect)
+                      onEmployeeSelect({
+                        id: created.id ?? created._id,
+                        name: created.full_name || created.name,
+                        phone: created.phone || "",
+                      } as Customer);
+                    if (onRefreshEmployees) await onRefreshEmployees();
+                  } catch (err: any) {
+                    console.error("Create staff failed:", err);
+                    toast({
+                      title: "Failed to add staff",
+                      description: err.message || "See console",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setEmpSaving(false);
+                  }
+                }}
+                className="flex-1"
+                disabled={empSaving}
+              >
+                {empSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEmpModalOpen(false)}
+                className="flex-1 sm:flex-none"
+                disabled={empSaving}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // === Render ===
   return (
     <Card>
@@ -445,18 +651,79 @@ export default function BillSummary({
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1 rounded-md"
-          >
-            <UserPlus className="h-4 w-4" />
-            Add
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1 rounded-md"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add
+            </Button>
+
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEmpPickerOpen((v) => !v)}
+                className="flex items-center gap-2 px-3 py-1 rounded-md"
+                title="Select staff"
+              >
+                <User className="h-4 w-4" />
+                Staff
+              </Button>
+
+              {empPickerOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 border rounded shadow p-3 z-50">
+                  <label className="block text-xs text-muted-foreground mb-2">
+                    Select staff (tenant)
+                  </label>
+                  <select
+                    className="w-full px-2 py-2 border rounded mb-2 bg-background text-sm"
+                    value={selectedEmployee?.id ?? ""}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const found = employees?.find(
+                        (x) => String(x.id) === String(id)
+                      );
+                      if (found && onEmployeeSelect) onEmployeeSelect(found);
+                      setEmpPickerOpen(false);
+                    }}
+                  >
+                    <option value="">-- Select staff --</option>
+                    {employees?.map((emp: any) => (
+                      <option key={emp.id ?? emp._id} value={emp.id ?? emp._id}>
+                        {emp.full_name || emp.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setEmpModalOpen(true);
+                        setEmpPickerOpen(false);
+                      }}
+                    >
+                      Add New
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEmpPickerOpen(false)}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-2">
+        <div className="mt-2 space-y-2">
           {typeof CustomerSearch === "function" ? (
             <CustomerSearch
               customers={customers}
@@ -465,14 +732,32 @@ export default function BillSummary({
               onClearCustomer={onClearCustomer}
             />
           ) : (
-            <>
-              <Input
-                value={selectedCustomer?.name ?? ""}
-                readOnly
-                placeholder="Select or add customer"
-              />
-            </>
+            <Input
+              value={selectedCustomer?.name ?? ""}
+              readOnly
+              placeholder="Select or add customer"
+            />
           )}
+
+          {/* Selected employee display */}
+          {/* <div className="mt-1">
+            <div className="text-sm font-medium">Staff</div>
+            <div className="text-xs text-muted-foreground">
+              (optional: apply staff discount)
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <Input
+                value={selectedEmployee?.name ?? ""}
+                readOnly
+                placeholder="Select or add staff"
+              />
+              {selectedEmployee && onClearEmployee && (
+                <Button variant="outline" size="sm" onClick={onClearEmployee}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div> */}
         </div>
 
         {selectedCustomer && (
@@ -581,6 +866,13 @@ export default function BillSummary({
             </div>
           )}
 
+          {uiEmployeeDiscount > 0 && (
+            <div className="flex justify-between text-green-700">
+              <span>Staff Discount</span>
+              <span>-AED {Number(uiEmployeeDiscount).toFixed(2)}</span>
+            </div>
+          )}
+
           <Separator />
 
           <div className="flex justify-between">
@@ -658,6 +950,7 @@ export default function BillSummary({
       </CardContent>
 
       {CustomerModal()}
+      {EmployeeModal()}
     </Card>
   );
 }
