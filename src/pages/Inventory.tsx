@@ -1414,12 +1414,12 @@ const StockTableRow = ({
       <td className="py-3 px-2 sm:px-4 text-xs">{item.expiryDate || "N/A"}</td>
       <td className="py-3 px-2 sm:px-4">
         <div className="flex gap-1 sm:gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
+          {/* <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
             <Edit className="h-3 w-3" />
           </Button>
           <Button variant="outline" size="sm" onClick={() => onDelete(item.id)}>
             <Trash2 className="h-3 w-3" />
-          </Button>
+          </Button> */}
         </div>
       </td>
     </tr>
@@ -1493,9 +1493,9 @@ const StockView = ({
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Expiry
                 </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                {/* <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Actions
-                </th>
+                </th> */}
               </tr>
             </thead>
             <tbody>
