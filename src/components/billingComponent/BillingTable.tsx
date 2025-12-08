@@ -319,6 +319,7 @@ export const BillingTable = ({
 
   const handleQtyChange = (index: number, value: string) => {
     const updated = [...rows];
+
     if (value === "" || value === null) {
       updated[index].qty = "";
       updated[index].total = 0;
