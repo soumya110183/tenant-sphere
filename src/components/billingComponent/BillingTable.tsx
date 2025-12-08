@@ -357,34 +357,6 @@ export const BillingTable = ({
   }, [showSuggestions, currentInputIndex]);
 
   return (
-<<<<<<< HEAD
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>Billing Table</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Item Code / Name</TableHead>
-              <TableHead>Qty</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="relative">
-                    <Input
-                      ref={(el) => (inputRefs.current[i] = el!)}
-                      value={r.code}
-                      onChange={(e) => handleItemCodeChange(i, e.target.value)}
-                      placeholder="Enter name, barcode, or SKU"
-                    />
-=======
     <>
       <Card className="lg:col-span-2">
         <CardHeader>
@@ -416,7 +388,6 @@ export const BillingTable = ({
                         }
                         placeholder="Enter name, barcode, or SKU"
                       />
->>>>>>> updates
 
                       {/* <button
                         type="button"
@@ -622,27 +593,6 @@ export const BillingTable = ({
                   {useManual ? "Use Camera" : "Use Manual"}
                 </Button>
 
-<<<<<<< HEAD
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDeleteRow(i)}
-                    disabled={rows.length === 1}
-                  >
-                    <MinusCircle className="h-5 w-5 text-red-500" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <Button variant="outline" onClick={onAddRow} className="mt-4">
-          + Add Row
-        </Button>
-      </CardContent>
-    </Card>
-=======
                 <Button
                   size="sm"
                   onClick={() => {
@@ -662,6 +612,5 @@ export const BillingTable = ({
         </div>
       )}
     </>
->>>>>>> updates
   );
 };
