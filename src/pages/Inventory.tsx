@@ -95,6 +95,7 @@ import {
   purchaseReturnService,
   supplierService,
 } from "@/services/api";
+import { normalizeItems } from "@/lib/utils";
 import { StatsCard } from "../components/InventoryComponent/StatsCard.jsx";
 import {
   LowStockAlert,
@@ -246,10 +247,7 @@ const Modal = ({
   // Sample product catalog - in real scenario, this would come from your product database
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -1376,8 +1374,8 @@ const StockTableRow = ({
   getStockStatus,
   getStockColor,
   getStockPercentage,
-  onEdit,
-  onDelete,
+  onEdit = () => {},
+  onDelete = () => {},
 }) => {
   const status = getStockStatus(item.quantity, item.reorderLevel);
   const percentage = getStockPercentage(item.quantity, item.maxStock);
@@ -1414,12 +1412,12 @@ const StockTableRow = ({
       <td className="py-3 px-2 sm:px-4 text-xs">{item.expiryDate || "N/A"}</td>
       <td className="py-3 px-2 sm:px-4">
         <div className="flex gap-1 sm:gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
+          {/* <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
             <Edit className="h-3 w-3" />
           </Button>
           <Button variant="outline" size="sm" onClick={() => onDelete(item.id)}>
             <Trash2 className="h-3 w-3" />
-          </Button>
+          </Button> */}
         </div>
       </td>
     </tr>
@@ -1493,9 +1491,9 @@ const StockView = ({
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Expiry
                 </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                {/* <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Actions
-                </th>
+                </th> */}
               </tr>
             </thead>
             <tbody>
@@ -1526,8 +1524,8 @@ const StockView = ({
                     getStockStatus={getStockStatus}
                     getStockColor={getStockColor}
                     getStockPercentage={getStockPercentage}
-                    onEdit={(item) => openModal("inventory", item)}
-                    onDelete={handleDelete}
+                    // onEdit={(item) => openModal("inventory", item)}
+                    // onDelete={handleDelete}
                   />
                 ))
               )}
@@ -1543,7 +1541,18 @@ const StockView = ({
 // Sales View Component - Updated to use invoices
 // Sales View Component - Expandable rows version
 // Sales View Component - Expandable rows version with eye button
-const SalesView = ({ sales, openModal, handleDelete }) => {
+const SalesView = ({
+  sales,
+  openModal,
+  handleDelete,
+  salesQuery,
+  setSalesQuery,
+  loadSales,
+  salesPage,
+  salesTotalPages,
+  salesTotalRecords,
+  pageSize,
+}) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
 
   const toggleRow = (saleId) => {
@@ -1556,6 +1565,9 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
     setExpandedRows(newExpanded);
   };
 
+  // local salesQuery live-binding to parent state via DOM - parent handles fetching
+  // no-op here; parent Inventory will manage actual search
+
   return (
     <Card>
       <CardHeader>
@@ -1564,7 +1576,23 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
             <ShoppingCart className="h-5 w-5 text-primary" />
             Sales Transactions ({sales.length})
           </CardTitle>
-          
+          <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+            <div className="relative flex-1 sm:flex-none">
+              <input
+                value={salesQuery}
+                onChange={(e) => setSalesQuery(e.target.value)}
+                placeholder="Search invoices by number, customer, or product"
+                className="w-full sm:w-64 px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              <button
+                onClick={() => loadSales(salesQuery)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 p-1"
+                title="Search"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -1641,14 +1669,14 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
                               <Eye className="h-3 w-3" />
                             )}
                           </Button>
-                          <Button
+                          {/* <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete("sale", sale.id)}
                             title="Delete sale"
                           >
                             <Trash2 className="h-3 w-3" />
-                          </Button>
+                          </Button> */}
                         </div>
                       </td>
                     </tr>
@@ -1695,6 +1723,14 @@ const SalesView = ({ sales, openModal, handleDelete }) => {
     </Card>
   );
 };
+// Debounce salesQuery changes to avoid too-frequent API calls
+function useDebouncedEffect(value, delay, callback) {
+  useEffect(() => {
+    const id = setTimeout(() => callback(value), delay);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+}
 // Returns View Component
 const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
   console.log("ReturnsView - salesReturns:", salesReturns);
@@ -1764,7 +1800,12 @@ const ReturnsView = ({ salesReturns, purchaseReturns, openModal }) => {
                         {new Date(ret.date).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-2 sm:px-4 text-sm">
-                        {ret.productName} ({ret.quantity}) - {ret.reason}
+                        {Array.isArray(ret.items) && ret.items.length
+                          ? ret.items
+                              .map((i) => `${i.name} (${i.qty})`)
+                              .join(", ")
+                          : `${ret.productName || "—"} (${ret.quantity || 0})` +
+                            (ret.reason ? ` - ${ret.reason}` : "")}
                       </td>
                       <td className="py-3 px-2 sm:px-4">
                         <Badge variant="outline">{ret.refundType}</Badge>
@@ -1988,6 +2029,11 @@ const GroceryInventory = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [sales, setSales] = useState([]);
+  const [salesQuery, setSalesQuery] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesTotalPages, setSalesTotalPages] = useState(1);
+  const [salesTotalRecords, setSalesTotalRecords] = useState(0);
+  const SALES_PAGE_SIZE = 10;
   const [salesReturns, setSalesReturns] = useState([]);
   const [salesReturnsPage, setSalesReturnsPage] = useState(1);
   const [salesReturnsTotalPages, setSalesReturnsTotalPages] = useState(1);
@@ -2010,20 +2056,69 @@ const GroceryInventory = () => {
   // Add function to load purchases
   // Update your loadPurchases function to match the actual API response
 
-  const loadSales = async () => {
+  const loadSales = async (search = "", page = 1) => {
     try {
-      const response = await invoiceService.getAll();
+      // Build params for backend pagination
+      const tenantId = localStorage.getItem("tenant_id");
+      const params: Record<string, any> = {
+        page,
+        limit: SALES_PAGE_SIZE,
+      };
+      if (search) params.search = search;
+      if (tenantId) params.tenant_id = tenantId;
+
+      console.log("Loading sales with params:", params);
+
+      // invoiceService.getAll accepts params object
+      const response = await invoiceService.getAll(params);
       console.log("Invoices API response:", response);
 
-      if (
-        response.data &&
-        response.data.success &&
-        Array.isArray(response.data.data)
-      ) {
-        setSales(response.data.data);
-      } else {
-        console.error("Unexpected invoices response structure:", response);
-        setSales([]);
+      const apiData = response?.data ?? response;
+      let rawData: any[] = [];
+
+      // Normalize common shapes
+      if (apiData && apiData.success && Array.isArray(apiData.data)) {
+        rawData = apiData.data;
+      } else if (apiData && Array.isArray(apiData.invoices)) {
+        rawData = apiData.invoices;
+      } else if (Array.isArray(apiData)) {
+        rawData = apiData;
+      } else if (apiData && Array.isArray(apiData.data?.data)) {
+        rawData = apiData.data.data;
+      }
+
+      // Format into UI-friendly shape
+      const formatted = rawData.map((s: any) => ({
+        id: s.id,
+        invoice_number: s.invoice_number ?? s.invoiceNo ?? s.number ?? s.id,
+        created_at: s.created_at ?? s.date,
+        invoice_items: s.invoice_items ?? s.items ?? s.lines ?? [],
+        total_amount: Number(s.total_amount ?? s.total ?? s.final_amount ?? 0),
+        payment_method: s.payment_method ?? s.payment ?? s.method ?? "",
+        ...s,
+      }));
+
+      setSales(formatted);
+
+      // Extract pagination metadata if present
+      const total =
+        apiData?.totalRecords ?? apiData?.total ?? apiData?.count ?? 0;
+      const totalPages =
+        apiData?.totalPages ??
+        Math.max(1, Math.ceil((total || 0) / SALES_PAGE_SIZE));
+      setSalesPage(apiData?.page || page);
+      setSalesTotalPages(totalPages);
+      setSalesTotalRecords(total || 0);
+
+      console.log("Sales Pagination State:", {
+        salesPage: apiData?.page || page,
+        salesTotalPages: totalPages,
+        salesTotalRecords: total || 0,
+        SALES_PAGE_SIZE,
+      });
+
+      if (formatted.length === 0) {
+        // optional: show toast for empty
       }
     } catch (error) {
       console.error("Error loading invoices:", error);
@@ -2035,6 +2130,20 @@ const GroceryInventory = () => {
       });
     }
   };
+  // call initial load
+  useEffect(() => {
+    loadSales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // debounce search input -> call loadSales
+  useEffect(() => {
+    const id = setTimeout(() => {
+      loadSales(salesQuery);
+    }, 350);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salesQuery]);
   const loadPurchases = async (page = 1) => {
     try {
       const tenantId = localStorage.getItem("tenant_id");
@@ -2246,33 +2355,58 @@ const GroceryInventory = () => {
               fbData = [fallbackJson];
             if (fbData.length) {
               console.log("Using fallback fetch sales returns data:", fbData);
-              const formattedFallback = fbData.map((ret: any) => ({
-                id: ret.id,
-                originalSaleId: ret.sales_id,
-                date:
-                  ret.created_at ||
-                  ret.return_date ||
-                  ret.date ||
-                  new Date().toISOString().split("T")[0],
-                productName:
-                  ret.product_name || ret.name || `Product #${ret.product_id}`,
-                productId: ret.product_id,
-                quantity: ret.quantity,
-                reason: ret.reason || ret.return_reason || "N/A",
-                refundType: ret.refund_type || ret.type || "Cash",
-                totalRefund:
-                  ret.total_refund || ret.refund_amount || ret.amount || 0,
-                items: [
-                  {
-                    name:
-                      ret.product_name ||
-                      ret.name ||
-                      `Product #${ret.product_id}`,
-                    qty: ret.quantity,
-                    reason: ret.reason || ret.return_reason || "N/A",
-                  },
-                ],
-              }));
+              const formattedFallback = fbData.map((ret: any) => {
+                // prefer detailed items when backend provides them
+                const items =
+                  Array.isArray(ret.sales_return_items) &&
+                  ret.sales_return_items.length
+                    ? ret.sales_return_items.map((it: any) => ({
+                        name:
+                          it?.products?.name ??
+                          it?.name ??
+                          it?.product_name ??
+                          `Product #${
+                            it?.product_id ?? it?.products?.id ?? ""
+                          }`,
+                        qty: Number(it?.quantity ?? it?.qty ?? 0),
+                        reason: it?.reason || it?.return_reason || "N/A",
+                      }))
+                    : [
+                        {
+                          name:
+                            ret.product_name ||
+                            ret.name ||
+                            `Product #${ret.product_id}`,
+                          qty: Number(ret.quantity || 0),
+                          reason: ret.reason || ret.return_reason || "N/A",
+                        },
+                      ];
+
+                return {
+                  id: ret.id,
+                  originalSaleId: ret.sales_id,
+                  date:
+                    ret.created_at ||
+                    ret.return_date ||
+                    ret.date ||
+                    new Date().toISOString().split("T")[0],
+                  productName: items[0]?.name || `Product #${ret.product_id}`,
+                  productId: ret.product_id,
+                  quantity: items.reduce(
+                    (s: number, it: any) => s + (Number(it.qty) || 0),
+                    0
+                  ),
+                  reason:
+                    items
+                      .map((it: any) => it.reason)
+                      .filter(Boolean)
+                      .join("; ") || "N/A",
+                  refundType: ret.refund_type || ret.type || "Cash",
+                  totalRefund:
+                    ret.total_refund || ret.refund_amount || ret.amount || 0,
+                  items,
+                };
+              });
               setSalesReturns(formattedFallback);
               return; // stop further processing
             }
@@ -2284,6 +2418,29 @@ const GroceryInventory = () => {
 
       // Transform backend data to match UI expectations
       const formattedData = rawData.map((ret: any) => {
+        // If backend provides detailed sales_return_items, use them
+        const items =
+          Array.isArray(ret.sales_return_items) && ret.sales_return_items.length
+            ? ret.sales_return_items.map((it: any) => ({
+                name:
+                  it?.products?.name ??
+                  it?.name ??
+                  it?.product_name ??
+                  `Product #${it?.product_id ?? it?.products?.id ?? ""}`,
+                qty: Number(it?.quantity ?? it?.qty ?? 0),
+                reason: it?.reason || it?.return_reason || "N/A",
+              }))
+            : [
+                {
+                  name:
+                    ret.product_name ||
+                    ret.name ||
+                    `Product #${ret.product_id}`,
+                  qty: Number(ret.quantity || 0),
+                  reason: ret.reason || ret.return_reason || "N/A",
+                },
+              ];
+
         return {
           id: ret.id,
           originalSaleId: ret.sales_id,
@@ -2292,22 +2449,20 @@ const GroceryInventory = () => {
             ret.return_date ||
             ret.date ||
             new Date().toISOString().split("T")[0],
-          productName:
-            ret.product_name || ret.name || `Product #${ret.product_id}`,
+          productName: items[0]?.name || `Product #${ret.product_id}`,
           productId: ret.product_id,
-          quantity: ret.quantity,
-          reason: ret.reason || ret.return_reason || "N/A",
+          quantity: items.reduce(
+            (s: number, it: any) => s + (Number(it.qty) || 0),
+            0
+          ),
+          reason:
+            items
+              .map((it: any) => it.reason)
+              .filter(Boolean)
+              .join("; ") || "N/A",
           refundType: ret.refund_type || ret.type || "Cash",
           totalRefund: ret.total_refund || ret.refund_amount || ret.amount || 0,
-          // Synthetic items array (backend currently flat)
-          items: [
-            {
-              name:
-                ret.product_name || ret.name || `Product #${ret.product_id}`,
-              qty: ret.quantity,
-              reason: ret.reason || ret.return_reason || "N/A",
-            },
-          ],
+          items,
         };
       });
 
@@ -2540,6 +2695,8 @@ const GroceryInventory = () => {
   const getStockPercentage = (quantity, maxStock) => {
     return Math.min((quantity / maxStock) * 100, 100);
   };
+
+  // use shared `normalizeItems` from utils
 
   const openModal = (type, item = null) => {
     setModalType(type);
@@ -2853,13 +3010,35 @@ const GroceryInventory = () => {
               : 0);
           const firstNetPrice = Number(firstNetPriceRaw) || 0;
           const firstRefundAmount = firstNetPrice * firstItem.quantity;
+          // Backend expects invoice_id and an items[] array. Build items payload.
+          const tenantId = localStorage.getItem("tenant_id");
+          const itemsForPayload = itemsPayload.map((it: any) => {
+            const invoiceItemMatch = selectedSaleForSubmit?.invoice_items?.find(
+              (ii: any) =>
+                String(ii.product_id) === String(it.product_id) ||
+                String(ii.products?.id) === String(it.product_id)
+            );
+            const netPriceRaw =
+              invoiceItemMatch?.net_price ??
+              invoiceItemMatch?.price ??
+              invoiceItemMatch?.selling_price ??
+              (invoiceItemMatch?.total && invoiceItemMatch?.quantity
+                ? invoiceItemMatch.total / invoiceItemMatch.quantity
+                : 0);
+            const netPrice = Number(netPriceRaw) || 0;
+            const lineRefund = netPrice * it.quantity;
+            return {
+              product_id: it.product_id,
+              quantity: it.quantity,
+              reason: it.reason || "",
+              total_refund: Number(lineRefund.toFixed(2)),
+            };
+          });
+
           const payload = {
             invoice_id: parseInt(formData.originalSaleId),
-            product_id: firstItem.product_id,
-            quantity: firstItem.quantity,
-            reason: firstItem.reason || "",
-            refund_type: (formData.refundType || "cash").toLowerCase(),
-            total_refund: Number(firstRefundAmount.toFixed(2)),
+            items: itemsForPayload,
+            ...(tenantId ? { tenant_id: tenantId } : {}),
           };
 
           console.log(
@@ -2869,46 +3048,10 @@ const GroceryInventory = () => {
 
           // Submit to backend - backend performs atomic inventory update
           const response = await salesReturnService.create(payload);
-          const ok = response?.data?.success !== false;
+          const ok =
+            response?.data?.success !== false && response?.status < 400;
 
           if (ok) {
-            // Handle multiple items
-            if (itemsPayload.length > 1) {
-              for (let i = 1; i < itemsPayload.length; i++) {
-                const extra = itemsPayload[i];
-                const extraInvoiceItemMatch =
-                  selectedSaleForSubmit?.invoice_items?.find(
-                    (ii: any) =>
-                      String(ii.product_id) === String(extra.product_id) ||
-                      String(ii.products?.id) === String(extra.product_id)
-                  );
-                const extraNetPriceRaw =
-                  extraInvoiceItemMatch?.net_price ??
-                  extraInvoiceItemMatch?.price ??
-                  extraInvoiceItemMatch?.selling_price ??
-                  (extraInvoiceItemMatch?.total &&
-                  extraInvoiceItemMatch?.quantity
-                    ? extraInvoiceItemMatch.total /
-                      extraInvoiceItemMatch.quantity
-                    : 0);
-                const extraNetPrice = Number(extraNetPriceRaw) || 0;
-                const extraRefundAmount = extraNetPrice * extra.quantity;
-                const extraPayload = {
-                  invoice_id: parseInt(formData.originalSaleId),
-                  product_id: extra.product_id,
-                  quantity: extra.quantity,
-                  reason: extra.reason || "",
-                  refund_type: (formData.refundType || "cash").toLowerCase(),
-                  total_refund: Number(extraRefundAmount.toFixed(2)),
-                };
-                try {
-                  await salesReturnService.create(extraPayload);
-                } catch (loopErr) {
-                  console.error("Additional return item failed:", loopErr);
-                }
-              }
-            }
-
             // Backend updated inventory atomically - reload authoritative data
             await loadInventory();
             await loadSalesReturns();
@@ -2932,6 +3075,11 @@ const GroceryInventory = () => {
           // Remove optimistic entries on error
           setSalesReturns((prev) => prev.filter((r: any) => !r._optimistic));
           console.error("Error creating sales return:", error);
+          // Log server response body when available to aid debugging
+          console.error(
+            "Server response body:",
+            (error as any)?.response?.data
+          );
           const errorMsg =
             (error as any)?.response?.data?.error ||
             (error as any)?.response?.data?.message ||
@@ -3283,11 +3431,64 @@ const GroceryInventory = () => {
         )}
 
         {activeTab === "sales" && (
-          <SalesView
-            sales={sales}
-            openModal={openModal}
-            handleDelete={handleDelete}
-          />
+          <>
+            <SalesView
+              sales={sales}
+              openModal={openModal}
+              handleDelete={handleDelete}
+              salesQuery={salesQuery}
+              setSalesQuery={setSalesQuery}
+              loadSales={loadSales}
+              salesPage={salesPage}
+              salesTotalPages={salesTotalPages}
+              salesTotalRecords={salesTotalRecords}
+              pageSize={SALES_PAGE_SIZE}
+            />
+            {salesTotalRecords > SALES_PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadSales(salesQuery, Math.max(1, salesPage - 1))
+                    }
+                    disabled={salesPage === 1}
+                  >
+                    Prev
+                  </Button>
+
+                  <span className="text-sm text-gray-500">
+                    Page {salesPage} of {salesTotalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      loadSales(
+                        salesQuery,
+                        Math.min(salesPage + 1, salesTotalPages)
+                      )
+                    }
+                    disabled={salesPage >= salesTotalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Showing{" "}
+                  {Math.min(
+                    (salesPage - 1) * SALES_PAGE_SIZE + 1,
+                    salesTotalRecords
+                  )}
+                  -{Math.min(salesPage * SALES_PAGE_SIZE, salesTotalRecords)} of{" "}
+                  {salesTotalRecords}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === "purchases" && (
@@ -3370,9 +3571,9 @@ const GroceryInventory = () => {
                         <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Date
                         </th>
-                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        {/* <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Invoice ID
-                        </th>
+                        </th> */}
                         <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Products
                         </th>
@@ -3403,15 +3604,21 @@ const GroceryInventory = () => {
                             <td className="py-3 px-2 sm:px-4 text-sm">
                               {ret.date}
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-sm">
+                            {/* <td className="py-3 px-2 sm:px-4 text-sm">
                               #{ret.originalSaleId}
-                            </td>
+                            </td> */}
                             <td className="py-3 px-2 sm:px-4 text-sm">
-                              {ret.items.map((item, idx) => (
-                                <div key={idx}>
-                                  {item.name} (x{item.qty})
+                              {normalizeItems(ret).length === 0 ? (
+                                <div className="text-muted-foreground">
+                                  No items
                                 </div>
-                              ))}
+                              ) : (
+                                normalizeItems(ret).map((item, idx) => (
+                                  <div key={idx}>
+                                    {item.name} (x{item.qty})
+                                  </div>
+                                ))
+                              )}
                             </td>
                             <td className="py-3 px-2 sm:px-4 text-sm capitalize">
                               {ret.refundType}
@@ -3504,9 +3711,9 @@ const GroceryInventory = () => {
                         <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Date
                         </th>
-                        <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
+                        {/* <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Supplier
-                        </th>
+                        </th> */}
                         <th className="text-left py-3 px-2 sm:px-4 font-semibold text-sm">
                           Products
                         </th>
@@ -3537,15 +3744,21 @@ const GroceryInventory = () => {
                             <td className="py-3 px-2 sm:px-4 text-sm">
                               {ret.date}
                             </td>
-                            <td className="py-3 px-2 sm:px-4 text-sm">
+                            {/* <td className="py-3 px-2 sm:px-4 text-sm">
                               {ret.supplierName}
-                            </td>
+                            </td> */}
                             <td className="py-3 px-2 sm:px-4 text-sm">
-                              {ret.items.map((item, idx) => (
-                                <div key={idx}>
-                                  {item.name} (x{item.qty})
+                              {normalizeItems(ret).length === 0 ? (
+                                <div className="text-muted-foreground">
+                                  No items
                                 </div>
-                              ))}
+                              ) : (
+                                normalizeItems(ret).map((item, idx) => (
+                                  <div key={idx}>
+                                    {item.name} (x{item.qty})
+                                  </div>
+                                ))
+                              )}
                             </td>
                             <td className="py-3 px-2 sm:px-4 text-sm capitalize">
                               {ret.refundMethod}

@@ -77,6 +77,8 @@ export default function BillSummary({
   onApplyDiscounts,
   onClearDiscounts,
   onOpenCouponPopup,
+  onCouponChange,
+  coupons,
   onOpenRedeemPopup,
   onGenerateInvoice,
   isApplyingDiscounts,
@@ -98,9 +100,10 @@ export default function BillSummary({
   couponCode: string;
   redeemPoints: number | "";
   paymentMethod: string;
-  onApplyDiscounts: () => void;
+  onApplyDiscounts: (showToast?: boolean) => void;
   onClearDiscounts: () => void;
   onOpenCouponPopup: () => void;
+  onCouponChange?: (code: string) => void;
   onOpenRedeemPopup: () => void;
   onGenerateInvoice: () => void;
   isApplyingDiscounts: boolean;
@@ -115,6 +118,7 @@ export default function BillSummary({
   onEmployeeSelect?: (employee: any) => void;
   onClearEmployee?: () => void;
   onRefreshEmployees?: () => Promise<void> | void;
+  coupons?: any[];
 }) {
   const { toast } = useToast();
 
@@ -190,6 +194,12 @@ export default function BillSummary({
     active: true,
   });
   const [empPickerOpen, setEmpPickerOpen] = useState(false);
+
+  // Coupon search state
+  const [couponQuery, setCouponQuery] = useState<string>(couponCode || "");
+  const [couponSuggestions, setCouponSuggestions] = useState<any[]>([]);
+  const [showCouponSuggestions, setShowCouponSuggestions] = useState(false);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
 
   const resetForm = () =>
     setForm({
@@ -293,6 +303,64 @@ export default function BillSummary({
       setSaving(false);
     }
   };
+
+  // Sync local coupon query when parent prop changes
+  React.useEffect(() => {
+    setCouponQuery(couponCode || "");
+  }, [couponCode]);
+
+  // Coupon search: use client-side filtering when `coupons` prop is provided,
+  // otherwise fall back to debounced backend search.
+  React.useEffect(() => {
+    if (!couponQuery || couponQuery.trim().length === 0) {
+      setCouponSuggestions([]);
+      return;
+    }
+
+    const q = couponQuery.trim().toLowerCase();
+
+    if (Array.isArray(coupons) && coupons.length > 0) {
+      // Client-side filter
+      const filtered = coupons.filter((c: any) => {
+        const code = String(c.code || c.id || "").toLowerCase();
+        const desc = String(c.description || c.name || "").toLowerCase();
+        return code.includes(q) || desc.includes(q);
+      });
+      setCouponSuggestions(filtered);
+      setShowCouponSuggestions(true);
+      setLoadingCoupons(false);
+      return;
+    }
+
+    // Fallback: debounced backend search
+    const id = setTimeout(async () => {
+      try {
+        setLoadingCoupons(true);
+        const token = localStorage.getItem("auth_token");
+        // try a search endpoint; backend may accept `search` query param
+        const res = await fetch(
+          `${API_BASE}/api/coupons?search=${encodeURIComponent(q)}`,
+          {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : "",
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const j = await res.json();
+        const list = res.ok ? j.data ?? (Array.isArray(j) ? j : []) : [];
+        setCouponSuggestions(list);
+        setShowCouponSuggestions(true);
+      } catch (e) {
+        console.warn("Coupon search failed", e);
+        setCouponSuggestions([]);
+      } finally {
+        setLoadingCoupons(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(id);
+  }, [couponQuery, coupons]);
 
   const CustomerModal = () => {
     if (!modalOpen) return null;
@@ -662,9 +730,27 @@ export default function BillSummary({
               Add
             </Button>
 
+            {/* compact staff chip + selector */}
+            {selectedEmployee && onClearEmployee && (
+              <div className="hidden sm:flex items-center gap-2 bg-muted/10 px-2 py-1 rounded-md">
+                <span className="text-sm">{selectedEmployee.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearEmployee();
+                  }}
+                  title="Clear staff"
+                  className="p-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
             <div className="relative">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setEmpPickerOpen((v) => !v)}
                 className="flex items-center gap-2 px-3 py-1 rounded-md"
@@ -700,15 +786,6 @@ export default function BillSummary({
                   </select>
 
                   <div className="flex gap-2 justify-end">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setEmpModalOpen(true);
-                        setEmpPickerOpen(false);
-                      }}
-                    >
-                      Add New
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -778,12 +855,72 @@ export default function BillSummary({
         <div>
           <Label>Coupon Code</Label>
           <div className="flex gap-2 mt-1">
-            <Input
-              value={couponCode}
-              placeholder="Enter coupon code"
-              className="flex-1"
-              readOnly
-            />
+            <div className="relative flex-1">
+              <input
+                value={couponQuery}
+                onChange={(e) => setCouponQuery(e.target.value)}
+                onFocus={() => setShowCouponSuggestions(true)}
+                onBlur={() =>
+                  setTimeout(() => setShowCouponSuggestions(false), 150)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (couponQuery && typeof onCouponChange === "function") {
+                      onCouponChange(couponQuery.trim());
+                      setShowCouponSuggestions(false);
+                      toast({
+                        title: "Coupon set",
+                        description: couponQuery.trim(),
+                      });
+                    }
+                  }
+                }}
+                placeholder="Search coupons or enter code"
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              />
+
+              {showCouponSuggestions && couponSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 border rounded shadow z-50 max-h-52 overflow-auto">
+                  {couponSuggestions.map((c: any) => (
+                    <button
+                      key={c.id ?? c.code}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/50"
+                      onClick={() => {
+                        // let parent know about selected coupon
+                        if (typeof onCouponChange === "function")
+                          onCouponChange(c.code);
+                        // close suggestions and update local query
+                        setCouponQuery(c.code || "");
+                        setShowCouponSuggestions(false);
+                        // optionally show toast
+                        toast({
+                          title: "Coupon selected",
+                          description: `${c.code} ${
+                            c.description ? "- " + c.description : ""
+                          }`,
+                        });
+                      }}
+                    >
+                      <div className="font-medium text-sm">{c.code}</div>
+                      {c.description && (
+                        <div className="text-xs text-muted-foreground">
+                          {c.description}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showCouponSuggestions &&
+                !loadingCoupons &&
+                couponSuggestions.length === 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 border rounded shadow z-50 px-3 py-2 text-sm text-muted-foreground">
+                    No coupons found
+                  </div>
+                )}
+            </div>
             <Button
               variant="outline"
               onClick={onOpenCouponPopup}
@@ -796,7 +933,7 @@ export default function BillSummary({
           <div className="flex gap-2 mt-2">
             <Button
               variant="outline"
-              onClick={onApplyDiscounts}
+              onClick={() => onApplyDiscounts?.(true)}
               disabled={isApplyingDiscounts}
               className="flex-1"
             >

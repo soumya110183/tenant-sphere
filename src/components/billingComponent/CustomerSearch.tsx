@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 type Product = {
   id: number;
@@ -37,6 +37,30 @@ export const CustomerSearch = ({
     []
   );
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Close suggestions when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!showCustomerSuggestions) return;
+
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) {
+        setShowCustomerSuggestions(false);
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCustomerSuggestions(false);
+    };
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showCustomerSuggestions]);
 
   // 🔥 Show all customers if input is empty
   const handleSearchChange = (val: string) => {
@@ -83,8 +107,8 @@ export const CustomerSearch = ({
   };
 
   return (
-    <div className="space-y-2 w-full">
-      <Label>Customer (for loyalty & coupons)</Label>
+    <div className="space-y-2 w-full" ref={containerRef}>
+      {/* <Label>Customer (for loyalty & coupons)</Label> */}
 
       <div className="relative">
         <Input
@@ -108,15 +132,19 @@ export const CustomerSearch = ({
         )}
 
         {showCustomerSuggestions && customerSuggestions.length > 0 && (
-          <div className="absolute bg-white border rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
+          <div className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
             {customerSuggestions.map((c) => (
               <div
                 key={c.id}
-                className="p-2 cursor-pointer hover:bg-gray-100 border-b"
+                className="p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700"
                 onClick={() => handleCustomerSelect(c)}
               >
-                <p className="font-semibold text-sm">{c.name}</p>
-                <p className="text-xs text-gray-500">{c.phone || "No phone"}</p>
+                <p className="font-semibold text-sm text-foreground dark:text-white">
+                  {c.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {c.phone || "No phone"}
+                </p>
               </div>
             ))}
           </div>
@@ -125,7 +153,7 @@ export const CustomerSearch = ({
 
       {/* Selected customer details */}
       {selectedCustomer && (
-        <div className="mt-2 text-sm bg-blue-50 p-2 rounded border border-blue-200">
+        <div className="mt-2 text-sm bg-blue-50 dark:bg-gray-800 p-2 rounded border border-blue-200 dark:border-gray-700 text-foreground dark:text-white">
           <div className="flex justify-between">
             <span className="font-medium">Name:</span>
             <span>{selectedCustomer.name}</span>
@@ -136,7 +164,7 @@ export const CustomerSearch = ({
           </div>
           <div className="flex justify-between">
             <span className="font-medium">Points:</span>
-            <span className="text-blue-600 font-semibold">
+            <span className="text-blue-600 dark:text-blue-400 font-semibold">
               {selectedCustomer.loyalty_points || 0}
             </span>
           </div>

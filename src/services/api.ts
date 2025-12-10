@@ -271,10 +271,135 @@ export async function getTimeseries(
   const res = await fetch(`${API_BASE}/api/reports/tenant?${q.toString()}`, {
     headers: { "Content-Type": "application/json", ...authHeader() },
   });
-
   if (!res.ok) {
     const errorText = await res.text();
     console.error(`getTimeseries error (${res.status}):`, errorText);
+
+    // If the unified reports endpoint forbids access for tenant-level tokens,
+    // fall back to tenant-scoped endpoints (mounted at /api/tenantreport)
+    // to assemble a compatible timeseries response. This avoids noisy 403s
+    // in the console and lets the UI continue using tenant-scoped data.
+    if (res.status === 403) {
+      try {
+        const [sales, purchases, stock, paymentSummary, summary] =
+          await Promise.all([
+            tenantReportAPI.getSalesChart().catch((e) => {
+              console.warn("getSalesChart fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getPurchaseChart().catch((e) => {
+              console.warn("getPurchaseChart fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getStockReport().catch((e) => {
+              console.warn("getStockReport fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getPaymentSummary().catch((e) => {
+              console.warn("getPaymentSummary fallback failed:", e);
+              return {};
+            }),
+            tenantReportAPI.getSummary().catch((e) => {
+              console.warn("getSummary fallback failed:", e);
+              return {};
+            }),
+          ]);
+
+        // Build timeseries by merging sales and purchases by date
+        const byDate: Record<string, any> = {};
+        const salesArr = Array.isArray(sales) ? sales : [];
+        const purchasesArr = Array.isArray(purchases) ? purchases : [];
+
+        salesArr.forEach((s: any) => {
+          const d = s.date ?? s.sale_date ?? s.day ?? "";
+          if (!d) return;
+          byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+          // Accumulate sales when multiple rows share the same date
+          byDate[d].sales += Number(
+            s.sales ?? s.total ?? s.value ?? s.total_sales ?? s.totalSales ?? 0
+          );
+        });
+
+        purchasesArr.forEach((p: any) => {
+          const d =
+            p.date ?? p.sale_date ?? p.day ?? (p.created_at || "").slice(0, 10);
+          if (!d) return;
+          byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+          // Accumulate purchase totals when multiple rows share the same date
+          byDate[d].purchase += Number(p.purchase ?? p.total ?? p.value ?? 0);
+        });
+
+        const timeseries = Object.values(byDate).sort(
+          (a: any, b: any) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+
+        // Normalize stock items so later logic (which expects 'quantity' and 'cost_price') works
+        const stockArr = Array.isArray(stock) ? stock : [];
+        const stock_page_normalized = stockArr.map((it: any, idx: number) => {
+          const quantity = Number(it.available ?? it.quantity ?? it.qty ?? 0);
+          const value = Number(it.value ?? it.stock_value ?? 0);
+          const cost_price =
+            quantity > 0
+              ? Number((value / quantity).toFixed(2))
+              : Number(it.cost_price ?? 0);
+          return {
+            id: it.id ?? it.product_id ?? it.product ?? `s-${idx}`,
+            product_id: it.product_id ?? undefined,
+            product_name:
+              it.product ?? it.product_name ?? it.products?.name ?? "",
+            quantity,
+            cost_price,
+            reorder_level: it.reorder_level ?? it.reorder ?? 0,
+            ...it,
+          };
+        });
+
+        // Normalize payment summary into shape: { total_amount, modes: [{mode, total, count}] }
+        let payment_summary_normalized: any = {};
+        if (Array.isArray(paymentSummary)) {
+          const modes = paymentSummary.map((m: any) => ({
+            mode: m.mode || m.name || m.method || "Unknown",
+            total: Number(m.value ?? m.total ?? 0),
+            count: m.count ?? 0,
+          }));
+          const total_amount = modes.reduce(
+            (s: number, mm: any) => s + Number(mm.total || 0),
+            0
+          );
+          payment_summary_normalized = { total_amount, modes };
+        } else if (paymentSummary && typeof paymentSummary === "object") {
+          // If server already returned an object with modes, normalize numbers
+          const modes = (paymentSummary.modes || []).map((m: any) => ({
+            mode: m.mode || m.name || m.method || "Unknown",
+            total: Number(m.total ?? m.value ?? 0),
+            count: m.count ?? 0,
+          }));
+          const total_amount =
+            paymentSummary.total_amount ??
+            modes.reduce((s: number, mm: any) => s + Number(mm.total || 0), 0);
+          payment_summary_normalized = { total_amount, modes };
+        } else {
+          payment_summary_normalized = { total_amount: 0, modes: [] };
+        }
+
+        return {
+          timeseries,
+          stock_page: stock_page_normalized,
+          payment_summary: payment_summary_normalized,
+          summary: summary ?? {},
+        };
+      } catch (fallbackErr) {
+        console.warn(
+          "getTimeseries fallback to tenantReport endpoints failed:",
+          fallbackErr
+        );
+        throw new Error(
+          `Failed to fetch report: ${res.status} ${res.statusText}`
+        );
+      }
+    }
+
     throw new Error(`Failed to fetch report: ${res.status} ${res.statusText}`);
   }
 
@@ -744,7 +869,7 @@ export const walletAPI = {
 export const purchaseService = {
   // Accept optional pagination params: { page, limit, tenant_id }
   getAll: (params: Record<string, any> = {}) =>
-    api.get("api/purchases", { params }),
+    api.get("/api/purchases", { params }),
   getById: (id) => api.get(`api/purchases/${id}`),
   create: (data) => api.post("api/purchases", data),
   update: (id, data) => api.put(`api/purchases/${id}`, data),
@@ -753,11 +878,13 @@ export const purchaseService = {
 
 // services/api.js - Add invoice service
 export const invoiceService = {
-  getAll: () => api.get("api/invoices"),
-  getById: (id) => api.get(`api/invoices/${id}`),
-  create: (data) => api.post("api/invoices", data),
-  delete: (id) => api.delete(`api/invoices/${id}`),
-  getStats: () => api.get("api/invoices/stats"),
+  // accept optional params object forwarded to axios (e.g., { search, page, limit })
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/invoices", { params }),
+  getById: (id) => api.get(`/api/invoices/${id}`),
+  create: (data) => api.post("/api/invoices", data),
+  delete: (id) => api.delete(`/api/invoices/${id}`),
+  getStats: () => api.get("/api/invoices/stats"),
 };
 
 // services/api.js - Add sales return service

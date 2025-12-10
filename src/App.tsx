@@ -407,6 +407,23 @@ const App = () => (
                       </RoleBasedRoute>
                     }
                   />
+                  {/* Explicit employee subroutes so direct URLs work (tab routing) */}
+                  <Route
+                    path="employees/salaries"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Employees />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="employees/discounts"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Employees />
+                      </RoleBasedRoute>
+                    }
+                  />
                   <Route
                     path="tasks"
                     element={

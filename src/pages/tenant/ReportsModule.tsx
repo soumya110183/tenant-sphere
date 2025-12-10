@@ -76,11 +76,19 @@ const ReportsModule = () => {
   });
 
   // Combine sales and purchase series for analytics chart
-  const combinedSeries = salesSeries.map((s, idx) => ({
-    date: s.date,
-    sales: s.sales || 0,
-    purchase: purchaseSeries[idx]?.purchase || 0,
-  }));
+  // Normalize backend shapes: support `date`/`sales` and `sale_date`/`total_sales` variants
+  const combinedSeries = salesSeries.map((s: any, idx: number) => {
+    const dateVal =
+      s.date ?? s.day ?? s.period ?? s.sale_date ?? s.saleDate ?? "";
+    const salesAmt = Number(
+      s.sales ?? s.total ?? s.value ?? s.total_sales ?? s.totalSales ?? 0
+    );
+    return {
+      date: dateVal,
+      sales: salesAmt || 0,
+      purchase: purchaseSeries[idx]?.purchase || 0,
+    };
+  });
 
   // derive today's sales from dailyMetrics or salesSeries
   const todayIso = new Date().toISOString().split("T")[0];
@@ -621,41 +629,78 @@ const ReportsModule = () => {
         {/* SALES */}
         <TabsContent value="sales">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Sales Report</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
-              >
-                {downloadingPDF === "sales" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-              </Button>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <CardTitle>Sales Report</CardTitle>
+                <div>
+                  <label className="text-xs text-muted-foreground mr-2">
+                    Granularity
+                  </label>
+                  <select
+                    value={granularity}
+                    onChange={(e) => setGranularity(e.target.value as any)}
+                    className="px-2 py-1 border rounded text-sm"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Button
+                  size="sm"
+                  onClick={() => handleDownloadPDF("sales")}
+                  disabled={downloadingPDF === "sales"}
+                >
+                  {downloadingPDF === "sales" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="sales"
-                    stroke="hsl(var(--primary))"
-                    name="Sales (AED)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">Date</th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Sales (AED)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesSeries && salesSeries.length > 0 ? (
+                      salesSeries.map((s: any) => (
+                        <tr key={s.date} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-sm">{s.date}</td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED{" "}
+                            {Number(s.sales ?? s.total ?? 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No sales data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* PURCHASES */}
+        {/* PURCHASES (Table) */}
         <TabsContent value="purchases">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -673,20 +718,39 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={purchaseSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="purchase"
-                    fill="hsl(var(--primary))"
-                    name="Purchases (AED)"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">Date</th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Purchases (AED)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseSeries && purchaseSeries.length > 0 ? (
+                      purchaseSeries.map((p: any) => (
+                        <tr key={p.date} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-sm">{p.date}</td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            {Number(p.purchase || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No purchase data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -741,55 +805,64 @@ const ReportsModule = () => {
           </Card>
         </TabsContent>
 
-        {/* PAYMENTS */}
+        {/* PAYMENTS (Table) */}
         <TabsContent value="payments">
           <Card>
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <RePieChart>
-                    <Pie
-                      data={paymentSummary}
-                      dataKey="value"
-                      nameKey="mode"
-                      outerRadius={100}
-                      label
-                    >
-                      {paymentSummary.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </RePieChart>
-                </ResponsiveContainer>
-                <div className="space-y-4">
-                  {paymentSummary.map((pm, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{
-                            backgroundColor: COLORS[idx % COLORS.length],
-                          }}
-                        />
-                        <span className="font-medium">{pm.mode}</span>
-                      </div>
-                      <span className="text-lg font-bold">
-                        AED {pm.value.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[400px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">
+                        Payment Mode
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Amount (AED)
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentSummary && paymentSummary.length > 0 ? (
+                      (() => {
+                        const total =
+                          paymentSummary.reduce(
+                            (s: number, p: any) => s + Number(p.value || 0),
+                            0
+                          ) || 1;
+                        return paymentSummary.map((pm: any, idx: number) => (
+                          <tr
+                            key={pm.mode || idx}
+                            className="border-b hover:bg-muted/50"
+                          >
+                            <td className="py-2 px-3 text-sm">{pm.mode}</td>
+                            <td className="py-2 px-3 text-sm text-right">
+                              AED {Number(pm.value || 0).toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-sm text-right">
+                              {((Number(pm.value || 0) / total) * 100).toFixed(
+                                1
+                              )}
+                              %
+                            </td>
+                          </tr>
+                        ));
+                      })()
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No payment data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

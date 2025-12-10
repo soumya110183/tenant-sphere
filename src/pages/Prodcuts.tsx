@@ -31,7 +31,9 @@ const productService = {
   async getAll(search = "", limit = 100, offset = 0) {
     const params = new URLSearchParams();
     params.append("limit", String(limit));
-    params.append("offset", String(offset));
+    // Backend expects a `page` (1-based). Convert offset -> page so search/pagination works.
+    const page = Math.floor(Number(offset || 0) / Number(limit || 1)) + 1;
+    params.append("page", String(page));
     if (search) params.append("search", search);
 
     const response = await fetch(`${API_BASE_URL}?${params}`, {
@@ -86,26 +88,33 @@ const productService = {
   },
 };
 
-// Product Stats Card Component
-const ProductStatsCard = ({ stat }) => (
-  <Card>
-    <CardContent className="pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div
-            className={`text-2xl font-bold ${stat.color || "text-foreground"}`}
-          >
-            {stat.value}
+// Product Stats Card Component (dynamic icon rendering, optional click)
+const ProductStatsCard = ({ stat, onClick = undefined }: any) => {
+  const Icon = stat.icon;
+  return (
+    <Card onClick={onClick} className={onClick ? "cursor-pointer" : ""}>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div
+              className={`text-2xl font-bold ${
+                stat.color || "text-foreground"
+              }`}
+            >
+              {stat.value}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+          {Icon ? (
+            <Icon
+              className={`h-8 w-8 ${stat.color || "text-muted-foreground"}`}
+            />
+          ) : null}
         </div>
-        <stat.icon
-          className={`h-8 w-8 ${stat.color || "text-muted-foreground"}`}
-        />
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 // Search and Filter Component for Products
 const ProductSearchFilter = ({
@@ -151,8 +160,10 @@ const ProductSearchFilter = ({
 
 // Product Table Row Component
 const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
-  const margin = product.selling_price - product.cost_price;
-  const marginPercent = ((margin / product.cost_price) * 100).toFixed(1);
+  const margin = (product.selling_price || 0) - (product.cost_price || 0);
+  const marginPercent = product.cost_price
+    ? ((margin / product.cost_price) * 100).toFixed(1)
+    : "0.0";
 
   return (
     <tr className="border-b hover:bg-muted/50">
@@ -270,7 +281,6 @@ const ProductModal = ({
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
     >
       <div
         className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"

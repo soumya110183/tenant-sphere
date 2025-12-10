@@ -50,7 +50,7 @@ export const CustomerModal: FC<CustomerModalProps> = ({
   return (
     <div
       className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      onClick={onClose}
+      
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"

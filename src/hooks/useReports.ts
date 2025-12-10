@@ -254,7 +254,8 @@ export function useReports({
             const d = s.date || s.day || s.label || s.month || s.month_label;
             if (!d) return;
             byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
-            byDate[d].sales = Number(
+            // Accumulate sales for the same date instead of overwriting
+            byDate[d].sales += Number(
               s.sales ?? s.total ?? s.value ?? s.amount ?? 0
             );
           });
@@ -262,7 +263,8 @@ export function useReports({
             const d = p.date || p.day || (p.created_at || "").slice(0, 10);
             if (!d) return;
             byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
-            byDate[d].purchase = Number(p.purchase ?? p.total ?? p.value ?? 0);
+            // Accumulate purchase totals for the same date instead of overwriting
+            byDate[d].purchase += Number(p.purchase ?? p.total ?? p.value ?? 0);
           });
 
           const timeseries = Object.values(byDate).sort(
