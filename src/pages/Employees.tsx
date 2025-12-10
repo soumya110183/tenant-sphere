@@ -419,9 +419,7 @@ function EmployeeModal({
       : "Register Employee";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -1171,9 +1169,7 @@ function DiscountRuleModal({
     : "Create Discount Rule";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -1293,6 +1289,7 @@ function PaySalaryModal({
   employee,
   onSubmit,
   submitting = false,
+  salaryAmount, // new prop: fixed salary amount to display
 }: {
   open: boolean;
   onClose: () => void;
@@ -1306,6 +1303,7 @@ function PaySalaryModal({
     payment_method: string;
   }) => Promise<void>;
   submitting?: boolean;
+  salaryAmount?: number;
 }) {
   const [form, setForm] = useState(() => ({
     month: new Date().toISOString().slice(0, 7), // yyyy-mm for month input
@@ -1319,7 +1317,11 @@ function PaySalaryModal({
     if (!open) return;
     // if employee exists, try to prefill salary_amount from main employees list via DOM not available here,
     // caller should set defaults if needed. Keep it simple: leave at 0 and rely on user.
-  }, [open, employee]);
+    // If a fixed salaryAmount prop is provided, reflect it in form for display/submission.
+    if (typeof salaryAmount === "number") {
+      setForm((f) => ({ ...f, salary_amount: Number(salaryAmount || 0) }));
+    }
+  }, [open, employee, salaryAmount]);
 
   if (!open) return null;
 
@@ -1334,7 +1336,11 @@ function PaySalaryModal({
       await onSubmit({
         employee_id: employee.id,
         month: form.month,
-        salary_amount: Number(form.salary_amount || 0),
+        // Use fixed salaryAmount when provided, otherwise fallback to form value
+        salary_amount:
+          typeof salaryAmount === "number"
+            ? Number(salaryAmount || 0)
+            : Number(form.salary_amount || 0),
         deductions: Number(form.deductions || 0),
         bonuses: Number(form.bonuses || 0),
         payment_method: form.payment_method,
@@ -1346,9 +1352,7 @@ function PaySalaryModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -1380,16 +1384,28 @@ function PaySalaryModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Salary Amount *
+                Salary Amount
               </label>
+              {/* Show fixed salary amount (read-only). If salaryAmount prop not provided, fall back to form input value */}
               <input
                 type="number"
                 min="0"
-                value={form.salary_amount}
+                value={
+                  typeof salaryAmount === "number"
+                    ? Number(salaryAmount || 0)
+                    : form.salary_amount
+                }
+                readOnly={typeof salaryAmount === "number"}
                 onChange={(e) => update("salary_amount", e.target.value)}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 required
               />
+              {typeof salaryAmount === "number" && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Salary amount is fixed from employee record and cannot be
+                  changed
+                </div>
+              )}
             </div>
 
             <div>
@@ -1466,10 +1482,7 @@ function SalaryHistoryModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -2110,6 +2123,12 @@ export default function Employees() {
           setPayingEmployee(null);
         }}
         employee={payingEmployee}
+        // pass fixed salary amount from employees list when available
+        salaryAmount={
+          payingEmployee
+            ? employees.find((e) => e._id === payingEmployee.id)?.salary
+            : undefined
+        }
         onSubmit={handlePaySalarySubmit}
         submitting={paying}
       />
