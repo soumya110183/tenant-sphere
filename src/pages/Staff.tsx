@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,11 +59,8 @@ const StaffModal = ({
 
   const roles = ["staff", "manager", "cashier", "admin"];
 
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      
-    >
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4">
       <div
         className="bg-background rounded-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -79,7 +77,9 @@ const StaffModal = ({
         <form onSubmit={onSubmit} className="p-4 space-y-4">
           {/* Full Name */}
           <div>
-            <label className="block text-sm font-medium mb-1">Full Name *</label>
+            <label className="block text-sm font-medium mb-1">
+              Full Name *
+            </label>
             <div className="flex items-center border rounded-md px-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <input
@@ -117,7 +117,9 @@ const StaffModal = ({
           {/* Password - only for creating */}
           {!editing && (
             <div>
-              <label className="block text-sm font-medium mb-1">Password *</label>
+              <label className="block text-sm font-medium mb-1">
+                Password *
+              </label>
               <input
                 required
                 type="password"
@@ -141,7 +143,9 @@ const StaffModal = ({
                 disabled={saving}
                 className="w-full px-2 py-2 text-sm bg-background"
                 value={formData.role || "staff"}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, role: e.target.value })
+                }
               >
                 {roles.map((role) => (
                   <option key={role} value={role}>
@@ -160,7 +164,10 @@ const StaffModal = ({
               className="w-full px-3 py-2 border rounded-md text-sm bg-background"
               value={formData.is_active ? "Active" : "Inactive"}
               onChange={(e) =>
-                setFormData({ ...formData, is_active: e.target.value === "Active" })
+                setFormData({
+                  ...formData,
+                  is_active: e.target.value === "Active",
+                })
               }
             >
               <option value="Active">Active</option>
@@ -184,7 +191,8 @@ const StaffModal = ({
           </Button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -208,8 +216,7 @@ const Staff = () => {
       setLoading(true);
       setError(null);
       const data = await staffService.getAll();
-      setStaff(data?.data || []);  // if backend sends { data: [...] }
-
+      setStaff(data?.data || []); // if backend sends { data: [...] }
     } catch (err) {
       setError(err.message || "Unable to load staff");
     } finally {
@@ -225,7 +232,13 @@ const Staff = () => {
   const openModal = (item = null) => {
     setEditingData(item);
     setFormData(
-      item || { full_name: "", email: "", password: "", role: "staff", is_active: true }
+      item || {
+        full_name: "",
+        email: "",
+        password: "",
+        role: "staff",
+        is_active: true,
+      }
     );
     setShowModal(true);
   };
@@ -272,7 +285,9 @@ const Staff = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Staff Management</h1>
-        <p className="text-muted-foreground mt-1">Manage staff accounts & roles</p>
+        <p className="text-muted-foreground mt-1">
+          Manage staff accounts & roles
+        </p>
       </div>
 
       {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
@@ -324,7 +339,10 @@ const Staff = () => {
                 <tbody>
                   {filteredStaff.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-6 text-muted-foreground">
+                      <td
+                        colSpan={5}
+                        className="text-center py-6 text-muted-foreground"
+                      >
                         No staff found
                       </td>
                     </tr>
@@ -349,7 +367,11 @@ const Staff = () => {
                         </td>
                         <td className="py-2 text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="outline" onClick={() => openModal(user)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openModal(user)}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button

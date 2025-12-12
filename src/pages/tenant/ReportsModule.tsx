@@ -566,17 +566,11 @@ const ReportsModule = () => {
                   <TableRow className="whitespace-nowrap">
                     <TableHead>Date</TableHead>
                     <TableHead>Sales (AED)</TableHead>
-                    <TableHead>Invoices</TableHead>
-                    <TableHead>Avg Bill (AED)</TableHead>
-                    <TableHead>Top Product</TableHead>
                     <TableHead>Purchases (AED)</TableHead>
-                    <TableHead>Purchase Entries</TableHead>
                     <TableHead>Profit (AED)</TableHead>
                     <TableHead>Margin %</TableHead>
                     <TableHead>Δ Prev Day %</TableHead>
                     <TableHead>Δ Weekly Avg %</TableHead>
-                    <TableHead>Sold Qty</TableHead>
-                    <TableHead>Received Qty</TableHead>
                     <TableHead>Cash (AED)</TableHead>
                     <TableHead>UPI (AED)</TableHead>
                     <TableHead>Card (AED)</TableHead>
@@ -589,13 +583,9 @@ const ReportsModule = () => {
                     <TableRow key={row.date} className="whitespace-nowrap">
                       <TableCell>{row.date}</TableCell>
                       <TableCell>{row.salesAmount.toLocaleString()}</TableCell>
-                      <TableCell>{row.invoiceCount}</TableCell>
-                      <TableCell>{row.avgBill.toLocaleString()}</TableCell>
-                      <TableCell>{row.topProduct}</TableCell>
                       <TableCell>
                         {row.purchaseAmount.toLocaleString()}
                       </TableCell>
-                      <TableCell>{row.purchaseEntries}</TableCell>
                       <TableCell>{row.dailyProfit.toLocaleString()}</TableCell>
                       <TableCell>{row.marginPct.toFixed(2)}</TableCell>
                       <TableCell>
@@ -606,8 +596,6 @@ const ReportsModule = () => {
                       <TableCell>
                         {row.vsWeeklyAvgSalesChangePct.toFixed(2)}
                       </TableCell>
-                      <TableCell>{row.soldItemsQty}</TableCell>
-                      <TableCell>{row.receivedItemsQty}</TableCell>
                       <TableCell>{row.cash.toLocaleString()}</TableCell>
                       <TableCell>{row.upi.toLocaleString()}</TableCell>
                       <TableCell>{row.card.toLocaleString()}</TableCell>

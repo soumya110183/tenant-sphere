@@ -1,4 +1,5 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,11 +61,8 @@ const SupplierModal: FC<any> = ({
 }) => {
   if (!show) return null;
 
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      
-    >
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4">
       <div
         className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -185,7 +183,8 @@ const SupplierModal: FC<any> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -303,16 +302,16 @@ const SupplierPage: FC = () => {
       </div>
 
       {/* Search + Add Button */}
-         <div className="flex justify-between gap-3 flex-col sm:flex-row">
-                        <div className="relative w-full sm:w-64">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <input
-                            placeholder="Search suppliers..."
-                            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
-                            value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                          />
-                        </div>
+      <div className="flex justify-between gap-3 flex-col sm:flex-row">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            placeholder="Search suppliers..."
+            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
 
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" /> Add Supplier

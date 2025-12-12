@@ -379,9 +379,11 @@ function EmployeeModal({
   useEffect(() => {
     if (initial) {
       setForm((f: any) => ({
+        // preserve any existing identifiers so parent can detect edits
+        _id: (initial as any)._id ?? (initial as any).id ?? f._id,
         name: initial.name ?? f.name,
         phone: initial.phone ?? f.phone,
-        position: (initial.role as any) ?? f.position,
+        position: initial.position ?? (initial as any).role ?? f.position,
         salary: (initial as any).salary ?? f.salary ?? "",
         createLogin: false,
         email: initial.email ?? "",

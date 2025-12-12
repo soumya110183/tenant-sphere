@@ -217,52 +217,36 @@ const AccountsModule = () => {
 
       {/* SUMMARY CARDS */}
       <div className="grid md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex justify-between">
-            <CardTitle className="text-sm text-muted-foreground">
-              Total Assets
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+        <Card className="relative">
+          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-primary" />
+          <CardHeader className="flex">
+            <CardTitle className="text-sm text-muted-foreground">Total Assets</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
-            AED {balanceSheet?.totals?.assetTotal || 0}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.assetTotal || 0}</CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex justify-between">
-            <CardTitle className="text-sm text-muted-foreground">
-              Liabilities
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-red-500" />
+        <Card className="relative">
+          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-red-500" />
+          <CardHeader className="flex">
+            <CardTitle className="text-sm text-muted-foreground">Liabilities</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
-            AED {balanceSheet?.totals?.liabilityTotal || 0}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.liabilityTotal || 0}</CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex justify-between">
-            <CardTitle className="text-sm text-muted-foreground">
-              Equity
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
+        <Card className="relative">
+          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-green-600" />
+          <CardHeader className="flex">
+            <CardTitle className="text-sm text-muted-foreground">Equity</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
-            AED {balanceSheet?.totals?.equityTotal || 0}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.equityTotal || 0}</CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex justify-between">
-            <CardTitle className="text-sm text-muted-foreground">
-              VAT Payable
-            </CardTitle>
-            <Receipt className="h-4 w-4 text-primary" />
+        <Card className="relative">
+          <Receipt className="absolute top-3 right-3 h-5 w-5 text-primary" />
+          <CardHeader className="flex">
+            <CardTitle className="text-sm text-muted-foreground">VAT Payable</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">
-            AED {vat[0]?.vat_payable || 0}
-          </CardContent>
+          <CardContent className="text-2xl font-bold">AED {vat[0]?.vat_payable || 0}</CardContent>
         </Card>
       </div>
 

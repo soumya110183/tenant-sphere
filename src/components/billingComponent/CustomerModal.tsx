@@ -1,6 +1,15 @@
 // src/components/CustomerModal.tsx
-import React, { FC } from "react";
-import { User, Mail, Phone, MapPin, X, Loader2, Save, AlertCircle } from "lucide-react";
+import React, { FC, useEffect } from "react";
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  X,
+  Loader2,
+  Save,
+  AlertCircle,
+} from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 
@@ -47,17 +56,30 @@ export const CustomerModal: FC<CustomerModalProps> = ({
 }) => {
   if (!show) return null;
 
+  // prevent background scroll when modal is open
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original || "";
+    };
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      
+      className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4"
+      aria-modal="true"
+      role="dialog"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
+        className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-y-auto relative max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
+        style={{ boxShadow: "0 10px 30px rgba(0,0,0,0.15)" }}
       >
         <div className="flex justify-between items-center border-b p-4">
-          <h2 className="font-bold text-lg">{editing ? "Edit Customer" : "Add Customer"}</h2>
+          <h2 className="font-bold text-lg">
+            {editing ? "Edit Customer" : "Add Customer"}
+          </h2>
           <button disabled={saving} onClick={onClose}>
             <X className="h-5 w-5" />
           </button>
@@ -80,10 +102,14 @@ export const CustomerModal: FC<CustomerModalProps> = ({
                 className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                 placeholder="Enter customer name"
                 value={formData.name || ""}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
               />
             </div>
-            {formErrors.name && <div className="text-red-600 text-sm mt-1">{formErrors.name}</div>}
+            {formErrors.name && (
+              <div className="text-red-600 text-sm mt-1">{formErrors.name}</div>
+            )}
           </div>
 
           <div>
@@ -96,14 +122,22 @@ export const CustomerModal: FC<CustomerModalProps> = ({
                 className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                 placeholder="Enter phone number"
                 value={formData.phone || ""}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
               />
             </div>
-            {formErrors.phone && <div className="text-red-600 text-sm mt-1">{formErrors.phone}</div>}
+            {formErrors.phone && (
+              <div className="text-red-600 text-sm mt-1">
+                {formErrors.phone}
+              </div>
+            )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Alternate Phone</label>
+            <label className="block text-sm font-medium mb-1">
+              Alternate Phone
+            </label>
             <div className="flex items-center border rounded-md px-2">
               <Phone className="h-4 w-4 text-gray-400" />
               <input
@@ -111,7 +145,9 @@ export const CustomerModal: FC<CustomerModalProps> = ({
                 className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                 placeholder="Enter alternate phone"
                 value={formData.alternatePhone || ""}
-                onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, alternatePhone: e.target.value })
+                }
               />
             </div>
           </div>
@@ -126,10 +162,16 @@ export const CustomerModal: FC<CustomerModalProps> = ({
                 className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                 placeholder="Email address"
                 value={formData.email || ""}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
               />
             </div>
-            {formErrors.email && <div className="text-red-600 text-sm mt-1">{formErrors.email}</div>}
+            {formErrors.email && (
+              <div className="text-red-600 text-sm mt-1">
+                {formErrors.email}
+              </div>
+            )}
           </div>
 
           <div>
@@ -142,7 +184,9 @@ export const CustomerModal: FC<CustomerModalProps> = ({
                 placeholder="Enter address"
                 rows={3}
                 value={formData.address || ""}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
               />
             </div>
           </div>
@@ -153,7 +197,12 @@ export const CustomerModal: FC<CustomerModalProps> = ({
               disabled={saving}
               className="w-full px-3 py-2 border rounded-md text-sm bg-transparent"
               value={formData.isActive ? "Active" : "Inactive"}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.value === "Active" })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  isActive: e.target.value === "Active",
+                })
+              }
             >
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>

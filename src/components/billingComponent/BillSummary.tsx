@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { Separator } from "@radix-ui/react-dropdown-menu";
 import {
   Banknote,
@@ -66,6 +67,284 @@ type Customer = {
   alternatePhone?: string;
   isActive?: boolean;
 };
+
+const CustomerModal = React.memo(
+  ({
+    form,
+    setForm,
+    formErrors,
+    saving,
+    onClose,
+    onCreate,
+  }: {
+    form: any;
+    setForm: (f: any) => void;
+    formErrors: Record<string, string>;
+    saving: boolean;
+    onClose: () => void;
+    onCreate: () => void;
+  }) => (
+    <div
+      className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center border-b p-4">
+          <h2 className="font-bold text-lg">Add Customer</h2>
+          <button disabled={saving} onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {formErrors.general && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+              {formErrors.general}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Name *</label>
+            <div className="flex items-center border rounded-md px-2">
+              <User className="h-4 w-4 text-gray-400" />
+              <input
+                required
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Enter customer name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            {formErrors.name && (
+              <div className="text-red-600 text-sm mt-1">{formErrors.name}</div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone *</label>
+            <div className="flex items-center border rounded-md px-2">
+              <Phone className="h-4 w-4 text-gray-400" />
+              <input
+                required
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Enter phone number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
+            {formErrors.phone && (
+              <div className="text-red-600 text-sm mt-1">
+                {formErrors.phone}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Alternate Phone
+            </label>
+            <div className="flex items-center border rounded-md px-2">
+              <Phone className="h-4 w-4 text-gray-400" />
+              <input
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Enter alternate phone"
+                value={form.alternatePhone}
+                onChange={(e) =>
+                  setForm({ ...form, alternatePhone: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Email</label>
+            <div className="flex items-center border rounded-md px-2">
+              <Mail className="h-4 w-4 text-gray-400" />
+              <input
+                type="email"
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Email address"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            {formErrors.email && (
+              <div className="text-red-600 text-sm mt-1">
+                {formErrors.email}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Address</label>
+            <div className="flex items-start border rounded-md px-2 py-2">
+              <MapPin className="h-4 w-4 text-gray-400 mt-1" />
+              <textarea
+                disabled={saving}
+                className="w-full px-2 bg-transparent text-sm resize-none outline-none"
+                placeholder="Enter address"
+                rows={3}
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <select
+              disabled={saving}
+              className="w-full px-3 py-2 border rounded-md text-sm bg-transparent"
+              value={form.isActive ? "Active" : "Inactive"}
+              onChange={(e) =>
+                setForm({ ...form, isActive: e.target.value === "Active" })
+              }
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <Button onClick={onCreate} className="w-full" disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+);
+
+const EmployeeModal = React.memo(
+  ({
+    form,
+    setForm,
+    saving,
+    onClose,
+    onCreate,
+  }: {
+    form: any;
+    setForm: (f: any) => void;
+    saving: boolean;
+    onClose: () => void;
+    onCreate: () => void;
+  }) => (
+    <div
+      className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center border-b p-4">
+          <h2 className="font-bold text-lg">Add Staff</h2>
+          <button disabled={saving} onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Full name *
+            </label>
+            <div className="flex items-center border rounded-md px-2">
+              <User className="h-4 w-4 text-gray-400" />
+              <input
+                required
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Enter staff name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone</label>
+            <div className="flex items-center border rounded-md px-2">
+              <Phone className="h-4 w-4 text-gray-400" />
+              <input
+                disabled={saving}
+                className="w-full px-2 py-2 bg-transparent text-sm outline-none"
+                placeholder="Enter phone number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Position</label>
+            <input
+              disabled={saving}
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              value={form.position}
+              onChange={(e) => setForm({ ...form, position: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Salary (monthly)
+            </label>
+            <input
+              disabled={saving}
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+              value={form.salary}
+              onChange={(e) => setForm({ ...form, salary: e.target.value })}
+              type="number"
+              min="0"
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+            <Button onClick={onCreate} className="flex-1" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 sm:flex-none"
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+);
 
 export default function BillSummary({
   rows,
@@ -364,11 +643,74 @@ export default function BillSummary({
     return () => clearTimeout(id);
   }, [couponQuery, coupons]);
 
-  const CustomerModal = () => {
+  const handleEmployeeCreate = async () => {
+    if (!empForm.name || !empForm.name.trim()) {
+      toast({
+        title: "Name required",
+        description: "Enter staff name",
+        variant: "destructive",
+      });
+      return;
+    }
+    setEmpSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/employees`, {
+        method: "POST",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          full_name: empForm.name,
+          phone: empForm.phone || undefined,
+          position: empForm.position || "staff",
+          salary: empForm.salary ? Number(empForm.salary) : undefined,
+          is_active: empForm.active ?? true,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok)
+        throw new Error(
+          json?.error || json?.message || "Failed to create staff"
+        );
+      const created = json?.data ?? json;
+      setEmpModalOpen(false);
+      setEmpForm({
+        name: "",
+        phone: "",
+        position: "staff",
+        salary: "",
+        active: true,
+      });
+      toast({
+        title: "Staff added",
+        description: `${created.full_name || created.name} created`,
+      });
+      if (onEmployeeSelect)
+        onEmployeeSelect({
+          id: created.id ?? created._id,
+          name: created.full_name || created.name,
+          phone: created.phone || "",
+        } as Customer);
+      if (onRefreshEmployees) await onRefreshEmployees();
+    } catch (err: any) {
+      console.error("Create staff failed:", err);
+      toast({
+        title: "Failed to add staff",
+        description: err.message || "See console",
+        variant: "destructive",
+      });
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const CustomerModalInner = () => {
     if (!modalOpen) return null;
     return (
       <div
-        className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
+        className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4"
         onClick={() => setModalOpen(false)}
       >
         <div
@@ -394,6 +736,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <User className="h-4 w-4 text-gray-400" />
                 <input
+                  key="customer-name"
                   required
                   disabled={saving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
@@ -414,6 +757,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <Phone className="h-4 w-4 text-gray-400" />
                 <input
+                  key="customer-phone"
                   required
                   disabled={saving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
@@ -436,6 +780,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <Phone className="h-4 w-4 text-gray-400" />
                 <input
+                  key="customer-alt-phone"
                   disabled={saving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                   placeholder="Enter alternate phone"
@@ -452,6 +797,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <Mail className="h-4 w-4 text-gray-400" />
                 <input
+                  key="customer-email"
                   type="email"
                   disabled={saving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
@@ -472,6 +818,7 @@ export default function BillSummary({
               <div className="flex items-start border rounded-md px-2 py-2">
                 <MapPin className="h-4 w-4 text-gray-400 mt-1" />
                 <textarea
+                  key="customer-address"
                   disabled={saving}
                   className="w-full px-2 bg-transparent text-sm resize-none outline-none"
                   placeholder="Enter address"
@@ -522,11 +869,11 @@ export default function BillSummary({
     );
   };
 
-  const EmployeeModal = () => {
+  const EmployeeModalInner = () => {
     if (!empModalOpen) return null;
     return (
       <div
-        className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
+        className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4"
         onClick={() => setEmpModalOpen(false)}
       >
         <div
@@ -548,6 +895,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <User className="h-4 w-4 text-gray-400" />
                 <input
+                  key="emp-name"
                   required
                   disabled={empSaving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
@@ -565,6 +913,7 @@ export default function BillSummary({
               <div className="flex items-center border rounded-md px-2">
                 <Phone className="h-4 w-4 text-gray-400" />
                 <input
+                  key="emp-phone"
                   disabled={empSaving}
                   className="w-full px-2 py-2 bg-transparent text-sm outline-none"
                   placeholder="Enter phone number"
@@ -579,6 +928,7 @@ export default function BillSummary({
             <div>
               <label className="block text-sm font-medium mb-1">Position</label>
               <input
+                key="emp-position"
                 disabled={empSaving}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 value={empForm.position}
@@ -593,6 +943,7 @@ export default function BillSummary({
                 Salary (monthly)
               </label>
               <input
+                key="emp-salary"
                 disabled={empSaving}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 value={empForm.salary}
@@ -606,73 +957,7 @@ export default function BillSummary({
 
             <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
               <Button
-                onClick={async () => {
-                  // create employee
-                  if (!empForm.name || !empForm.name.trim()) {
-                    toast({
-                      title: "Name required",
-                      description: "Enter staff name",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  setEmpSaving(true);
-                  try {
-                    const token = localStorage.getItem("auth_token");
-                    const res = await fetch(`${API_BASE}/api/employees`, {
-                      method: "POST",
-                      headers: {
-                        Authorization: token ? `Bearer ${token}` : "",
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        full_name: empForm.name,
-                        phone: empForm.phone || undefined,
-                        position: empForm.position || "staff",
-                        salary: empForm.salary
-                          ? Number(empForm.salary)
-                          : undefined,
-                        is_active: empForm.active ?? true,
-                      }),
-                    });
-                    const json = await res.json();
-                    if (!res.ok)
-                      throw new Error(
-                        json?.error || json?.message || "Failed to create staff"
-                      );
-                    const created = json?.data ?? json;
-                    setEmpModalOpen(false);
-                    setEmpForm({
-                      name: "",
-                      phone: "",
-                      position: "staff",
-                      salary: "",
-                      active: true,
-                    });
-                    toast({
-                      title: "Staff added",
-                      description: `${
-                        created.full_name || created.name
-                      } created`,
-                    });
-                    if (onEmployeeSelect)
-                      onEmployeeSelect({
-                        id: created.id ?? created._id,
-                        name: created.full_name || created.name,
-                        phone: created.phone || "",
-                      } as Customer);
-                    if (onRefreshEmployees) await onRefreshEmployees();
-                  } catch (err: any) {
-                    console.error("Create staff failed:", err);
-                    toast({
-                      title: "Failed to add staff",
-                      description: err.message || "See console",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setEmpSaving(false);
-                  }
-                }}
+                onClick={handleEmployeeCreate}
                 className="flex-1"
                 disabled={empSaving}
               >
@@ -1115,8 +1400,29 @@ export default function BillSummary({
         </Button>
       </CardContent>
 
-      {CustomerModal()}
-      {EmployeeModal()}
+      {modalOpen &&
+        createPortal(
+          <CustomerModal
+            form={form}
+            setForm={setForm}
+            formErrors={formErrors}
+            saving={saving}
+            onClose={() => setModalOpen(false)}
+            onCreate={handleCreateCustomer}
+          />,
+          document.body
+        )}
+      {empModalOpen &&
+        createPortal(
+          <EmployeeModal
+            form={empForm}
+            setForm={setEmpForm}
+            saving={empSaving}
+            onClose={() => setEmpModalOpen(false)}
+            onCreate={handleEmployeeCreate}
+          />,
+          document.body
+        )}
     </Card>
   );
 }

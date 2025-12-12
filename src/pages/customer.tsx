@@ -1,4 +1,5 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import axios, { AxiosResponse } from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -140,8 +141,8 @@ const CustomerModal: FC<any> = ({
 }) => {
   if (!show) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4">
       <div
         className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -294,7 +295,8 @@ const CustomerModal: FC<any> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
