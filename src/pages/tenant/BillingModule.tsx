@@ -326,13 +326,26 @@ const SupermarketBilling = () => {
   };
 
   // Coupon management
-  const handleSelectCoupon = (coupon: any) => {
-    setCouponCode(coupon.code);
-    setShowCouponPopup(false);
-    toast({
-      title: "Coupon Applied",
-      description: `${coupon.code} - ${coupon.description || "Coupon applied"}`,
-    });
+  const handleSelectCoupon = async (coupon: any) => {
+    try {
+      setCouponCode(coupon?.code ?? "");
+      setShowCouponPopup(false);
+      toast({
+        title: "Coupon Applied",
+        description: `${coupon?.code || ""} - ${
+          coupon?.description || "Coupon applied"
+        }`,
+      });
+
+      // Immediately run preview/apply with the selected coupon so totals update
+      try {
+        await handleApplyDiscounts(true);
+      } catch (err) {
+        console.error("Apply discounts after coupon select failed", err);
+      }
+    } catch (err) {
+      console.error("handleSelectCoupon error:", err);
+    }
   };
 
   // Redeem points management
@@ -675,6 +688,7 @@ const SupermarketBilling = () => {
               onClearDiscounts={handleClearDiscounts}
               onOpenCouponPopup={() => setShowCouponPopup(true)}
               onCouponChange={setCouponCode}
+              onSelectCoupon={handleSelectCoupon}
               onOpenRedeemPopup={() => setShowRedeemPopup(true)}
               onGenerateInvoice={handleGenerateInvoice}
               isApplyingDiscounts={isApplyingDiscounts}

@@ -197,8 +197,7 @@ const GroceryInventory = () => {
 
   const loadPurchaseReturns = async () => {
     try {
-      const tenantId = localStorage.getItem("tenant_id");
-      const params = tenantId ? { tenant_id: tenantId } : {};
+      const params = {};
       const response = await purchaseReturnService.getAll(params);
       const apiData = response?.data;
       let rawData = [];

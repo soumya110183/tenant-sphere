@@ -413,7 +413,7 @@ const ReportsModule = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card
           className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
           onClick={() => (window.location.href = "/inventory")}
@@ -505,7 +505,7 @@ const ReportsModule = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm text-muted-foreground">
               Transactions
@@ -525,7 +525,7 @@ const ReportsModule = () => {
             </p>
             <p className="text-xs text-muted-foreground mt-1">Total Invoices</p>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Tabs (route-aware) */}

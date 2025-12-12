@@ -78,6 +78,7 @@ export default function BillSummary({
   onClearDiscounts,
   onOpenCouponPopup,
   onCouponChange,
+  onSelectCoupon,
   coupons,
   onOpenRedeemPopup,
   onGenerateInvoice,
@@ -104,6 +105,7 @@ export default function BillSummary({
   onClearDiscounts: () => void;
   onOpenCouponPopup: () => void;
   onCouponChange?: (code: string) => void;
+  onSelectCoupon?: (coupon: any) => void;
   onOpenRedeemPopup: () => void;
   onGenerateInvoice: () => void;
   isApplyingDiscounts: boolean;
@@ -730,23 +732,7 @@ export default function BillSummary({
               Add
             </Button>
 
-            {/* compact staff chip + selector */}
-            {selectedEmployee && onClearEmployee && (
-              <div className="hidden sm:flex items-center gap-2 bg-muted/10 px-2 py-1 rounded-md">
-                <span className="text-sm">{selectedEmployee.name}</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClearEmployee();
-                  }}
-                  title="Clear staff"
-                  className="p-1"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+            {/* compact staff selector (chip moved to the right of Staff button) */}
 
             <div className="relative">
               <Button
@@ -797,6 +783,24 @@ export default function BillSummary({
                 </div>
               )}
             </div>
+
+            {/* compact staff chip + clear button placed to the right of the Staff button */}
+            {selectedEmployee && onClearEmployee && (
+              <div className="hidden sm:flex items-center gap-2 bg-muted/10 px-2 py-1 rounded-md">
+                <span className="text-sm">{selectedEmployee.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearEmployee();
+                  }}
+                  title="Clear staff"
+                  className="p-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -867,12 +871,29 @@ export default function BillSummary({
                   if (e.key === "Enter") {
                     e.preventDefault();
                     if (couponQuery && typeof onCouponChange === "function") {
-                      onCouponChange(couponQuery.trim());
+                      const code = couponQuery.trim();
+                      onCouponChange(code);
+                      // if this code matches one of the loaded suggestions, pass the full coupon object
+                      try {
+                        const matched = couponSuggestions.find(
+                          (cc: any) => String(cc.code) === String(code)
+                        );
+                        if (matched && typeof onSelectCoupon === "function")
+                          onSelectCoupon(matched);
+                      } catch (e) {
+                        // ignore
+                      }
                       setShowCouponSuggestions(false);
                       toast({
                         title: "Coupon set",
-                        description: couponQuery.trim(),
+                        description: code,
                       });
+                      // apply discounts immediately after selecting coupon via Enter
+                      try {
+                        onApplyDiscounts?.(true);
+                      } catch (err) {
+                        /* ignore */
+                      }
                     }
                   }
                 }}
@@ -890,6 +911,9 @@ export default function BillSummary({
                         // let parent know about selected coupon
                         if (typeof onCouponChange === "function")
                           onCouponChange(c.code);
+                        // provide the full coupon object to parent (same as CouponPopup)
+                        if (typeof onSelectCoupon === "function")
+                          onSelectCoupon(c);
                         // close suggestions and update local query
                         setCouponQuery(c.code || "");
                         setShowCouponSuggestions(false);
@@ -900,6 +924,12 @@ export default function BillSummary({
                             c.description ? "- " + c.description : ""
                           }`,
                         });
+                        // apply discounts immediately after selecting coupon
+                        try {
+                          onApplyDiscounts?.(true);
+                        } catch (err) {
+                          /* ignore */
+                        }
                       }}
                     >
                       <div className="font-medium text-sm">{c.code}</div>

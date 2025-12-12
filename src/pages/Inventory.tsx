@@ -2580,12 +2580,10 @@ const GroceryInventory = () => {
 
   const loadPurchaseReturns = async (page = 1) => {
     try {
-      const tenantId = localStorage.getItem("tenant_id");
       const params: Record<string, any> = {
         page,
         limit: PURCHASE_RETURNS_PAGE_SIZE,
       };
-      if (tenantId) params.tenant_id = tenantId;
 
       const response = await purchaseReturnService.getAll(params);
       console.log("Purchase Returns API Response:", response);

@@ -363,11 +363,23 @@ export function useReports({
         );
         const profit = totalSales - totalPurchases;
 
-        // Total transactions from timeseries counts
-        const transactions = timeseriesRaw.reduce(
+        // Total transactions from timeseries counts. If the backend timeseries
+        // does not include per-period `sales_count`, fall back to invoice
+        // page length so `summary.transactions` is not always zero.
+        let transactions = timeseriesRaw.reduce(
           (s: number, t: TimeSeriesPoint) => s + (Number(t.sales_count) || 0),
           0
         );
+
+        if (!transactions || transactions === 0) {
+          // Try to derive from invoices list (tenant-specific fallback)
+          try {
+            const invCount = Array.isArray(invoices) ? invoices.length : 0;
+            if (invCount && invCount > 0) transactions = invCount;
+          } catch (e) {
+            // keep transactions as-is (0) if anything fails
+          }
+        }
 
         const lowStock = inventory.filter((it) => {
           const qty = Number(it.quantity ?? 0);
