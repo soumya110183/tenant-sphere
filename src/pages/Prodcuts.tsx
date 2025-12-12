@@ -22,72 +22,11 @@ import {
 // API Configuration
 const API_BASE_URL = "https://billingbackend-1vei.onrender.com/api/products";
 
-// Helper function to get auth token
-const getAuthToken = () => {
-  return localStorage.getItem("auth_token") || "";
-};
+// Use centralized productService from services/api
+import { productService } from "../services/api";
 
-// API Service
-const productService = {
-  async getAll(search = "", limit = 100, offset = 0) {
-    const params = new URLSearchParams();
-    params.append("limit", String(limit));
-    // Backend expects a `page` (1-based). Convert offset -> page so search/pagination works.
-    const page = Math.floor(Number(offset || 0) / Number(limit || 1)) + 1;
-    params.append("page", String(page));
-    if (search) params.append("search", search);
-
-    const response = await fetch(`${API_BASE_URL}?${params}`, {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) throw new Error("Failed to fetch products");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async create(productData) {
-    const response = await fetch(API_BASE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(productData),
-    });
-    if (!response.ok) throw new Error("Failed to create product");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async update(id, productData) {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(productData),
-    });
-    if (!response.ok) throw new Error("Failed to update product");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async delete(id) {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) throw new Error("Failed to delete product");
-    return true;
-  },
-};
+// runtime holder for categories to avoid JSX prop typing friction
+let productModalCategories: any[] = [];
 
 // Product Stats Card Component (dynamic icon rendering, optional click)
 const ProductStatsCard = ({ stat, onClick = undefined }: any) => {
@@ -148,8 +87,8 @@ const ProductSearchFilter = ({
     >
       <option value="All">All Categories</option>
       {categories.map((cat) => (
-        <option key={cat} value={cat}>
-          {cat}
+        <option key={cat?.id ?? cat} value={cat?.name ?? cat}>
+          {cat?.name ?? cat}
         </option>
       ))}
     </select>
@@ -248,29 +187,28 @@ const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
 };
 
 // Product Modal Component
-const ProductModal = ({
-  showModal,
-  editingProduct,
-  formData,
-  setFormData,
-  onClose,
-  onSubmit,
-  isSubmitting,
-}) => {
+type ProductModalProps = {
+  showModal: any;
+  editingProduct?: any;
+  formData: any;
+  setFormData: any;
+  onClose: any;
+  onSubmit: any;
+  isSubmitting: any;
+  categories?: any[];
+};
+const ProductModal = (props: ProductModalProps) => {
+  const {
+    showModal,
+    editingProduct,
+    formData,
+    setFormData,
+    onClose,
+    onSubmit,
+    isSubmitting,
+  } = props;
+  const categories = (props as any).categories ?? productModalCategories;
   if (!showModal) return null;
-
-  const categories = [
-    "Grocery",
-    "Beverage",
-    "Dairy",
-    "Bakery",
-    "Personal Care",
-    "Household",
-    "Frozen Foods",
-    "Snacks",
-    "Baby Care",
-    "Health & Wellness",
-  ];
 
   const units = [
     "kg",
@@ -359,8 +297,11 @@ const ProductModal = ({
                   >
                     <option value="">Select Category</option>
                     {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
+                      <option
+                        key={cat && (cat.id ?? cat._id ?? cat.name ?? cat)}
+                        value={cat.name ?? cat}
+                      >
+                        {cat.name ?? cat}
                       </option>
                     ))}
                   </select>
@@ -659,14 +600,13 @@ const CategoryModal = ({
   onClose,
   onSubmit,
   isSubmitting,
-  categories = [],
 }) => {
   if (!showModal) return null;
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4">
       <div
-        className="bg-background rounded-lg w-full max-w-2xl max-h-[60vh] overflow-y-auto"
+        className="bg-background rounded-lg w-full max-w-lg max-h-[60vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
@@ -688,35 +628,10 @@ const CategoryModal = ({
               required
               className="w-full px-3 py-2 border rounded-md bg-background text-sm"
               value={formData.name || ""}
-              onChange={(e) => {
-                const name = e.target.value;
-                const gen = name
-                  .toLowerCase()
-                  .trim()
-                  .replace(/\s+/g, "-")
-                  .replace(/[^a-z0-9\-]/g, "");
-                setFormData({
-                  ...formData,
-                  name,
-                  slug: formData.slug ? formData.slug : gen,
-                });
-              }}
-              placeholder="Enter category name"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Slug / Code *
-            </label>
-            <input
-              required
-              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-              value={formData.slug || ""}
               onChange={(e) =>
-                setFormData({ ...formData, slug: e.target.value })
+                setFormData({ ...formData, name: e.target.value })
               }
-              placeholder="e.g., electronics"
+              placeholder="Enter category name"
             />
           </div>
 
@@ -735,99 +650,11 @@ const CategoryModal = ({
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Parent Category
-            </label>
-            <select
-              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-              value={formData.parent_id || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, parent_id: e.target.value })
-              }
-            >
-              <option value="">-- None --</option>
-              {categories.map((c) => (
-                <option key={c.id ?? c._id} value={c.id ?? c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Category Image
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  image:
-                    e.target.files && e.target.files[0]
-                      ? e.target.files[0]
-                      : null,
-                })
-              }
-              className="w-full text-sm"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                value={formData.status || "Active"}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">HSN Code</label>
-              <input
-                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                value={formData.hsn_code || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, hsn_code: e.target.value })
-                }
-                placeholder="e.g., 8517"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Display Order
-            </label>
-            <input
-              type="number"
-              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-              value={
-                formData.display_order != null ? formData.display_order : ""
-              }
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  display_order:
-                    e.target.value === "" ? "" : Number(e.target.value),
-                })
-              }
-            />
-          </div>
-
           <div className="flex gap-2 pt-4 border-t">
             <Button type="submit" className="flex-1" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...
                 </>
               ) : (
                 <>
@@ -874,20 +701,20 @@ const ErrorAlert = ({ message, onClose }) => (
 
 // Main Product Catalog Component
 const ProductCatalog = () => {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [categoryForm, setCategoryForm] = useState({});
-  const [categoriesList, setCategoriesList] = useState([]);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [formData, setFormData] = useState<any>({});
+  const [categoryForm, setCategoryForm] = useState<any>({});
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Load products on component mount
   useEffect(() => {
@@ -911,8 +738,17 @@ const ProductCatalog = () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await productService.getAll(search);
-      setProducts(data);
+      // centralized productService.getAll() returns all products
+      const data = await productService.getAll();
+      // if a search term is provided, filter client-side (name match)
+      const filtered = search
+        ? data.filter((p) =>
+            String(p?.name || "")
+              .toLowerCase()
+              .includes(search.toLowerCase())
+          )
+        : data;
+      setProducts(filtered);
     } catch (err) {
       console.error("Error loading products:", err);
       setError(
@@ -965,16 +801,7 @@ const ProductCatalog = () => {
   };
 
   const openCategoryModal = () => {
-    setCategoryForm({
-      name: "",
-      slug: "",
-      description: "",
-      parent_id: "",
-      status: "Active",
-      hsn_code: "",
-      display_order: 0,
-      image: null,
-    });
+    setCategoryForm({ name: "", description: "" });
     setShowCategoryModal(true);
   };
 
@@ -985,62 +812,41 @@ const ProductCatalog = () => {
 
   const handleCategorySave = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    // basic validation
-    if (!categoryForm.name || !categoryForm.name.trim()) return;
-    if (!categoryForm.slug || !categoryForm.slug.trim()) return;
+    if (!categoryForm.name || !String(categoryForm.name).trim()) {
+      setError("Category name is required");
+      return;
+    }
+
     setIsCategorySubmitting(true);
     try {
       const apiRoot = API_BASE_URL.replace(/\/api\/products\/?$/, "");
-      let res;
-      // If image attached, send as multipart/form-data
-      if (categoryForm.image) {
-        const fd = new FormData();
-        fd.append("name", categoryForm.name);
-        fd.append("slug", categoryForm.slug);
-        fd.append("description", categoryForm.description || "");
-        if (categoryForm.parent_id)
-          fd.append("parent_id", String(categoryForm.parent_id));
-        fd.append("status", categoryForm.status || "Active");
-        if (categoryForm.hsn_code) fd.append("hsn_code", categoryForm.hsn_code);
-        if (categoryForm.display_order != null)
-          fd.append("display_order", String(categoryForm.display_order));
-        fd.append("image", categoryForm.image);
-        res = await fetch(`${apiRoot}/api/categories`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-          },
-          body: fd,
-        });
-      } else {
-        res = await fetch(`${apiRoot}/api/categories`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: categoryForm.name,
-            slug: categoryForm.slug,
-            description: categoryForm.description || "",
-            parent_id: categoryForm.parent_id || undefined,
-            status: categoryForm.status || "Active",
-            hsn_code: categoryForm.hsn_code || undefined,
-            display_order:
-              categoryForm.display_order != null
-                ? Number(categoryForm.display_order)
-                : undefined,
-          }),
-        });
-      }
+      const payload = {
+        name: categoryForm.name,
+        description: categoryForm.description || "",
+      };
 
+      const res = await fetch(`${apiRoot}/api/categories`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const j = await res.json().catch(() => null);
       if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        throw new Error(j?.message || "Failed to create category");
+        throw new Error(j?.message || j?.error || "Failed to create category");
       }
 
-      // refresh categories and close
+      const newCategory = j?.data || j;
       await loadCategories();
+      if (newCategory && newCategory.name) {
+        setFormData((prev) => ({
+          ...(prev || {}),
+          category: newCategory.name,
+        }));
+      }
       closeCategoryModal();
     } catch (err) {
       console.error("Create category failed:", err);
@@ -1053,13 +859,25 @@ const ProductCatalog = () => {
   const loadCategories = async () => {
     try {
       const apiRoot = API_BASE_URL.replace(/\/api\/products\/?$/, "");
-      const res = await fetch(`${apiRoot}/api/categories`);
-      if (res.ok) {
-        const j = await res.json();
-        setCategoriesList(j.data || j || []);
+      const res = await fetch(`${apiRoot}/api/categories`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
+      });
+      if (!res.ok) {
+        console.warn("Failed to fetch categories", res.status);
+        return;
       }
+      const j = await res.json().catch(() => null);
+      const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+      const normalized = list.map((c) => ({
+        id: c.id ?? c._id ?? c.id,
+        name: c.name ?? c,
+        description: c.description ?? "",
+      }));
+      setCategoriesList(normalized);
     } catch (e) {
-      // ignore
+      console.warn("loadCategories error:", e);
     }
   };
 
@@ -1166,9 +984,17 @@ const ProductCatalog = () => {
     },
   ];
 
+  // build category filter options from backend categoriesList when available
+  const derivedCategoriesFromList = (categoriesList || [])
+    .map((c) => c?.name)
+    .filter(Boolean);
   const categories = [
     "All",
-    ...new Set(products.map((p) => p.category).filter(Boolean)),
+    ...new Set(
+      derivedCategoriesFromList.length > 0
+        ? derivedCategoriesFromList
+        : products.map((p) => p.category).filter(Boolean)
+    ),
   ];
 
   const filteredProducts = products.filter((product) => {
@@ -1295,6 +1121,11 @@ const ProductCatalog = () => {
       </div>
 
       {/* Product Modal */}
+      {/* expose categories to the modal via runtime holder to avoid JSX prop typing friction */}
+      {(() => {
+        productModalCategories = categoriesList || [];
+        return null;
+      })()}
       <ProductModal
         showModal={showModal}
         editingProduct={editingProduct}
@@ -1313,7 +1144,6 @@ const ProductCatalog = () => {
         onClose={closeCategoryModal}
         onSubmit={handleCategorySave}
         isSubmitting={isCategorySubmitting}
-        categories={categoriesList}
       />
     </div>
   );

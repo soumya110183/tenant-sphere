@@ -1,6 +1,6 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import axios from "axios";
+import { supplierService } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import {
   Search,
@@ -18,8 +18,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 interface Supplier {
   id?: number;
@@ -209,11 +207,8 @@ const SupplierPage: FC = () => {
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await axios.get(`${API_BASE}/api/suppliers`, {
-        params: { search: q },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSuppliers(resp.data.data ?? []);
+      const list = await supplierService.list(q);
+      setSuppliers(list ?? []);
     } catch (err) {
       console.error("Failed to fetch suppliers", err);
     } finally {
@@ -261,13 +256,9 @@ const SupplierPage: FC = () => {
 
     try {
       if (editingId) {
-        await axios.put(`${API_BASE}/api/suppliers/${editingId}`, form, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await supplierService.update(editingId, form);
       } else {
-        await axios.post(`${API_BASE}/api/suppliers`, form, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await supplierService.create(form);
       }
       setModalOpen(false);
       fetchSuppliers();
@@ -285,9 +276,7 @@ const SupplierPage: FC = () => {
     setDeleting(id);
 
     try {
-      await axios.delete(`${API_BASE}/api/suppliers/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await supplierService.delete(id);
       fetchSuppliers();
     } finally {
       setDeleting(null);

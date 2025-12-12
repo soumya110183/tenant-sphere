@@ -818,10 +818,39 @@ export const plansAPI = planAPI;
 // PRODUCTS API
 // ===============================
 export const productService = {
-  getAll: async () => (await api.get("/api/products")).data,
+  // getAll supports optional query params: { search, page, limit }
+  getAll: async (params: Record<string, any> = {}) => {
+    const res = await api.get("/api/products", { params });
+    const payload = res.data;
+    // Normalize to always return an array of products
+    return payload?.data ?? (Array.isArray(payload) ? payload : []);
+  },
+
   getById: async (id) => (await api.get(`/api/products/${id}`)).data,
-  create: async (data) => (await api.post("/api/products", data)).data,
-  update: async (id, data) => (await api.put(`/api/products/${id}`, data)).data,
+
+  // create/update accept either JSON or FormData (for images)
+  create: async (data) => {
+    if (typeof FormData !== "undefined" && data instanceof FormData) {
+      const res = await api.post("/api/products", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res.data;
+    }
+    const res = await api.post("/api/products", data);
+    return res.data;
+  },
+
+  update: async (id, data) => {
+    if (typeof FormData !== "undefined" && data instanceof FormData) {
+      const res = await api.put(`/api/products/${id}`, data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res.data;
+    }
+    const res = await api.put(`/api/products/${id}`, data);
+    return res.data;
+  },
+
   delete: async (id) => (await api.delete(`/api/products/${id}`)).data,
 };
 
@@ -944,6 +973,16 @@ export const supplierService = {
     return (await api.get("/api/suppliers", { params })).data;
   },
 
+  // Normalized list: always returns an array of supplier objects
+  list: async (search = "") => {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    const res = await api.get("/api/suppliers", { params });
+    const payload = res.data;
+    // backend may return { data: [...] } or an array directly
+    return payload?.data ?? payload ?? [];
+  },
+
   // Get single supplier detail
   getById: async (id) => (await api.get(`/api/suppliers/${id}`)).data,
 
@@ -961,6 +1000,55 @@ export const supplierService = {
 // ===============================
 // EMPLOYEE API
 // ===============================
+// ===============================
+// CUSTOMER API
+// ===============================
+export const customerService = {
+  // list customers, supports pagination and search
+  list: async ({ page = 1, limit = 50, search = "" } = {}) => {
+    if (search && String(search).trim().length > 0) {
+      const res = await api.get(
+        `/api/customers/search/${encodeURIComponent(String(search))}`
+      );
+      const payload = res.data;
+      const data = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : payload?.data ?? [];
+      return { data, total: payload?.total ?? data.length };
+    }
+
+    const res = await api.get("/api/customers", { params: { page, limit } });
+    const payload = res.data;
+    const data = payload?.data ?? (Array.isArray(payload) ? payload : []);
+    return {
+      data,
+      total: payload?.total ?? payload?.totalRecords ?? data.length,
+    };
+  },
+
+  getById: async (id: string | number) => {
+    const res = await api.get(`/api/customers/${id}`);
+    return res.data;
+  },
+
+  create: async (payload: any) => {
+    const res = await api.post(`/api/customers`, payload);
+    return res.data;
+  },
+
+  update: async (id: string | number, payload: any) => {
+    const res = await api.put(`/api/customers/${id}`, payload);
+    return res.data;
+  },
+
+  delete: async (id: string | number) => {
+    const res = await api.delete(`/api/customers/${id}`);
+    return res.data;
+  },
+};
+
 export const employeeService = {
   // Get all employees
   getAll: async (params: Record<string, any> = {}) =>
