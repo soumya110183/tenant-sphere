@@ -2317,8 +2317,11 @@ const GroceryInventory = () => {
   const loadProducts = async () => {
     try {
       const data = await productService.getAll();
-      console.log("Product catalog loaded:", data.data);
-      setProductCatalog(data.data || []);
+      // productService.getAll normalizes and returns an array, but some callers
+      // may return an object with a `data` property. Handle both shapes.
+      const catalog = data?.data ?? data ?? [];
+      console.log("Product catalog loaded:", catalog);
+      setProductCatalog(Array.isArray(catalog) ? catalog : []);
     } catch (error) {
       console.error("Error loading products:", error);
       setProductCatalog([]);
