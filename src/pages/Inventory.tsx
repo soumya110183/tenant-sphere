@@ -2216,7 +2216,7 @@ const GroceryInventory = () => {
         try {
           const token = localStorage.getItem("auth_token");
           const fallbackResp = await fetch(
-            "https://billingbackend-1vei.onrender.com/api/sales_returns",
+            "http://localhost:5000/api/sales_returns",
             {
               headers: {
                 "Content-Type": "application/json",

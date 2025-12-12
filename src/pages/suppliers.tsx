@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 interface Supplier {
   id?: number;

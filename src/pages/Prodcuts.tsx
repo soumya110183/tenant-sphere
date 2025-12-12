@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 // API Configuration
-const API_BASE_URL = "https://billingbackend-1vei.onrender.com/api/products";
+const API_BASE_URL = "http://localhost:5000/api/products";
 
 // Helper function to get auth token
 const getAuthToken = () => {

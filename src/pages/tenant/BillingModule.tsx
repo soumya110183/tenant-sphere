@@ -8,7 +8,7 @@ import { RedeemPointsPopup } from "@/components/billingComponent/RedeemPointsPop
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, useCallback } from "react";
 
-const API_BASE = "https://billingbackend-1vei.onrender.com";
+const API_BASE = "http://localhost:5000";
 
 // =============================================
 // TYPES

@@ -10,7 +10,7 @@ const LoyaltySettings = () => {
   const [pointsPerCurrency, setPointsPerCurrency] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = "https://billingbackend-1vei.onrender.com";
+  const API_BASE = "http://localhost:5000";
 
   useEffect(() => {
     fetchActiveRule();
