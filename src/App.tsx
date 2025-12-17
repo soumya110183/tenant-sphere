@@ -198,6 +198,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="report/profit"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
                     path="report/purchases"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>

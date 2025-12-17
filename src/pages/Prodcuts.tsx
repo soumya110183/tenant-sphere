@@ -290,9 +290,19 @@ const ProductModal = (props: ProductModalProps) => {
                   <select
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                     value={formData.category || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      const catObj = (categories || []).find(
+                        (c) => (c?.name ?? c) === selected
+                      );
+                      setFormData({
+                        ...formData,
+                        category: selected,
+                        category_id: catObj
+                          ? catObj.id ?? catObj._id ?? catObj
+                          : undefined,
+                      });
+                    }}
                     disabled={isSubmitting}
                   >
                     <option value="">Select Category</option>
@@ -715,39 +725,85 @@ const ProductCatalog = () => {
   const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [productsPage, setProductsPage] = useState(1);
+  const [PRODUCTS_PAGE_SIZE] = useState(10);
+  const [productsTotalRecords, setProductsTotalRecords] = useState(0);
+  const [productsTotalPages, setProductsTotalPages] = useState(1);
+  const [jumpInput, setJumpInput] = useState<string>(String(productsPage));
 
   // Load products on component mount
   useEffect(() => {
     loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounced search effect
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm) {
-        loadProducts(searchTerm);
-      } else {
-        loadProducts();
-      }
+      setProductsPage(1);
+      loadProducts(searchTerm, 1);
     }, 500);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
-  const loadProducts = async (search = "") => {
+  // Reload when page changes
+  useEffect(() => {
+    loadProducts(searchTerm, productsPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsPage]);
+
+  const loadProducts = async (search = "", page = 1) => {
     try {
       setIsLoading(true);
       setError(null);
       // centralized productService.getAll() returns all products
-      const data = await productService.getAll();
+      const params: Record<string, any> = { page, limit: PRODUCTS_PAGE_SIZE };
+      if (search) params.search = search;
+      const data = await productService.getAll(params);
+      // support both shapes: array or { data: [...], meta... }
+      const rawProducts: any[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+      // extract total records/pages when available (support Supabase controller fields)
+      let total =
+        Number(
+          data?.totalRecords ??
+            data?.meta?.total ??
+            data?.total ??
+            data?.pagination?.total ??
+            0
+        ) || 0;
+      // fallback to array length when backend returns plain array (no pagination meta)
+      if (!total) total = rawProducts.length;
+
+      const totalPages =
+        Number(
+          data?.totalPages ??
+            data?.meta?.last_page ??
+            Math.max(1, Math.ceil(total / PRODUCTS_PAGE_SIZE))
+        ) || Math.max(1, Math.ceil(total / PRODUCTS_PAGE_SIZE));
+
+      // if backend provided page info, reflect it (keeps UI in sync)
+      const backendPage =
+        Number(data?.page ?? data?.currentPage ?? page) || page;
+
+      setProductsTotalRecords(total);
+      setProductsTotalPages(totalPages);
+      setProductsPage(backendPage);
+
       // if a search term is provided, filter client-side (name match)
       const filtered = search
-        ? data.filter((p) =>
+        ? rawProducts.filter((p) =>
             String(p?.name || "")
               .toLowerCase()
               .includes(search.toLowerCase())
           )
-        : data;
+        : rawProducts;
       setProducts(filtered);
     } catch (err) {
       console.error("Error loading products:", err);
@@ -767,6 +823,11 @@ const ProductCatalog = () => {
         name: product.name,
         brand: product.brand,
         category: product.category,
+        category_id:
+          product.category_id ??
+          product.categoryId ??
+          categoriesList.find((c) => (c.name ?? c) === product.category)?.id ??
+          undefined,
         unit: product.unit,
         cost_price: product.cost_price,
         selling_price: product.selling_price,
@@ -784,6 +845,7 @@ const ProductCatalog = () => {
         name: "",
         brand: "",
         category: "",
+        category_id: undefined,
         unit: "",
         cost_price: 0,
         selling_price: 0,
@@ -845,6 +907,11 @@ const ProductCatalog = () => {
         setFormData((prev) => ({
           ...(prev || {}),
           category: newCategory.name,
+          category_id:
+            newCategory.id ??
+            newCategory._id ??
+            newCategory.category_id ??
+            undefined,
         }));
       }
       closeCategoryModal();
@@ -899,8 +966,27 @@ const ProductCatalog = () => {
       setError(null);
 
       let result;
+      // Ensure payload always includes both category name and category_id
+      const resolvedCategoryId =
+        formData.category_id ??
+        categoriesList.find((c) => (c.name ?? c) === formData.category)?.id ??
+        categoriesList.find((c) => c.id === formData.category)?.id;
+
+      const resolvedCategoryName =
+        formData.category ||
+        (categoriesList.find((c) => c.id === formData.category_id)?.name ??
+          categoriesList.find((c) => c.id === resolvedCategoryId)?.name);
+
+      const payload = {
+        ...formData,
+        category: resolvedCategoryName || formData.category || "",
+        category_id: resolvedCategoryId ?? formData.category_id ?? undefined,
+        // include alias in case backend expects `categoryId`
+        categoryId: resolvedCategoryId ?? formData.category_id ?? undefined,
+      };
+
       if (editingProduct) {
-        result = await productService.update(editingProduct.id, formData);
+        result = await productService.update(editingProduct.id, payload);
         // Update existing product in state
         setProducts((prevProducts) =>
           prevProducts.map((p) =>
@@ -910,7 +996,7 @@ const ProductCatalog = () => {
           )
         );
       } else {
-        result = await productService.create(formData);
+        result = await productService.create(payload);
         // Add new product to state
         setProducts((prevProducts) => [
           ...prevProducts,
@@ -1118,6 +1204,117 @@ const ProductCatalog = () => {
             )}
           </CardContent>
         </Card>
+        {productsTotalRecords > PRODUCTS_PAGE_SIZE && (
+          <div className="flex items-center justify-between mt-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProductsPage(Math.max(1, productsPage - 1))}
+                disabled={productsPage === 1}
+              >
+                Prev
+              </Button>
+
+              <span className="text-sm text-gray-500">
+                Page {productsPage} of {productsTotalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setProductsPage(
+                    Math.min(productsPage + 1, productsTotalPages)
+                  )
+                }
+                disabled={productsPage >= productsTotalPages}
+              >
+                Next
+              </Button>
+
+              {/* Jump to page input */}
+              <div className="flex items-center gap-2 ml-3">
+                <input
+                  type="text"
+                  placeholder="page or 'next'/'prev'"
+                  value={jumpInput}
+                  onChange={(e) => setJumpInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = (jumpInput || "")
+                        .toString()
+                        .trim()
+                        .toLowerCase();
+                      if (v === "next" || v === "n") {
+                        setProductsPage((p) =>
+                          Math.min(p + 1, productsTotalPages)
+                        );
+                      } else if (
+                        v === "prev" ||
+                        v === "previous" ||
+                        v === "p"
+                      ) {
+                        setProductsPage((p) => Math.max(1, p - 1));
+                      } else {
+                        const num = Number(v);
+                        if (!isNaN(num) && num >= 1) {
+                          setProductsPage(
+                            Math.min(
+                              Math.max(1, Math.floor(num)),
+                              productsTotalPages
+                            )
+                          );
+                        }
+                      }
+                    }
+                  }}
+                  className="w-36 px-2 py-1 border rounded text-sm"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const v = (jumpInput || "").toString().trim().toLowerCase();
+                    if (v === "next" || v === "n") {
+                      setProductsPage((p) =>
+                        Math.min(p + 1, productsTotalPages)
+                      );
+                    } else if (v === "prev" || v === "previous" || v === "p") {
+                      setProductsPage((p) => Math.max(1, p - 1));
+                    } else {
+                      const num = Number(v);
+                      if (!isNaN(num) && num >= 1) {
+                        setProductsPage(
+                          Math.min(
+                            Math.max(1, Math.floor(num)),
+                            productsTotalPages
+                          )
+                        );
+                      }
+                    }
+                  }}
+                >
+                  Go
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              Showing{" "}
+              {Math.min(
+                (productsPage - 1) * PRODUCTS_PAGE_SIZE + 1,
+                productsTotalRecords
+              )}
+              -
+              {Math.min(
+                productsPage * PRODUCTS_PAGE_SIZE,
+                productsTotalRecords
+              )}{" "}
+              of {productsTotalRecords}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product Modal */}

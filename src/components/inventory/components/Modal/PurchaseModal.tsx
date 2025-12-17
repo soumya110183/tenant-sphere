@@ -168,23 +168,16 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Cost Price (AED) *
+                      Cost Price (AED)
                     </label>
                     <input
                       type="number"
                       required
                       min="0"
-                      step="1"
+                      step="0.01"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={pp.cost_price ?? ""}
-                      onChange={(e) => {
-                        const updated = [...purchaseProducts];
-                        updated[idx].cost_price =
-                          e.target.value === ""
-                            ? ""
-                            : parseFloat(e.target.value) || 0;
-                        setPurchaseProducts(updated);
-                      }}
+                      value={pp.cost_price ?? 0}
+                      readOnly
                     />
                   </div>
                 </div>

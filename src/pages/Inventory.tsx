@@ -131,6 +131,20 @@ const Modal = ({
 }) => {
   if (!showModal) return null;
 
+  console.log("modal:", productCatalog);
+  // const [productCatalog,setProductCatalog] = useState([]);
+
+  // Purchased products (for purchase return flow) derived from selected purchase
+  const [purchaseReturnProducts, setPurchaseReturnProducts] = useState<any[]>(
+    []
+  );
+
+  // Sales-return invoice search (modal-local) using invoices API and optional api key
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [selectedInvoiceLocal, setSelectedInvoiceLocal] = useState<any>(null);
+
   // Helper: compute refund lines & total for sales return modal
   let selectedSale: any = null;
   let refundComputation: {
@@ -142,9 +156,15 @@ const Modal = ({
   }[] = [];
   let totalRefund = 0;
   if (modalType === "salesReturn" && formData.originalSaleId) {
-    selectedSale = sales.find(
+    // Resolve selected invoice from (1) loaded `sales`, (2) recent `invoiceResults`, or (3) local selected invoice
+    const foundInSales = sales.find(
       (s: any) => String(s.id) === String(formData.originalSaleId)
     );
+    const foundInResults = invoiceResults.find(
+      (r) => String(r.id) === String(formData.originalSaleId)
+    )?.raw;
+    selectedSale = foundInSales || foundInResults || selectedInvoiceLocal;
+
     refundComputation = (returnItems || [])
       .filter((r) => r.productId && r.qty)
       .map((ri: any) => {
@@ -174,13 +194,46 @@ const Modal = ({
         };
       });
   }
-  console.log("modal:", productCatalog);
-  // const [productCatalog,setProductCatalog] = useState([]);
 
-  // Purchased products (for purchase return flow) derived from selected purchase
-  const [purchaseReturnProducts, setPurchaseReturnProducts] = useState<any[]>(
-    []
-  );
+  const searchInvoices = async (q: string) => {
+    try {
+      setInvoiceLoading(true);
+      setInvoiceResults([]);
+      const tenantId = localStorage.getItem("tenant_id");
+      const apiKey = localStorage.getItem("search_api_key") || undefined;
+      const params: Record<string, any> = {
+        search: q || "",
+        limit: 20,
+        page: 1,
+      };
+      if (tenantId) params.tenant_id = tenantId;
+      if (apiKey) params.api_key = apiKey;
+      const resp = await invoiceService.getAll(params);
+      const data = resp?.data ?? resp;
+      let raw: any[] = [];
+      if (data && Array.isArray(data.data)) raw = data.data;
+      else if (data && Array.isArray(data.invoices)) raw = data.invoices;
+      else if (Array.isArray(data)) raw = data;
+
+      const mapped = raw.map((s: any) => ({
+        id: s.id ?? s._id ?? s.number,
+        invoice_number: s.invoice_number ?? s.number ?? s.id,
+        created_at: s.created_at ?? s.date ?? s.invoice_date,
+        total_amount: Number(s.total_amount ?? s.total ?? s.final_amount ?? 0),
+        customer_name:
+          s.customer_name || s.customers?.name || s.customer?.name || "",
+        invoice_items: s.invoice_items ?? s.items ?? s.lines ?? [],
+        raw: s,
+      }));
+
+      setInvoiceResults(mapped.slice(0, 50));
+    } catch (err) {
+      console.error("Invoice search failed:", err);
+      setInvoiceResults([]);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
   useEffect(() => {
     if (modalType !== "purchaseReturn") return;
     const purchaseId = formData.purchaseId;
@@ -662,24 +715,94 @@ const Modal = ({
                     Select Original Invoice *
                   </label>
 
-                  {/* Searchable invoice picker: input + results list */}
-                  <InvoicePicker
-                    sales={sales}
-                    value={formData.originalSaleId}
-                    onSelect={(id) => {
-                      setFormData({ ...formData, originalSaleId: id });
-                      setReturnItems([]);
-                    }}
-                  />
+                  {/* Searchable invoice picker: calls invoices API (supports api key via localStorage 'search_api_key') */}
+                  <div>
+                    <div className="flex items-center w-full sm:w-64">
+                      <input
+                        type="search"
+                        value={invoiceQuery}
+                        onChange={(e) => setInvoiceQuery(e.target.value)}
+                        placeholder="Search invoices by number, customer, or product"
+                        className="flex-1 px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => searchInvoices(invoiceQuery)}
+                        className="ml-2 flex-shrink-0 flex items-center px-3"
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        <span className="hidden sm:inline">Search</span>
+                      </Button>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border rounded-md bg-white mt-2">
+                      {invoiceLoading ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Searching...
+                        </div>
+                      ) : invoiceResults.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No invoices
+                        </div>
+                      ) : (
+                        invoiceResults.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              const idStr = String(s.id);
+                              setFormData({
+                                ...formData,
+                                originalSaleId: idStr,
+                              });
+                              // keep a local copy of the selected invoice from search results
+                              setSelectedInvoiceLocal(s.raw || s);
+                              setReturnItems([]);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-muted/30 text-sm flex justify-between items-center"
+                          >
+                            <div>
+                              <div className="font-medium">
+                                Invoice #{s.invoice_number}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {s.created_at
+                                  ? new Date(s.created_at).toLocaleDateString(
+                                      "en-GB",
+                                      { day: "2-digit", month: "short" }
+                                    )
+                                  : "N/A"}
+                                {s.customer_name ? ` • ${s.customer_name}` : ""}
+                              </div>
+                            </div>
+                            <div className="text-sm font-semibold">
+                              AED {Number(s.total_amount || 0).toFixed(2)}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Step 2: Show Invoice Items if invoice selected */}
                 {formData.originalSaleId &&
                   (() => {
-                    const selectedInvoice = sales.find(
-                      (s) => String(s.id) === String(formData.originalSaleId)
-                    );
-                    const invoiceItems = selectedInvoice?.invoice_items || [];
+                    // try to resolve the selected invoice from multiple sources:
+                    // 1) `sales` prop (loaded list), 2) local invoiceResults search, 3) selectedInvoiceLocal
+                    const selectedInvoice =
+                      sales.find(
+                        (s) => String(s.id) === String(formData.originalSaleId)
+                      ) ||
+                      invoiceResults.find(
+                        (r) => String(r.id) === String(formData.originalSaleId)
+                      )?.raw ||
+                      selectedInvoiceLocal;
+
+                    const invoiceItems =
+                      selectedInvoice?.invoice_items ||
+                      selectedInvoice?.items ||
+                      [];
 
                     return invoiceItems.length > 0 ? (
                       <div className="border rounded-lg p-4 bg-muted/20">
@@ -2679,8 +2802,67 @@ const GroceryInventory = () => {
     setIsLoading(true); // Start loading
     try {
       const data = await inventoryService.getAll();
-      console.log("inventory data:", data.data);
-      const items = data.data || [];
+      // backend may return { data: [...] } or an array directly
+      const raw = data?.data ?? (Array.isArray(data) ? data : []);
+
+      // Normalize inventory item shape to what StockView expects
+      const items = raw.map((it: any, idx: number) => {
+        const productObj = it.products ?? it.product ?? {};
+
+        const categoryName =
+          (it.categories &&
+            (it.categories.name ??
+              (Array.isArray(it.categories) && it.categories[0]?.name))) ||
+          productObj.categories?.name ||
+          productObj.category ||
+          it.category ||
+          "Uncategorized";
+
+        const name = it.name ?? productObj.name ?? it.product_name ?? "";
+        const brand = it.brand ?? productObj.brand ?? "";
+        const unit = it.unit ?? productObj.unit ?? "";
+        const quantity = Number(it.quantity ?? it.qty ?? it.available ?? 0);
+        const reorderLevel = Number(
+          it.reorderLevel ?? it.reorder_level ?? it.reorder ?? 0
+        );
+        const maxStock = Number(it.maxStock ?? it.max_stock ?? it.max ?? 0);
+        const cost_price = Number(
+          it.cost_price ??
+            it.costPrice ??
+            productObj.cost_price ??
+            productObj.unit_cost ??
+            0
+        );
+        const selling_price = Number(
+          it.selling_price ??
+            it.sellingPrice ??
+            productObj.selling_price ??
+            productObj.price ??
+            0
+        );
+        const expiryDate = it.expiryDate ?? it.expiry_date ?? it.expiry ?? "";
+
+        return {
+          // canonical ids
+          id: it.id ?? it.product_id ?? productObj.id ?? `inv-${idx}`,
+          product_id: it.product_id ?? productObj.id ?? undefined,
+          // normalized display fields
+          name,
+          brand,
+          category: categoryName,
+          unit,
+          quantity,
+          reorderLevel,
+          maxStock,
+          cost_price,
+          selling_price,
+          expiryDate,
+          sku: it.sku ?? productObj.sku ?? "",
+          // include raw payload for any downstream needs
+          _raw: it,
+        } as any;
+      });
+
       setBaseInventory(items);
       setProducts(items); // initial view before derived recompute
     } catch (error) {
@@ -2990,13 +3172,17 @@ const GroceryInventory = () => {
       case "salesReturn":
         try {
           setSubmitting(true);
+          // Accept multiple possible shapes for returnItems (qty/quantity, productId/product_id, reason/return_reason)
           const itemsPayload = (returnItems || [])
-            .filter((it) => it.productId && it.qty)
             .map((it) => ({
-              product_id: parseInt(it.productId),
-              quantity: parseInt(String(it.qty || 0)),
-              reason: it.reason || "",
-            }));
+              product_id:
+                parseInt(
+                  it.productId ?? it.product_id ?? it.product?.id ?? ""
+                ) || undefined,
+              quantity: parseInt(String(it.qty ?? it.quantity ?? 0)) || 0,
+              reason: it.reason ?? it.return_reason ?? it.refund_reason ?? "",
+            }))
+            .filter((it) => it.product_id && it.quantity > 0);
 
           if (!formData.originalSaleId) {
             toast({
@@ -3091,6 +3277,11 @@ const GroceryInventory = () => {
                 String(ii.product_id) === String(it.product_id) ||
                 String(ii.products?.id) === String(it.product_id)
             );
+            const productMatch = products.find(
+              (p: any) =>
+                String(p.product_id) === String(it.product_id) ||
+                String(p.id) === String(it.product_id)
+            );
             const netPriceRaw =
               invoiceItemMatch?.net_price ??
               invoiceItemMatch?.price ??
@@ -3099,18 +3290,68 @@ const GroceryInventory = () => {
                 ? invoiceItemMatch.total / invoiceItemMatch.quantity
                 : 0);
             const netPrice = Number(netPriceRaw) || 0;
+            const taxPercent = Number(
+              invoiceItemMatch?.tax_percent ?? invoiceItemMatch?.tax ?? 0
+            );
             const lineRefund = netPrice * it.quantity;
             return {
               product_id: it.product_id,
+              product_name:
+                productMatch?.name ||
+                invoiceItemMatch?.products?.name ||
+                `Product #${it.product_id}`,
+              sku: productMatch?.sku || invoiceItemMatch?.products?.sku || "",
               quantity: it.quantity,
+              unit_price: Number(netPrice.toFixed(2)),
+              tax_percent: taxPercent,
+              // include multiple reason key variants for backend compatibility
               reason: it.reason || "",
+              return_reason: it.reason || "",
+              refund_reason: it.reason || "",
               total_refund: Number(lineRefund.toFixed(2)),
+              line_total: Number(lineRefund.toFixed(2)),
             };
           });
 
+          console.log(
+            "itemsForPayload:",
+            JSON.stringify(itemsForPayload, null, 2)
+          );
+
+          const totalRefundSum = itemsForPayload.reduce(
+            (s: number, it: any) => s + (Number(it.total_refund) || 0),
+            0
+          );
+
           const payload = {
             invoice_id: parseInt(formData.originalSaleId),
+            invoice_number:
+              selectedSaleForSubmit?.invoice_number ||
+              selectedSaleForSubmit?.number ||
+              null,
+            customer_id:
+              selectedSaleForSubmit?.customer_id ||
+              selectedSaleForSubmit?.customer?.id ||
+              selectedSaleForSubmit?.customers?.id ||
+              null,
             items: itemsForPayload,
+            // overall totals for convenience / compatibility
+            total_refund: Number(totalRefundSum.toFixed(2)),
+            refund_amount: Number(totalRefundSum.toFixed(2)),
+            // include a top-level reason and refund_type for backends that expect them
+            reason:
+              (itemsForPayload &&
+                itemsForPayload.length === 1 &&
+                itemsForPayload[0].reason) ||
+              formData.reason ||
+              (itemsForPayload || [])
+                .map((i: any) => i.reason)
+                .filter(Boolean)
+                .join("; ") ||
+              "",
+            refund_type: formData.refundType || formData.refund_type || "cash",
+            processed_by: user?.id ?? user?.user_id ?? null,
+            created_by: user?.id ?? null,
             ...(tenantId ? { tenant_id: tenantId } : {}),
           };
 
