@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Save } from "lucide-react";
+import { inventoryService } from "@/services/api";
 
 interface PurchaseModalProps {
   formData: any;
@@ -30,6 +31,53 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
     purchaseProducts,
     productCatalogLength: productCatalog?.length,
   });
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const doSearch = async (q?: string) => {
+    const term = ((q ?? query) || "").trim();
+    if (!term) return setResults([]);
+    try {
+      setLoading(true);
+      const resp = await inventoryService.getAll({
+        search: term,
+        limit: 50,
+        page: 1,
+      });
+      const data = resp?.data ?? resp ?? [];
+      // normalize possible shapes
+      let raw: any[] = [];
+      if (Array.isArray(data)) raw = data;
+      else if (Array.isArray(resp?.data)) raw = resp.data;
+      else if (Array.isArray(resp?.results)) raw = resp.results;
+      else if (Array.isArray(resp?.items)) raw = resp.items;
+      else if (Array.isArray(resp?.data?.data)) raw = resp.data.data;
+      // sort by simple relevance score based on the search term
+      const score = (p: any) => {
+        const t = term.toLowerCase();
+        const name = (p.name || "").toLowerCase();
+        const sku = (p.sku || "").toLowerCase();
+        const barcode = (p.barcode || "").toLowerCase();
+        let s = 0;
+        if (name === t) s += 100;
+        if (name.startsWith(t)) s += 50;
+        if (name.includes(t)) s += 20;
+        if (sku === t || barcode === t) s += 40;
+        if (sku.includes(t) || barcode.includes(t)) s += 10;
+        return s;
+      };
+
+      const sorted = (raw || []).slice().sort((a, b) => score(b) - score(a));
+      setResults(sorted.slice(0, 50));
+    } catch (err) {
+      console.error("Inventory search failed:", err);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-4">
@@ -114,14 +162,41 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                     <label className="block text-sm font-medium mb-1">
                       Product *
                     </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="search"
+                        placeholder="Search product by name, SKU or barcode"
+                        className="flex-1 px-3 py-2 border rounded-md bg-background text-sm"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            doSearch();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => doSearch()}
+                      >
+                        {loading ? "Searching..." : "Search"}
+                      </Button>
+                    </div>
+
                     <select
                       required
-                      className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                      className="w-full mt-2 px-3 py-2 border rounded-md bg-background text-sm"
                       value={pp.product_id ?? ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         const parsedId = val === "" ? "" : parseInt(val);
-                        const selectedProduct = (productCatalog || []).find(
+                        const pool =
+                          (results && results.length
+                            ? results
+                            : productCatalog) || [];
+                        const selectedProduct = pool.find(
                           (p) => p.id === parsedId
                         );
                         const updated = [...purchaseProducts];
@@ -129,18 +204,53 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                           parsedId === "" ? "" : parsedId;
                         if (selectedProduct) {
                           updated[idx].cost_price =
-                            selectedProduct.cost_price || 0;
+                            selectedProduct.cost_price ||
+                            selectedProduct.unit_cost ||
+                            0;
                         }
                         setPurchaseProducts(updated);
                       }}
                     >
                       <option value="">Select Product</option>
-                      {(productCatalog || []).map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} - {product.brand} - AED{" "}
-                          {product.cost_price} per {product.unit}
-                        </option>
-                      ))}
+                      {(() => {
+                        const pool = (
+                          results && results.length
+                            ? results
+                            : productCatalog || []
+                        ).slice();
+                        // score using current query for fallback sorting
+                        const q = (query || "").trim().toLowerCase();
+                        const score = (p: any) => {
+                          const t = q;
+                          const name = (p.name || "").toLowerCase();
+                          const sku = (p.sku || "").toLowerCase();
+                          const barcode = (p.barcode || "").toLowerCase();
+                          let s = 0;
+                          if (name === t) s += 100;
+                          if (name.startsWith(t)) s += 50;
+                          if (name.includes(t)) s += 20;
+                          if (sku === t || barcode === t) s += 40;
+                          if (sku.includes(t) || barcode.includes(t)) s += 10;
+                          return s;
+                        };
+                        pool.sort((a, b) => score(b) - score(a));
+                        // ensure currently selected product is first
+                        const selId = pp.product_id;
+                        if (selId) {
+                          const idxSel = pool.findIndex((p) => p.id === selId);
+                          if (idxSel > 0) {
+                            const [it] = pool.splice(idxSel, 1);
+                            pool.unshift(it);
+                          }
+                        }
+                        return pool.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name} - {product.brand} - AED{" "}
+                            {product.cost_price ?? product.unit_cost} per{" "}
+                            {product.unit}
+                          </option>
+                        ));
+                      })()}
                     </select>
                   </div>
 

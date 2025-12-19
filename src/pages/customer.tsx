@@ -30,6 +30,12 @@ import {
   MapPin,
   AlertCircle,
 } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationPrevious,
+  PaginationNext,
+} from "@/components/ui/pagination";
 
 // API handled by `customerService` in src/services/api.ts
 
@@ -122,6 +128,30 @@ const ErrorAlert: FC<{ message: string | null; onClose: () => void }> = ({
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between mt-4">
+        <div className="text-sm text-muted-foreground">
+          Page {page}
+          {totalPages ? ` of ${totalPages}` : ""} — Total: {total}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={gotoPrev}
+            disabled={page <= 1}
+          >
+            Previous
+          </Button>
+          <Button
+            size="sm"
+            onClick={gotoNext}
+            disabled={!(hasMore || (totalPages ? page < totalPages : true))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -300,6 +330,8 @@ const CustomerModal: FC<any> = ({
 const CustomerPage: FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [total, setTotal] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(false);
   const [q, setQ] = useState<string>("");
   const [page, setPage] = useState<number>(1);
   const limit = 20;
@@ -323,11 +355,43 @@ const CustomerPage: FC = () => {
           limit,
           search: q,
         });
-        const list: Customer[] = (
-          Array.isArray(resp.data) ? resp.data : []
-        ).map((d) => normalizeFromServer(d));
+        const rawList: any[] = Array.isArray(resp?.data)
+          ? resp.data
+          : Array.isArray(resp)
+          ? resp
+          : [];
+        const list: Customer[] = (rawList || []).map((d) =>
+          normalizeFromServer(d)
+        );
         setCustomers(list || []);
-        setTotal(typeof resp.total === "number" ? resp.total : list.length);
+
+        const totalFromResp =
+          typeof resp?.total === "number"
+            ? resp.total
+            : resp?.totalRecords ??
+              resp?.total_count ??
+              resp?.totalRecordsCount ??
+              undefined;
+
+        // try headers (axios-style)
+        const headerTotal =
+          resp?.headers &&
+          (resp.headers["x-total-count"] || resp.headers["X-Total-Count"])
+            ? parseInt(
+                resp.headers["x-total-count"] || resp.headers["X-Total-Count"]
+              )
+            : undefined;
+
+        const resolvedTotal =
+          typeof totalFromResp === "number"
+            ? totalFromResp
+            : typeof headerTotal === "number" && !isNaN(headerTotal)
+            ? headerTotal
+            : list.length;
+        setTotal(resolvedTotal);
+        setTotalPages(Math.ceil(resolvedTotal / limit));
+        // hasMore if server indicates totalPages or list length equals limit
+        setHasMore(resolvedTotal > pageToLoad * limit || list.length >= limit);
       } catch (err) {
         console.error("Failed to load customers", err);
       } finally {
@@ -350,17 +414,7 @@ const CustomerPage: FC = () => {
     return () => clearTimeout(t);
   }, [q]);
 
-  // axios auth handled by central `api` interceptor in services/api.ts
-
-  const openCreate = () => {
-    setEditingId(null);
-    setFormErrors({});
-    setForm({ ...initialForm });
-    setModalOpen(true);
-  };
-
   const openEdit = async (id: ID) => {
-    setEditingId(id);
     setFormErrors({});
     try {
       const resp = await customerService.getById(id);
@@ -586,6 +640,37 @@ const CustomerPage: FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <Pagination className="mt-4">
+        <PaginationContent>
+          <PaginationPrevious
+            onClick={(e) => {
+              e.preventDefault();
+              if (page > 1) gotoPrev();
+            }}
+            className={page <= 1 ? "opacity-50 pointer-events-none" : ""}
+          />
+
+          <li className="flex items-center px-3 text-sm text-muted-foreground">
+            Page {page}
+            {totalPages ? ` of ${totalPages}` : ""} — Total: {total}
+          </li>
+
+          <PaginationNext
+            onClick={(e) => {
+              e.preventDefault();
+              const canNext =
+                hasMore || (totalPages ? page < totalPages : true);
+              if (canNext) gotoNext();
+            }}
+            className={
+              !(hasMore || (totalPages ? page < totalPages : true))
+                ? "opacity-50 pointer-events-none"
+                : ""
+            }
+          />
+        </PaginationContent>
+      </Pagination>
 
       <CustomerModal
         show={modalOpen}

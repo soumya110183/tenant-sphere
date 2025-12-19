@@ -125,8 +125,34 @@ export const BillingTable = ({
         p.sku === value ||
         p.product_id.toString() === value
     );
-
     if (exactMatch) {
+      // merge into existing row if same product already present
+      const existingIndex = updated.findIndex(
+        (r, idx) =>
+          idx !== index &&
+          r.product_id != null &&
+          r.product_id === exactMatch.product_id
+      );
+
+      if (existingIndex !== -1) {
+        const qtyToAdd = Number(updated[index].qty || 1);
+        const existingQty = Number(updated[existingIndex].qty || 0);
+        const newQty = existingQty + qtyToAdd;
+
+        updated[existingIndex].qty = newQty;
+        updated[existingIndex].price = Number(exactMatch.selling_price || 0);
+        updated[existingIndex].tax = Number(exactMatch.tax || 0);
+        updated[existingIndex].total = newQty * updated[existingIndex].price;
+
+        // remove the duplicate row and update
+        updated.splice(index, 1);
+        onRowsChange(updated);
+        setShowSuggestions(false);
+        setPortalPos(null);
+        setTimeout(() => inputRefs.current[existingIndex]?.focus(), 100);
+        return;
+      }
+
       updated[index].code = exactMatch.name;
       updated[index].name = exactMatch.name;
       updated[index].price = Number(exactMatch.selling_price || 0);
@@ -153,6 +179,29 @@ export const BillingTable = ({
           String(p.product_id) === value
       );
       if (byBarcode) {
+        const existingIndex = updated.findIndex(
+          (r, idx) =>
+            idx !== index &&
+            r.product_id != null &&
+            r.product_id === byBarcode.product_id
+        );
+
+        if (existingIndex !== -1) {
+          const qtyToAdd = Number(updated[index].qty || 1);
+          const existingQty = Number(updated[existingIndex].qty || 0);
+          const newQty = existingQty + qtyToAdd;
+
+          updated[existingIndex].qty = newQty;
+          updated[existingIndex].price = Number(byBarcode.selling_price || 0);
+          updated[existingIndex].tax = Number(byBarcode.tax || 0);
+          updated[existingIndex].total = newQty * updated[existingIndex].price;
+
+          updated.splice(index, 1);
+          onRowsChange(updated);
+          setTimeout(() => inputRefs.current[existingIndex]?.focus(), 100);
+          return;
+        }
+
         updated[index].code = byBarcode.name;
         updated[index].name = byBarcode.name;
         updated[index].price = Number(byBarcode.selling_price || 0);
@@ -175,71 +224,132 @@ export const BillingTable = ({
     // Use BarcodeDetector API when available
     try {
       const BarcodeDetectorClass = (window as any).BarcodeDetector;
-      if (!BarcodeDetectorClass)
-        throw new Error("BarcodeDetector not supported");
 
-      detectorRef.current = new BarcodeDetectorClass({
-        formats: [
-          "ean_13",
-          "ean_8",
-          "code_128",
-          "upc_a",
-          "upc_e",
-          "code_39",
-          "code_93",
-        ],
-      });
+      // If native BarcodeDetector is available, use it (fast, native).
+      if (BarcodeDetectorClass) {
+        detectorRef.current = new BarcodeDetectorClass({
+          formats: [
+            "ean_13",
+            "ean_8",
+            "code_128",
+            "upc_a",
+            "upc_e",
+            "code_39",
+            "code_93",
+          ],
+        });
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        let running = true;
+
+        const loop = async () => {
+          if (!running) return;
+          try {
+            if (!videoRef.current) return;
+            const detections = await detectorRef.current.detect(
+              videoRef.current
+            );
+            if (detections && detections.length) {
+              const code =
+                detections[0].rawValue ||
+                detections[0].raw_string ||
+                detections[0].value;
+              if (code) {
+                running = false;
+                onDetected(String(code));
+                return;
+              }
+            }
+          } catch (e) {
+            // ignore intermittent detection errors
+          }
+          setTimeout(loop, 300);
+        };
+
+        loop();
+
+        return () => {
+          running = false;
+          try {
+            stream.getTracks().forEach((t) => t.stop());
+          } catch (e) {}
+          if (videoRef.current) {
+            try {
+              videoRef.current.pause();
+              videoRef.current.srcObject = null;
+            } catch (e) {}
+          }
+        };
       }
 
-      let running = true;
+      // Fallback: try a software decoder via @zxing/browser if available.
+      // We import dynamically so the package is optional.
+      try {
+        const ZXing = await import("@zxing/browser");
+        const codeReader = new (ZXing.BrowserBarcodeReader as any)();
 
-      const loop = async () => {
-        if (!running) return;
-        try {
-          if (!videoRef.current) return;
-          const detections = await detectorRef.current.detect(videoRef.current);
-          if (detections && detections.length) {
-            const code =
-              detections[0].rawValue ||
-              detections[0].raw_string ||
-              detections[0].value;
-            if (code) {
-              running = false;
-              onDetected(String(code));
-              return;
-            }
-          }
-        } catch (e) {
-          // ignore intermittent detection errors
-        }
-        setTimeout(loop, 300);
-      };
-
-      loop();
-
-      return () => {
-        running = false;
-        try {
-          stream.getTracks().forEach((t) => t.stop());
-        } catch (e) {}
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+        });
+        streamRef.current = stream;
         if (videoRef.current) {
-          try {
-            videoRef.current.pause();
-            videoRef.current.srcObject = null;
-          } catch (e) {}
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
-      };
+
+        // decodeOnceFromVideoDevice will resolve once a code is found
+        const deviceId = undefined; // let browser choose
+        (codeReader as any)
+          .decodeOnceFromVideoDevice(deviceId, videoRef.current)
+          .then((res: any) => {
+            if (res && res.text) onDetected(String(res.text));
+          })
+          .catch(() => {
+            // ignore decode errors
+          });
+
+        return () => {
+          try {
+            (codeReader as any).reset();
+          } catch (e) {}
+          try {
+            stream.getTracks().forEach((t) => t.stop());
+          } catch (e) {}
+          if (videoRef.current) {
+            try {
+              videoRef.current.pause();
+              videoRef.current.srcObject = null;
+            } catch (e) {}
+          }
+        };
+      } catch (impErr) {
+        // No native BarcodeDetector and no ZXing available — switch to manual mode
+        const msg =
+          "Barcode scanning is unavailable in this browser. Use manual entry or enable camera support.";
+        try {
+          setScannerError(msg);
+          setUseManual(true);
+        } catch (e) {}
+        // resolve with a no-op cleanup so caller doesn't treat this as a failure
+        return () => {};
+      }
     } catch (err) {
-      // BarcodeDetector not supported or camera failed
-      throw err;
+      // Camera or decoder initialization failed — fall back to manual entry
+      const msg =
+        err?.message || String(err) || "Scanner initialization failed";
+      try {
+        setScannerError(msg);
+        setUseManual(true);
+      } catch (e) {}
+      return () => {};
     }
   }
 
@@ -293,6 +403,34 @@ export const BillingTable = ({
 
     const updated = [...rows];
 
+    // If product already exists in another row, merge quantities instead of duplicating
+    const existingIndex = updated.findIndex(
+      (r, idx) =>
+        idx !== currentInputIndex &&
+        r.product_id != null &&
+        r.product_id === product.product_id
+    );
+
+    if (existingIndex !== -1) {
+      const qtyToAdd = Number(updated[currentInputIndex].qty || 1);
+      const existingQty = Number(updated[existingIndex].qty || 0);
+      const newQty = existingQty + qtyToAdd;
+
+      updated[existingIndex].qty = newQty;
+      updated[existingIndex].price = Number(product.selling_price || 0);
+      updated[existingIndex].tax = Number(product.tax || 0);
+      updated[existingIndex].total = newQty * updated[existingIndex].price;
+
+      // remove the duplicate row
+      updated.splice(currentInputIndex, 1);
+      onRowsChange(updated);
+      setShowSuggestions(false);
+      setCurrentInputIndex(null);
+      setTimeout(() => inputRefs.current[existingIndex]?.focus(), 100);
+      return;
+    }
+
+    // otherwise fill current row with product
     updated[currentInputIndex].code = product.name;
     updated[currentInputIndex].name = product.name;
     updated[currentInputIndex].price = Number(product.selling_price || 0);
@@ -421,6 +559,8 @@ export const BillingTable = ({
                   <TableCell>
                     <div className="relative">
                       <Input
+                        id={`item_code_${i}`}
+                        name={`item_code_${i}`}
                         ref={(el) => (inputRefs.current[i] = el!)}
                         value={r.code}
                         onChange={(e) =>
@@ -429,14 +569,14 @@ export const BillingTable = ({
                         placeholder="Enter name, barcode, or SKU"
                       />
 
-                      {/* <button
+                      <button
                         type="button"
                         title="Scan barcode"
                         onClick={() => openScannerForRow(i)}
                         className="ml-2 absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded bg-transparent hover:bg-muted/50"
                       >
                         <Camera className="h-4 w-4 text-muted-foreground" />
-                      </button> */}
+                      </button>
 
                       {showSuggestions && currentInputIndex === i && (
                         <>
@@ -503,6 +643,8 @@ export const BillingTable = ({
 
                   <TableCell>
                     <Input
+                      id={`qty_${i}`}
+                      name={`qty_${i}`}
                       type="number"
                       value={r.qty}
                       onChange={(e) => handleQtyChange(i, e.target.value)}
@@ -587,6 +729,8 @@ export const BillingTable = ({
                     Enter barcode manually
                   </label>
                   <input
+                    id="manual_barcode"
+                    name="manual_barcode"
                     className="w-full px-3 py-2 border rounded bg-background text-sm"
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}

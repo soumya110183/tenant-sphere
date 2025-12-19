@@ -144,6 +144,10 @@ const Modal = ({
   const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [selectedInvoiceLocal, setSelectedInvoiceLocal] = useState<any>(null);
+  // Purchase search (modal-local) for Purchase Return -> server-side search with debounce
+  const [purchaseQuery, setPurchaseQuery] = useState("");
+  const [purchaseResults, setPurchaseResults] = useState<any[]>([]);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   // Helper: compute refund lines & total for sales return modal
   let selectedSale: any = null;
@@ -234,6 +238,43 @@ const Modal = ({
       setInvoiceLoading(false);
     }
   };
+  // Debounced search for purchases when user types in Purchase Order field
+  useEffect(() => {
+    let mounted = true;
+    const tid = setTimeout(async () => {
+      const q = (purchaseQuery || "").trim();
+      if (!q) {
+        if (mounted) setPurchaseResults([]);
+        return;
+      }
+      try {
+        if (mounted) setPurchaseLoading(true);
+        const tenantId = localStorage.getItem("tenant_id");
+        const apiKey = localStorage.getItem("search_api_key") || undefined;
+        const params: Record<string, any> = { search: q, limit: 50, page: 1 };
+        if (tenantId) params.tenant_id = tenantId;
+        if (apiKey) params.api_key = apiKey;
+        // restrict to supplier if selected
+        if (formData?.supplierId) params.supplier_id = formData.supplierId;
+        const resp = await purchaseService.getAll(params);
+        const data = resp?.data ?? resp;
+        let raw: any[] = [];
+        if (data && Array.isArray(data.data)) raw = data.data;
+        else if (data && Array.isArray(data.purchases)) raw = data.purchases;
+        else if (Array.isArray(data)) raw = data;
+        if (mounted) setPurchaseResults(raw.slice(0, 50));
+      } catch (err) {
+        console.warn("Purchase search failed:", err);
+        if (mounted) setPurchaseResults([]);
+      } finally {
+        if (mounted) setPurchaseLoading(false);
+      }
+    }, 350);
+    return () => {
+      mounted = false;
+      clearTimeout(tid);
+    };
+  }, [purchaseQuery, formData?.supplierId]);
   useEffect(() => {
     if (modalType !== "purchaseReturn") return;
     const purchaseId = formData.purchaseId;
@@ -1065,6 +1106,10 @@ const Modal = ({
                           purchaseId: "",
                         });
                         setReturnItems([]);
+                        // reset purchase search state when supplier changes
+                        setPurchaseQuery("");
+                        setPurchaseResults([]);
+                        setPurchaseLoading(false);
                       }}
                     >
                       <option value="">Select Supplier...</option>
@@ -1080,30 +1125,54 @@ const Modal = ({
                       <label className="block text-sm font-medium mb-1">
                         Purchase Order *
                       </label>
-                      <select
-                        required
-                        className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                        value={formData.purchaseId || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            purchaseId: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="">Select Purchase...</option>
-                        {purchases
-                          .filter(
-                            (p: any) =>
-                              String(p.supplier_id) ===
-                              String(formData.supplierId)
+                      <div>
+                        <input
+                          type="search"
+                          placeholder="Search purchase orders by invoice # or reference"
+                          className="w-full px-3 py-2 mb-2 border rounded-md bg-background text-sm"
+                          value={purchaseQuery}
+                          onChange={(e) => setPurchaseQuery(e.target.value)}
+                        />
+                        <select
+                          required
+                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                          value={formData.purchaseId || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              purchaseId: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="">Select Purchase...</option>
+                          {(purchaseQuery && !purchaseLoading
+                            ? purchaseResults || []
+                            : purchases || []
                           )
-                          .map((p: any) => (
-                            <option key={p.id} value={p.id}>
-                              PO #{p.invoice_number || p.id}
-                            </option>
-                          ))}
-                      </select>
+                            .filter((p: any) => {
+                              const sid =
+                                p.supplier_id ??
+                                p.supplierId ??
+                                p.Suppliers_id ??
+                                p.supplier?.id ??
+                                p.supplier_id;
+                              return (
+                                String(sid) === String(formData.supplierId)
+                              );
+                            })
+                            .map((p: any) => (
+                              <option key={p.id} value={p.id}>
+                                PO #{p.invoice_number || p.id}
+                              </option>
+                            ))}
+                          {purchaseLoading && <option>Searching...</option>}
+                          {purchaseQuery &&
+                            !purchaseLoading &&
+                            purchaseResults.length === 0 && (
+                              <option value="">No purchases found</option>
+                            )}
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2248,6 +2317,13 @@ const GroceryInventory = () => {
   );
   const [submitting, setSubmitting] = useState(false);
 
+  // Stock pagination state
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryTotalPages, setInventoryTotalPages] = useState(1);
+  const [inventoryTotalRecords, setInventoryTotalRecords] = useState(0);
+  const [inventoryHasMore, setInventoryHasMore] = useState(false);
+  const STOCK_PAGE_SIZE = 20;
+
   // Add function to load purchases
   // Update your loadPurchases function to match the actual API response
 
@@ -2401,7 +2477,7 @@ const GroceryInventory = () => {
   useEffect(() => {
     loadProducts();
     loadSuppliers();
-    loadInventory();
+    loadInventory(inventoryPage, searchTerm);
     loadPurchases();
     loadSales();
     loadSalesReturns();
@@ -2429,7 +2505,7 @@ const GroceryInventory = () => {
       }
       // After optimistic change, reload authoritative data
       loadSales();
-      loadInventory();
+      loadInventory(inventoryPage, searchTerm);
     };
     window.addEventListener("invoice-created", invoiceListener);
     return () => {
@@ -2798,17 +2874,43 @@ const GroceryInventory = () => {
     }
   };
 
-  const loadInventory = async () => {
-    setIsLoading(true); // Start loading
+  const loadInventory = async (page = 1, search = "") => {
+    setIsLoading(true);
     try {
-      const data = await inventoryService.getAll();
-      // backend may return { data: [...] } or an array directly
-      const raw = data?.data ?? (Array.isArray(data) ? data : []);
+      const tenantId = localStorage.getItem("tenant_id");
+      const params: Record<string, any> = { page, limit: STOCK_PAGE_SIZE };
+      if (tenantId) params.tenant_id = tenantId;
+      if (search) params.search = search;
 
-      // Normalize inventory item shape to what StockView expects
-      const items = raw.map((it: any, idx: number) => {
+      const response = await inventoryService.getAll(params);
+      console.log("Inventory API response:", response);
+
+      const apiData = response?.data ?? response;
+      let raw: any[] = [];
+      if (apiData && Array.isArray(apiData.data)) raw = apiData.data;
+      else if (Array.isArray(apiData)) raw = apiData;
+      else if (apiData && Array.isArray(apiData.results)) raw = apiData.results;
+      else if (apiData && Array.isArray(apiData.items)) raw = apiData.items;
+
+      // Attempt to read total records from payload or response headers
+      const headerCount =
+        response?.headers?.["x-total-count"] ||
+        response?.headers?.["x-total-records"] ||
+        response?.headers?.["X-Total-Count"] ||
+        response?.headers?.["X-Total-Records"];
+
+      const totalRecords =
+        (apiData?.totalRecords ??
+          apiData?.total ??
+          apiData?.count ??
+          Number(headerCount)) ||
+        0;
+      const totalPages =
+        apiData?.totalPages ??
+        Math.max(1, Math.ceil((totalRecords || 0) / STOCK_PAGE_SIZE));
+
+      const items = (raw || []).map((it: any, idx: number) => {
         const productObj = it.products ?? it.product ?? {};
-
         const categoryName =
           (it.categories &&
             (it.categories.name ??
@@ -2843,10 +2945,8 @@ const GroceryInventory = () => {
         const expiryDate = it.expiryDate ?? it.expiry_date ?? it.expiry ?? "";
 
         return {
-          // canonical ids
           id: it.id ?? it.product_id ?? productObj.id ?? `inv-${idx}`,
           product_id: it.product_id ?? productObj.id ?? undefined,
-          // normalized display fields
           name,
           brand,
           category: categoryName,
@@ -2858,13 +2958,17 @@ const GroceryInventory = () => {
           selling_price,
           expiryDate,
           sku: it.sku ?? productObj.sku ?? "",
-          // include raw payload for any downstream needs
           _raw: it,
         } as any;
       });
 
       setBaseInventory(items);
-      setProducts(items); // initial view before derived recompute
+      setProducts(items);
+      setInventoryPage(apiData?.page || page);
+      setInventoryTotalPages(totalPages);
+      setInventoryTotalRecords(totalRecords || 0);
+      // If backend doesn't include totals, indicate whether there are more pages
+      setInventoryHasMore(((raw || []).length || 0) >= STOCK_PAGE_SIZE);
     } catch (error) {
       console.error("Error loading inventory:", error);
       toast({
@@ -2873,7 +2977,7 @@ const GroceryInventory = () => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false); // End loading
+      setIsLoading(false);
     }
   };
 
@@ -3076,7 +3180,7 @@ const GroceryInventory = () => {
 
           if (response.success || response.data) {
             // ✅ Reload the inventory to get the updated data with proper joins
-            await loadInventory();
+            await loadInventory(inventoryPage, searchTerm);
             toast({
               title: editingItem ? "Inventory Updated" : "Inventory Added",
               description: editingItem
@@ -3141,7 +3245,7 @@ const GroceryInventory = () => {
           // Match your API response structure: { data: { success: true, purchase_id, invoice_number } }
           if (response.data && response.data.success) {
             await loadPurchases();
-            await loadInventory();
+            await loadInventory(inventoryPage, searchTerm);
 
             toast({
               title: "Purchase Created",
@@ -3367,7 +3471,7 @@ const GroceryInventory = () => {
 
           if (ok) {
             // Backend updated inventory atomically - reload authoritative data
-            await loadInventory();
+            await loadInventory(inventoryPage, searchTerm);
             await loadSalesReturns();
 
             toast({
@@ -3563,7 +3667,7 @@ const GroceryInventory = () => {
                 }
               }
             }
-            await loadInventory();
+            await loadInventory(inventoryPage, searchTerm);
             await loadPurchaseReturns();
             toast({
               title: "Purchase Return Created",
@@ -3688,20 +3792,28 @@ const GroceryInventory = () => {
 
   const categories = ["All", ...new Set(products.map((p) => p.category))];
 
+  // For stock we perform search server-side; local filter only applies category
   const filteredProducts = products.filter((product) => {
-    const name = product?.name ?? "";
-    const barcode = product?.barcode ?? "";
     const category = product?.category ?? "";
-
-    const matchesSearch =
-      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      barcode.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesCategory =
       filterCategory === "All" || category === filterCategory;
-
-    return matchesSearch && matchesCategory;
+    return matchesCategory;
   });
+
+  // Debounced server-side search for inventory
+  useDebouncedEffect(searchTerm, 350, (val) => {
+    setInventoryPage(1);
+    loadInventory(1, val);
+  });
+
+  // If backend doesn't supply totals, paginate locally as a fallback
+  const localStart = (inventoryPage - 1) * STOCK_PAGE_SIZE;
+  const localEnd = localStart + STOCK_PAGE_SIZE;
+  const displayedProducts =
+    inventoryTotalRecords > 0
+      ? filteredProducts
+      : filteredProducts.slice(localStart, localEnd);
+  const hasNextLocal = filteredProducts.length > localEnd;
 
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
@@ -3742,6 +3854,73 @@ const GroceryInventory = () => {
             getStockPercentage={getStockPercentage}
             isLoading={isLoading}
           />
+        )}
+        {activeTab === "stock" && (inventoryPage > 1 || inventoryHasMore) && (
+          <div className="flex items-center justify-between mt-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  loadInventory(Math.max(1, inventoryPage - 1), searchTerm)
+                }
+                disabled={inventoryPage === 1}
+              >
+                Prev
+              </Button>
+
+              <span className="text-sm text-gray-500">
+                Page {inventoryPage}
+                {inventoryTotalRecords > 0 ? ` of ${inventoryTotalPages}` : ""}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  loadInventory(
+                    inventoryTotalRecords > 0
+                      ? Math.min(inventoryTotalPages, inventoryPage + 1)
+                      : inventoryPage + 1,
+                    searchTerm
+                  )
+                }
+                disabled={
+                  inventoryTotalRecords > 0
+                    ? inventoryPage >= inventoryTotalPages
+                    : !inventoryHasMore
+                }
+              >
+                Next
+              </Button>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              {inventoryTotalRecords > 0 ? (
+                <>
+                  Showing{" "}
+                  {Math.min(
+                    (inventoryPage - 1) * STOCK_PAGE_SIZE + 1,
+                    inventoryTotalRecords
+                  )}
+                  -
+                  {Math.min(
+                    inventoryPage * STOCK_PAGE_SIZE,
+                    inventoryTotalRecords
+                  )}{" "}
+                  of {inventoryTotalRecords}
+                </>
+              ) : (
+                <>
+                  Showing {(inventoryPage - 1) * STOCK_PAGE_SIZE + 1}-
+                  {Math.min(
+                    inventoryPage * STOCK_PAGE_SIZE,
+                    products.length || inventoryPage * STOCK_PAGE_SIZE
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         {activeTab === "sales" && (

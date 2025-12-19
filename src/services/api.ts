@@ -1003,7 +1003,9 @@ export const productService = {
 
 export const inventoryService = {
   // ✅ Get all inventory items (joined with product details)
-  getAll: async () => (await api.get("/api/inventory")).data,
+  // Accepts optional params object forwarded to axios (e.g., { search, page, limit })
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/inventory", { params }).then((r) => r.data),
 
   // ✅ Get single inventory item by ID
   getById: async (id) => (await api.get(`/api/inventory/${id}`)).data,
@@ -1090,11 +1092,8 @@ export const purchaseReturnService = {
 // ===============================
 export const staffService = {
   // Get all staff users belonging to the current tenant
-  getAll: async (search = "") => {
-    const params: Record<string, string> = {};
-    if (search) params.search = search;
-    return (await api.get("/api/staff", { params })).data;
-  },
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/staff", { params }),
 
   // Get single staff detail
   getById: async (id) => (await api.get(`/api/staff/${id}`)).data,

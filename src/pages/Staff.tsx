@@ -20,6 +20,12 @@ import {
 } from "lucide-react";
 
 import { staffService } from "@/services/api"; // <-- your api.js path
+import {
+  Pagination,
+  PaginationContent,
+  PaginationPrevious,
+  PaginationNext,
+} from "@/components/ui/pagination";
 
 // --------------------------------------------
 // Error Alert Component
@@ -202,6 +208,11 @@ const StaffModal = ({
 const Staff = () => {
   const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState<number>(1);
+  const limit = 20;
+  const [total, setTotal] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(false);
   const [showModal, setShowModal] = useState(false);
   const [editingData, setEditingData] = useState(null);
   const [formData, setFormData] = useState({});
@@ -210,13 +221,38 @@ const Staff = () => {
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState(null);
 
-  // Fetch staff
-  const loadStaff = async () => {
+  // Fetch staff with pagination and search
+  const loadStaff = async (pageToLoad = page) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await staffService.getAll();
-      setStaff(data?.data || []); // if backend sends { data: [...] }
+      const resp = await staffService.getAll({
+        page: pageToLoad,
+        limit,
+        search,
+      });
+      const payload = resp && resp.data ? resp.data : resp;
+      const list = Array.isArray(payload)
+        ? payload
+        : payload?.data ?? payload?.results ?? [];
+      setStaff(list || []);
+
+      const totalFromBody =
+        typeof payload?.totalRecords === "number"
+          ? payload.totalRecords
+          : payload?.total ?? undefined;
+      const resolvedTotal =
+        typeof totalFromBody === "number"
+          ? totalFromBody
+          : Array.isArray(list)
+          ? list.length
+          : 0;
+      setTotal(resolvedTotal);
+      setTotalPages(Math.ceil(resolvedTotal / limit));
+      setHasMore(
+        resolvedTotal > pageToLoad * limit ||
+          (Array.isArray(list) && list.length >= limit)
+      );
     } catch (err) {
       setError(err.message || "Unable to load staff");
     } finally {
@@ -224,9 +260,12 @@ const Staff = () => {
     }
   };
 
+  // Reload when page or search changes (debounced)
   useEffect(() => {
-    loadStaff();
-  }, []);
+    const t = setTimeout(() => loadStaff(page), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search]);
 
   // Open modal
   const openModal = (item = null) => {
@@ -276,9 +315,11 @@ const Staff = () => {
     }
   };
 
-  const filteredStaff = staff.filter((s) =>
-    s.full_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredStaff = Array.isArray(staff)
+    ? staff.filter((s) =>
+        s.full_name?.toLowerCase().includes(search.toLowerCase())
+      )
+    : [];
 
   return (
     <div className="space-y-6">
@@ -300,7 +341,10 @@ const Staff = () => {
             placeholder="Search staff..."
             className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
 
@@ -397,6 +441,39 @@ const Staff = () => {
           )}
         </CardContent>
       </Card>
+      {/* Pagination Controls */}
+      <div className="flex justify-center mt-4">
+        <Pagination>
+          <PaginationContent>
+            <PaginationPrevious
+              onClick={(e) => {
+                e.preventDefault();
+                setPage((p) => Math.max(1, p - 1));
+              }}
+              className={page <= 1 ? "opacity-50 pointer-events-none" : ""}
+            />
+
+            <li className="flex items-center px-3 text-sm text-muted-foreground">
+              Page {page}
+              {totalPages ? ` of ${totalPages}` : ""} — Total: {total}
+            </li>
+
+            <PaginationNext
+              onClick={(e) => {
+                e.preventDefault();
+                const canNext =
+                  hasMore || (totalPages ? page < totalPages : true);
+                if (canNext) setPage((p) => p + 1);
+              }}
+              className={
+                !(hasMore || (totalPages ? page < totalPages : true))
+                  ? "opacity-50 pointer-events-none"
+                  : ""
+              }
+            />
+          </PaginationContent>
+        </Pagination>
+      </div>
 
       {/* Modal Component */}
       <StaffModal
