@@ -54,12 +54,15 @@ export const BillingTable = ({
   );
 
   const inputRefs = useRef<HTMLInputElement[]>([]);
+  const qtyRefs = useRef<HTMLInputElement[]>([]);
   const suggestionRef = useRef<HTMLDivElement | null>(null);
   const [portalPos, setPortalPos] = useState<{
     top: number;
     left: number;
     width: number;
   } | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerIndex, setScannerIndex] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -82,6 +85,28 @@ export const BillingTable = ({
       )
       .slice(0, 8);
   };
+
+  // keep highlighted index in sync with suggestions
+  useEffect(() => {
+    if (suggestions && suggestions.length > 0) setHighlightedIndex(0);
+    else setHighlightedIndex(-1);
+  }, [suggestions]);
+
+  useEffect(() => {
+    // Detect dark mode only from the presence of a `dark` class on the root element.
+    // Avoid using system `prefers-color-scheme` so site-controlled light/dark toggles behave correctly.
+    try {
+      const el = document.documentElement;
+      const check = () =>
+        setIsDarkMode(Boolean(el.classList && el.classList.contains("dark")));
+      check();
+      const mo = new MutationObserver(() => check());
+      mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+      return () => mo.disconnect();
+    } catch (e) {
+      // ignore in non-browser environments
+    }
+  }, []);
 
   const handleItemCodeChange = (index: number, value: string) => {
     const updated = [...rows];
@@ -399,20 +424,24 @@ export const BillingTable = ({
   }, [showScanner, scannerIndex]);
 
   const handleSuggestionClick = (product: Product) => {
+    // delegate to unified selection helper which handles merging and focus
     if (currentInputIndex === null) return;
+    applyProductSelection(product, currentInputIndex);
+  };
 
+  // Apply selection into a specific row index without auto-adding a new row.
+  const applyProductSelection = (product: Product, index: number) => {
     const updated = [...rows];
 
-    // If product already exists in another row, merge quantities instead of duplicating
     const existingIndex = updated.findIndex(
       (r, idx) =>
-        idx !== currentInputIndex &&
+        idx !== index &&
         r.product_id != null &&
         r.product_id === product.product_id
     );
 
     if (existingIndex !== -1) {
-      const qtyToAdd = Number(updated[currentInputIndex].qty || 1);
+      const qtyToAdd = Number(updated[index].qty || 1);
       const existingQty = Number(updated[existingIndex].qty || 0);
       const newQty = existingQty + qtyToAdd;
 
@@ -422,7 +451,7 @@ export const BillingTable = ({
       updated[existingIndex].total = newQty * updated[existingIndex].price;
 
       // remove the duplicate row
-      updated.splice(currentInputIndex, 1);
+      updated.splice(index, 1);
       onRowsChange(updated);
       setShowSuggestions(false);
       setCurrentInputIndex(null);
@@ -430,29 +459,21 @@ export const BillingTable = ({
       return;
     }
 
-    // otherwise fill current row with product
-    updated[currentInputIndex].code = product.name;
-    updated[currentInputIndex].name = product.name;
-    updated[currentInputIndex].price = Number(product.selling_price || 0);
-    updated[currentInputIndex].tax = Number(product.tax || 0);
-    updated[currentInputIndex].product_id = product.product_id;
-
-    updated[currentInputIndex].total =
-      Number(product.selling_price || 0) *
-      Number(updated[currentInputIndex].qty || 0);
+    // fill current row with product
+    updated[index].code = product.name;
+    updated[index].name = product.name;
+    updated[index].price = Number(product.selling_price || 0);
+    updated[index].tax = Number(product.tax || 0);
+    updated[index].product_id = product.product_id;
+    updated[index].total =
+      Number(product.selling_price || 0) * Number(updated[index].qty || 0);
 
     onRowsChange(updated);
-
     setShowSuggestions(false);
     setCurrentInputIndex(null);
 
-    // Auto-focus next row
-    if (currentInputIndex === updated.length - 1) {
-      onAddRow();
-      setTimeout(() => inputRefs.current[currentInputIndex + 1]?.focus(), 100);
-    } else {
-      inputRefs.current[currentInputIndex + 1]?.focus();
-    }
+    // focus quantity input in this row
+    setTimeout(() => qtyRefs.current[index]?.focus(), 50);
   };
 
   const handleQtyChange = (index: number, value: string) => {
@@ -566,6 +587,37 @@ export const BillingTable = ({
                         onChange={(e) =>
                           handleItemCodeChange(i, e.target.value)
                         }
+                        onKeyDown={(e) => {
+                          if (!showSuggestions) return;
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setHighlightedIndex((h) =>
+                              h < suggestions.length - 1 ? h + 1 : 0
+                            );
+                          } else if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setHighlightedIndex((h) =>
+                              h > 0 ? h - 1 : suggestions.length - 1
+                            );
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (
+                              highlightedIndex >= 0 &&
+                              suggestions[highlightedIndex]
+                            ) {
+                              applyProductSelection(
+                                suggestions[highlightedIndex],
+                                i
+                              );
+                            } else {
+                              handleItemCodeChange(i, r.code);
+                              setTimeout(() => qtyRefs.current[i]?.focus(), 50);
+                            }
+                          } else if (e.key === "Escape") {
+                            setShowSuggestions(false);
+                            setHighlightedIndex(-1);
+                          }
+                        }}
                         placeholder="Enter name, barcode, or SKU"
                       />
 
@@ -584,7 +636,11 @@ export const BillingTable = ({
                             createPortal(
                               <div
                                 ref={suggestionRef}
-                                className="bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
+                                className={`${
+                                  isDarkMode
+                                    ? "bg-slate-800 border-slate-700"
+                                    : "bg-white border-gray-200"
+                                } rounded-md shadow-lg max-h-60 overflow-auto`}
                                 style={{
                                   position: "absolute",
                                   top: portalPos.top,
@@ -593,20 +649,47 @@ export const BillingTable = ({
                                   zIndex: 9999,
                                 }}
                               >
-                                {suggestions.map((p) => (
+                                {suggestions.map((p2, sIdx) => (
                                   <div
-                                    key={p.inventory_id}
-                                    className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                                    onClick={() => handleSuggestionClick(p)}
+                                    key={p2.inventory_id}
+                                    className={`px-3 py-2 cursor-pointer border-b ${
+                                      isDarkMode
+                                        ? "border-slate-700"
+                                        : "border-gray-100"
+                                    } ${
+                                      sIdx === highlightedIndex
+                                        ? isDarkMode
+                                          ? "bg-indigo-600 text-white"
+                                          : "bg-gray-100"
+                                        : isDarkMode
+                                        ? "hover:bg-indigo-600"
+                                        : "hover:bg-gray-50"
+                                    }`}
+                                    onMouseEnter={() =>
+                                      setHighlightedIndex(sIdx)
+                                    }
+                                    onClick={() =>
+                                      applyProductSelection(
+                                        p2,
+                                        currentInputIndex!
+                                      )
+                                    }
                                   >
                                     <div className="font-medium text-sm">
-                                      {p.name}
+                                      {p2.name}
                                     </div>
-                                    <div className="text-xs text-gray-500">
-                                      {p.sku && `SKU: ${p.sku} • `}
-                                      {p.barcode && `Barcode: ${p.barcode} • `}
-                                      Stock: {p.quantity} • AED{" "}
-                                      {p.selling_price}
+                                    <div
+                                      className={`${
+                                        isDarkMode
+                                          ? "text-slate-300"
+                                          : "text-gray-500"
+                                      } text-xs`}
+                                    >
+                                      {p2.sku && `SKU: ${p2.sku} • `}
+                                      {p2.barcode &&
+                                        `Barcode: ${p2.barcode} • `}
+                                      Stock: {p2.quantity} • AED{" "}
+                                      {p2.selling_price}
                                     </div>
                                   </div>
                                 ))}
@@ -616,21 +699,50 @@ export const BillingTable = ({
                           ) : (
                             <div
                               ref={suggestionRef}
-                              className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1"
+                              className={`absolute z-50 ${
+                                isDarkMode
+                                  ? "bg-slate-800 border-slate-700"
+                                  : "bg-white border-gray-200"
+                              } rounded-md shadow-lg max-h-60 overflow-auto w-full mt-1`}
                             >
-                              {suggestions.map((p) => (
+                              {suggestions.map((p2, sIdx) => (
                                 <div
-                                  key={p.inventory_id}
-                                  className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100"
-                                  onClick={() => handleSuggestionClick(p)}
+                                  key={p2.inventory_id}
+                                  className={`px-3 py-2 cursor-pointer border-b ${
+                                    isDarkMode
+                                      ? "border-slate-700"
+                                      : "border-gray-100"
+                                  } ${
+                                    sIdx === highlightedIndex
+                                      ? isDarkMode
+                                        ? "bg-indigo-600 text-white"
+                                        : "bg-gray-100"
+                                      : isDarkMode
+                                      ? "hover:bg-indigo-600"
+                                      : "hover:bg-gray-50"
+                                  }`}
+                                  onMouseEnter={() => setHighlightedIndex(sIdx)}
+                                  onClick={() =>
+                                    applyProductSelection(
+                                      p2,
+                                      currentInputIndex!
+                                    )
+                                  }
                                 >
                                   <div className="font-medium text-sm">
-                                    {p.name}
+                                    {p2.name}
                                   </div>
-                                  <div className="text-xs text-gray-500">
-                                    {p.sku && `SKU: ${p.sku} • `}
-                                    {p.barcode && `Barcode: ${p.barcode} • `}
-                                    Stock: {p.quantity} • AED {p.selling_price}
+                                  <div
+                                    className={`${
+                                      isDarkMode
+                                        ? "text-slate-300"
+                                        : "text-gray-500"
+                                    } text-xs`}
+                                  >
+                                    {p2.sku && `SKU: ${p2.sku} • `}
+                                    {p2.barcode && `Barcode: ${p2.barcode} • `}
+                                    Stock: {p2.quantity} • AED{" "}
+                                    {p2.selling_price}
                                   </div>
                                 </div>
                               ))}
@@ -646,8 +758,33 @@ export const BillingTable = ({
                       id={`qty_${i}`}
                       name={`qty_${i}`}
                       type="number"
+                      ref={(el) => (qtyRefs.current[i] = el!)}
                       value={r.qty}
                       onChange={(e) => handleQtyChange(i, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          const cur = Number(rows[i].qty || 0) || 0;
+                          const next = cur + 1;
+                          handleQtyChange(i, String(next));
+                        } else if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          const cur = Number(rows[i].qty || 0) || 0;
+                          const next = Math.max(1, cur - 1);
+                          handleQtyChange(i, String(next));
+                        } else if (e.key === "Enter") {
+                          e.preventDefault();
+                          const cur = Number(rows[i].qty || 0) || 0;
+                          if (!cur || cur < 1) {
+                            handleQtyChange(i, "1");
+                          }
+                          onAddRow();
+                          setTimeout(() => {
+                            const nextIdx = i + 1;
+                            inputRefs.current[nextIdx]?.focus();
+                          }, 50);
+                        }
+                      }}
                       onBlur={() => {
                         if (!rows[i].qty || rows[i].qty === 0) {
                           const updated = [...rows];

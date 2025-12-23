@@ -25,7 +25,7 @@ import AMC_reports from "./pages/amc_report";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
-import Inventory from "./pages/Inventory";
+import Inventory from "./pages/InventoryPage";
 import Staff from "./pages/Staff";
 import CustomerPage from "./pages/customer.js";
 import Tasks from "./pages/Tasks";

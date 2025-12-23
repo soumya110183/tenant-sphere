@@ -39,7 +39,6 @@ import {
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  invoiceService,
   inventoryService,
   purchaseService,
   pdfReportService,
@@ -81,6 +80,8 @@ const TenantDashboard = () => {
     stockReport,
     paymentSummary,
     dailyMetrics,
+    recentInvoices,
+    invoicesTotal,
   } = useReports({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
@@ -229,7 +230,25 @@ const TenantDashboard = () => {
           : 0;
 
         // total orders from summary.transactions (fallback to 0)
-        const totalOrders = Number(summary?.transactions || 0);
+        let totalOrders = Number(summary?.transactions || 0);
+
+        // Debug: log summary and timeseries source so we can see why transactions may be 0
+        try {
+          // eslint-disable-next-line no-console
+          console.debug("useReports summary:", summary, {
+            salesSeriesLength: salesSeries?.length,
+            purchaseSeriesLength: purchaseSeries?.length,
+          });
+        } catch (e) {}
+
+        // If summary doesn't provide transactions, prefer invoicesTotal returned by the reports hook
+        if (
+          (!totalOrders || totalOrders === 0) &&
+          typeof invoicesTotal === "number" &&
+          invoicesTotal > 0
+        ) {
+          totalOrders = Number(invoicesTotal);
+        }
 
         // revenueData: map last 6 months using salesSeries
         const lastSixMonths = getLastSixMonths();
@@ -263,12 +282,10 @@ const TenantDashboard = () => {
           return { day: dayData.day, sales: Number(pt?.sales || 0) };
         });
 
-        // recentOrders: fetch small recent page to show list (1 request only)
-        let recentOrders: any[] = [];
-        try {
-          const invResp = await invoiceService.getAll({ page: 1, limit: 10 });
-          const invs = parseInvoicesArray(invResp).slice(0, 10);
-          recentOrders = invs.map((invoice) => ({
+        // recentOrders: use recentInvoices provided by the reports hook (already fetched)
+        const recentOrders: any[] = (recentInvoices || [])
+          .slice(0, 10)
+          .map((invoice) => ({
             id: `#${invoice.invoice_number || invoice.id}`,
             customer:
               invoice.customer_name || invoice.customer || "Walk-in Customer",
@@ -276,9 +293,6 @@ const TenantDashboard = () => {
             status: invoice.status || "Completed",
             time: formatTimeAgo(invoice.created_at),
           }));
-        } catch (e) {
-          recentOrders = [];
-        }
 
         setDashboardData({
           todaySales,

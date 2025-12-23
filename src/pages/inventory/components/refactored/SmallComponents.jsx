@@ -29,7 +29,6 @@ export const TabNavigation = ({ activeTab, setActiveTab }) => {
     { id: "purchases", path: "/inventory/purchases" },
     { id: "sales returns", path: "/inventory/sales-returns" },
     { id: "purchase returns", path: "/inventory/purchase-returns" },
-    // { id: "adjustments", path: "/inventory/adjustments" },
   ];
 
   return (
@@ -85,9 +84,5 @@ export const SearchFilter = ({
         </option>
       ))}
     </select>
-    {/* <Button onClick={onAddProduct} className="whitespace-nowrap">
-      <Plus className="h-4 w-4 mr-2" />
-      Add Inventory
-    </Button> */}
   </div>
 );

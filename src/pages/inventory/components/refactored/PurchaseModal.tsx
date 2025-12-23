@@ -105,7 +105,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
               ))}
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium mb-1">
               Invoice Number
             </label>
@@ -122,9 +122,9 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
               placeholder="Leave empty for auto-generation"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Will auto-generate if left empty
+              Will auto-generate if left 
             </p>
-          </div>
+          </div> */}
         </div>
 
         <div className="border-t pt-4">
