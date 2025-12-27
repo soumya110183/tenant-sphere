@@ -56,9 +56,9 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Total Amount
                 </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                {/* <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Actions
-                </th>
+                </th> */}
               </tr>
             </thead>
             <tbody>
@@ -110,7 +110,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                     <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
                       AED {purchase.total_amount?.toFixed(2)}
                     </td>
-                    <td className="py-3 px-2 sm:px-4">
+                    {/* <td className="py-3 px-2 sm:px-4">
                       <div className="flex gap-1 sm:gap-2 justify-end">
                         <Button
                           variant="outline"
@@ -120,7 +120,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
-                    </td>
+                    </td> */}
                   </tr>
                 ))
               )}

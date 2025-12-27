@@ -198,6 +198,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="report/profit"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <ReportsModule />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
                     path="report/purchases"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
@@ -401,6 +409,23 @@ const App = () => (
                   />
                   <Route
                     path="employees"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Employees />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  {/* Explicit employee subroutes so direct URLs work (tab routing) */}
+                  <Route
+                    path="employees/salaries"
+                    element={
+                      <RoleBasedRoute allowedRoles={["tenant"]}>
+                        <Employees />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  <Route
+                    path="employees/discounts"
                     element={
                       <RoleBasedRoute allowedRoles={["tenant"]}>
                         <Employees />

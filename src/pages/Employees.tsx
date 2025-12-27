@@ -1,5 +1,6 @@
 // src/pages/Employees.tsx
 import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,7 @@ interface StatsCardProps {
   stat: {
     label: string;
     value: string | number;
+    subtitle?: string | number;
     icon: React.ComponentType<{ className?: string }>;
     color?: string;
   };
@@ -159,6 +161,7 @@ interface SalariesViewProps {
   salaries: Salary[];
   markSalaryPaid: (id: string) => void;
   salaryPayments?: SalaryPayment[];
+  onOpenHistory?: (employeeId: string, employeeName?: string) => void;
 }
 
 interface DiscountsViewProps {
@@ -172,6 +175,7 @@ interface TabNavigationProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   counts?: Record<string, number>;
+  onNavigate?: (tab: string) => void;
 }
 
 // TabNavigation Component (matching screenshot)
@@ -179,6 +183,7 @@ function TabNavigation({
   activeTab,
   setActiveTab,
   counts = {},
+  onNavigate,
 }: TabNavigationProps) {
   const tabs = [
     { id: "employees", label: "Employees" },
@@ -205,7 +210,13 @@ function TabNavigation({
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/0"
                 }
               `}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate(tab.id);
+                } else {
+                  setActiveTab(tab.id);
+                }
+              }}
             >
               <span className="font-medium text-sm">{tab.label}</span>
 
@@ -254,6 +265,11 @@ function StatsCard({ stat }: StatsCardProps) {
             <div className="text-sm text-muted-foreground mt-1">
               {stat.label}
             </div>
+            {stat.subtitle && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {stat.subtitle}
+              </div>
+            )}
           </div>
           <div className="text-muted-foreground">
             <Icon className="h-6 w-6" />
@@ -363,9 +379,11 @@ function EmployeeModal({
   useEffect(() => {
     if (initial) {
       setForm((f: any) => ({
+        // preserve any existing identifiers so parent can detect edits
+        _id: (initial as any)._id ?? (initial as any).id ?? f._id,
         name: initial.name ?? f.name,
         phone: initial.phone ?? f.phone,
-        position: (initial.role as any) ?? f.position,
+        position: initial.position ?? (initial as any).role ?? f.position,
         salary: (initial as any).salary ?? f.salary ?? "",
         createLogin: false,
         email: initial.email ?? "",
@@ -403,10 +421,7 @@ function EmployeeModal({
       : "Register Employee";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -898,6 +913,7 @@ function SalariesView({
   salaries,
   markSalaryPaid,
   salaryPayments = [],
+  onOpenHistory,
 }: SalariesViewProps) {
   const activeSalaries = salaries.filter((s) => s.active);
   const inactiveSalaries = salaries.filter((s) => !s.active);
@@ -964,6 +980,17 @@ function SalariesView({
                           >
                             <CreditCard className="h-3 w-3" /> Process Payment
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() =>
+                              onOpenHistory &&
+                              onOpenHistory(s.employeeId, s.employeeName)
+                            }
+                          >
+                            <FileText className="h-3 w-3" /> History
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1024,7 +1051,7 @@ function SalariesView({
       )}
 
       {/* Salary Payments History */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <FileText className="h-5 w-5 text-primary" />
@@ -1088,7 +1115,7 @@ function SalariesView({
             </table>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
     </div>
   );
 }
@@ -1144,10 +1171,7 @@ function DiscountRuleModal({
     : "Create Discount Rule";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -1267,6 +1291,7 @@ function PaySalaryModal({
   employee,
   onSubmit,
   submitting = false,
+  salaryAmount, // new prop: fixed salary amount to display
 }: {
   open: boolean;
   onClose: () => void;
@@ -1280,6 +1305,7 @@ function PaySalaryModal({
     payment_method: string;
   }) => Promise<void>;
   submitting?: boolean;
+  salaryAmount?: number;
 }) {
   const [form, setForm] = useState(() => ({
     month: new Date().toISOString().slice(0, 7), // yyyy-mm for month input
@@ -1293,7 +1319,11 @@ function PaySalaryModal({
     if (!open) return;
     // if employee exists, try to prefill salary_amount from main employees list via DOM not available here,
     // caller should set defaults if needed. Keep it simple: leave at 0 and rely on user.
-  }, [open, employee]);
+    // If a fixed salaryAmount prop is provided, reflect it in form for display/submission.
+    if (typeof salaryAmount === "number") {
+      setForm((f) => ({ ...f, salary_amount: Number(salaryAmount || 0) }));
+    }
+  }, [open, employee, salaryAmount]);
 
   if (!open) return null;
 
@@ -1308,7 +1338,11 @@ function PaySalaryModal({
       await onSubmit({
         employee_id: employee.id,
         month: form.month,
-        salary_amount: Number(form.salary_amount || 0),
+        // Use fixed salaryAmount when provided, otherwise fallback to form value
+        salary_amount:
+          typeof salaryAmount === "number"
+            ? Number(salaryAmount || 0)
+            : Number(form.salary_amount || 0),
         deductions: Number(form.deductions || 0),
         bonuses: Number(form.bonuses || 0),
         payment_method: form.payment_method,
@@ -1320,10 +1354,7 @@ function PaySalaryModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
@@ -1355,16 +1386,28 @@ function PaySalaryModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Salary Amount *
+                Salary Amount
               </label>
+              {/* Show fixed salary amount (read-only). If salaryAmount prop not provided, fall back to form input value */}
               <input
                 type="number"
                 min="0"
-                value={form.salary_amount}
+                value={
+                  typeof salaryAmount === "number"
+                    ? Number(salaryAmount || 0)
+                    : form.salary_amount
+                }
+                readOnly={typeof salaryAmount === "number"}
                 onChange={(e) => update("salary_amount", e.target.value)}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary"
                 required
               />
+              {typeof salaryAmount === "number" && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Salary amount is fixed from employee record and cannot be
+                  changed
+                </div>
+              )}
             </div>
 
             <div>
@@ -1422,6 +1465,91 @@ function PaySalaryModal({
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function SalaryHistoryModal({
+  open,
+  onClose,
+  employeeName,
+  payments,
+}: {
+  open: boolean;
+  onClose: () => void;
+  employeeName?: string;
+  payments: SalaryPayment[];
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div
+        className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
+          <h2 className="text-lg sm:text-xl font-bold">
+            Salary History {employeeName ? `— ${employeeName}` : ""}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-6">
+          {payments.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No salary payments found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Month
+                    </th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Net Salary
+                    </th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Method
+                    </th>
+                    <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                      Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-2 sm:px-4 text-sm">{p.month}</td>
+                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                        AED{" "}
+                        {Number(
+                          p.net_salary || p.salary_amount || 0
+                        ).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.payment_method || "-"}
+                      </td>
+                      <td className="py-3 px-2 sm:px-4 text-sm">
+                        {p.created_at
+                          ? new Date(p.created_at).toLocaleString()
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1496,6 +1624,9 @@ function DiscountsView({
  * Main Employees Component
  */
 export default function Employees() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState<string>("employees");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -1516,17 +1647,41 @@ export default function Employees() {
   const [submittingRule, setSubmittingRule] = useState<boolean>(false);
   const [paying, setPaying] = useState<boolean>(false);
   const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
+  const [salaryHistoryOpen, setSalaryHistoryOpen] = useState(false);
+  const [salaryHistoryFor, setSalaryHistoryFor] = useState<{
+    employeeId: string;
+    employeeName?: string;
+  } | null>(null);
+  const [salaryHistory, setSalaryHistory] = useState<SalaryPayment[]>([]);
   const [kpiCounts, setKpiCounts] = useState({
     total: 0,
     activeShifts: 0,
     pendingSalaries: 0,
     staffDiscountAvg: 0,
+    avgSalary: 0,
+    totalPayroll: 0,
+    activeEmployees: 0,
   });
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     fetchAll();
   }, []);
+
+  // Sync active tab from the current route (so /employees/salaries opens Salaries tab)
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (path.endsWith("/salaries") || path.includes("/employees/salaries")) {
+      setActiveTab("salaries");
+    } else if (
+      path.endsWith("/discounts") ||
+      path.includes("/employees/discounts")
+    ) {
+      setActiveTab("discounts");
+    } else {
+      setActiveTab("employees");
+    }
+  }, [location.pathname]);
 
   async function fetchAll() {
     setLoading(true);
@@ -1578,9 +1733,10 @@ export default function Employees() {
       setDiscounts([]);
 
       // Fetch salary payments history
+      let payments: any[] = [];
       try {
         const spJson = await salaryService.getAll();
-        const payments = (spJson || []).map((p: any) => ({
+        payments = (spJson || []).map((p: any) => ({
           id: p.id || p._id || `${p.employee_id}-${p.month}`,
           employee_id: p.employee_id,
           employee_name:
@@ -1594,11 +1750,12 @@ export default function Employees() {
           bonuses: Number(p.bonuses || 0),
           net_salary: Number(p.net_salary || 0),
           payment_method: p.payment_method,
-          created_at: p.created_at || p.created_at,
+          created_at: p.created_at || p.createdAt || new Date().toISOString(),
         }));
         setSalaryPayments(payments);
       } catch (e) {
         console.warn("Failed to fetch salary payments:", e);
+        payments = [];
         setSalaryPayments([]);
       }
 
@@ -1611,9 +1768,32 @@ export default function Employees() {
         setDiscountRule(null);
       }
 
-      // Compute KPIs based on available data
-      const activeShifts = 0; // Would come from attendance API
-      const pendingSalaries = 0; // Salary payments tracked separately via SalaryController
+      // Compute KPI aggregates using backend-derived lists
+      const activeEmployees = normalizedEmployees.filter(
+        (e: any) => e.active
+      ).length;
+
+      const currentMonth = new Date().toISOString().slice(0, 7); // yyyy-mm
+      const paidThisMonth = new Set(
+        payments
+          .filter((p: any) => p.month === currentMonth)
+          .map((p: any) => p.employee_id)
+      );
+
+      const pendingSalaries = normalizedSalaries.filter(
+        (s: any) =>
+          !paidThisMonth.has(s.employeeId) && Number(s.monthlySalary) > 0
+      ).length;
+
+      const totalPayroll = normalizedSalaries.reduce(
+        (sum: number, s: any) => sum + Number(s.monthlySalary || 0),
+        0
+      );
+
+      const avgSalary = normalizedSalaries.length
+        ? Math.round(totalPayroll / normalizedSalaries.length)
+        : 0;
+
       const avgDiscount =
         normalizedEmployees.length === 0
           ? 0
@@ -1626,9 +1806,12 @@ export default function Employees() {
 
       setKpiCounts({
         total: normalizedEmployees.length,
-        activeShifts,
+        activeShifts: activeEmployees,
         pendingSalaries,
         staffDiscountAvg: avgDiscount,
+        avgSalary,
+        totalPayroll,
+        activeEmployees,
       });
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -1768,6 +1951,42 @@ export default function Employees() {
     }
   }
 
+  function closeSalaryHistory() {
+    setSalaryHistoryOpen(false);
+    setSalaryHistoryFor(null);
+    setSalaryHistory([]);
+  }
+
+  async function openSalaryHistory(employeeId: string, employeeName?: string) {
+    setSalaryHistoryOpen(true);
+    setSalaryHistoryFor({ employeeId, employeeName });
+    try {
+      const resp = await salaryService.getByEmployee(employeeId);
+      // resp expected { success: true, data: [...] } or array depending on wrapper
+      const data = Array.isArray(resp?.data)
+        ? resp.data
+        : resp?.data || resp?.data || resp;
+      const normalized = (data || []).map((p: any) => ({
+        id: p.id || p._id,
+        employee_id: p.employee_id,
+        employee_name: p.employee_name,
+        month: p.month,
+        salary_amount: Number(
+          p.salary_amount || p.salary_amount || p.net_salary || 0
+        ),
+        deductions: Number(p.deductions || 0),
+        bonuses: Number(p.bonuses || 0),
+        net_salary: Number(p.net_salary || 0),
+        payment_method: p.payment_method,
+        created_at: p.created_at || p.createdAt,
+      }));
+      setSalaryHistory(normalized);
+    } catch (err) {
+      console.error("Failed to fetch salary history:", err);
+      setSalaryHistory([]);
+    }
+  }
+
   // Calculate tab counts
   const tabCounts = {
     employees: employees.length,
@@ -1781,24 +2000,30 @@ export default function Employees() {
     {
       label: "Total Employees",
       value: kpiCounts.total,
+      subtitle: `Active ${kpiCounts.activeEmployees}`,
       icon: Users,
       color: "text-blue-600",
     },
     {
-      label: "Active Shifts",
-      value: kpiCounts.activeShifts,
+      label: "Average Salary",
+      value: kpiCounts.avgSalary
+        ? `AED ${kpiCounts.avgSalary.toLocaleString()}`
+        : "AED 0",
+      subtitle: `Payroll AED ${kpiCounts.totalPayroll?.toLocaleString() || 0}`,
       icon: Clock,
       color: "text-green-600",
     },
     {
       label: "Avg Staff Discount",
       value: `Avg ${kpiCounts.staffDiscountAvg}%`,
+      subtitle: `${kpiCounts.total} employees`,
       icon: Tag,
       color: "text-purple-600",
     },
     {
       label: "Pending Salaries",
       value: kpiCounts.pendingSalaries,
+      subtitle: `Unpaid this month`,
       icon: CreditCard,
       color:
         kpiCounts.pendingSalaries > 0
@@ -1844,6 +2069,11 @@ export default function Employees() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           counts={tabCounts}
+          onNavigate={(tab) => {
+            setActiveTab(tab);
+            if (tab === "employees") navigate("/employees");
+            else navigate(`/employees/${tab}`);
+          }}
         />
 
         {activeTab === "employees" && (
@@ -1866,6 +2096,7 @@ export default function Employees() {
             salaries={salaries}
             markSalaryPaid={markSalaryPaid}
             salaryPayments={salaryPayments}
+            onOpenHistory={openSalaryHistory}
           />
         )}
 
@@ -1894,8 +2125,21 @@ export default function Employees() {
           setPayingEmployee(null);
         }}
         employee={payingEmployee}
+        // pass fixed salary amount from employees list when available
+        salaryAmount={
+          payingEmployee
+            ? employees.find((e) => e._id === payingEmployee.id)?.salary
+            : undefined
+        }
         onSubmit={handlePaySalarySubmit}
         submitting={paying}
+      />
+
+      <SalaryHistoryModal
+        open={salaryHistoryOpen}
+        onClose={closeSalaryHistory}
+        employeeName={salaryHistoryFor?.employeeName}
+        payments={salaryHistory}
       />
 
       <DiscountRuleModal

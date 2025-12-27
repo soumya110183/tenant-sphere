@@ -1,5 +1,6 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
-import axios, { AxiosResponse } from "axios";
+import { createPortal } from "react-dom";
+import { customerService } from "@/services/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -30,10 +31,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-// Use environment API base if provided, otherwise default to local backend
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ??
-  "http://localhost:5000";
+// API handled by `customerService` in src/services/api.ts
 
 type ID = string | number;
 
@@ -140,11 +138,8 @@ const CustomerModal: FC<any> = ({
 }) => {
   if (!show) return null;
 
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      onClick={onClose}
-    >
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4">
       <div
         className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -297,7 +292,8 @@ const CustomerModal: FC<any> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -322,32 +318,18 @@ const CustomerPage: FC = () => {
     async (pageToLoad = page) => {
       setLoadingList(true);
       try {
-        let resp: AxiosResponse<ApiListResponse> | AxiosResponse<any>;
-        if (q && q.trim().length > 0) {
-          resp = await axios.get(
-            `${API_BASE}/api/customers/search/${encodeURIComponent(q)}`
-          );
-        } else {
-          resp = await axios.get(`${API_BASE}/api/customers`, {
-            params: { page: pageToLoad, limit },
-          });
-        }
-        const payload: ApiListResponse = resp?.data ?? {};
-        const list: Customer[] = Array.isArray(payload.data)
-          ? payload.data.map((d) => normalizeFromServer(d))
-          : Array.isArray(payload)
-          ? (payload as unknown as Customer[]).map((d) =>
-              normalizeFromServer(d)
-            )
-          : [];
-
+        const resp = await customerService.list({
+          page: pageToLoad,
+          limit,
+          search: q,
+        });
+        const list: Customer[] = (
+          Array.isArray(resp.data) ? resp.data : []
+        ).map((d) => normalizeFromServer(d));
         setCustomers(list || []);
-        setTotal(
-          typeof payload.total === "number" ? payload.total : list.length
-        );
+        setTotal(typeof resp.total === "number" ? resp.total : list.length);
       } catch (err) {
         console.error("Failed to load customers", err);
-        setError("Unable to load customers");
       } finally {
         setLoadingList(false);
       }
@@ -368,11 +350,7 @@ const CustomerPage: FC = () => {
     return () => clearTimeout(t);
   }, [q]);
 
-  useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    if (token)
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  }, []);
+  // axios auth handled by central `api` interceptor in services/api.ts
 
   const openCreate = () => {
     setEditingId(null);
@@ -385,10 +363,8 @@ const CustomerPage: FC = () => {
     setEditingId(id);
     setFormErrors({});
     try {
-      const resp: AxiosResponse<ApiSingleResponse> = await axios.get(
-        `${API_BASE}/api/customers/${id}`
-      );
-      const data: Customer = resp?.data?.data ?? resp?.data ?? {};
+      const resp = await customerService.getById(id);
+      const data: Customer = resp?.data ?? resp ?? {};
       const normalized = normalizeFromServer(data);
       setForm({
         name: normalized.name ?? "",
@@ -423,9 +399,9 @@ const CustomerPage: FC = () => {
     try {
       const payload = toPayload(form);
       if (editingId) {
-        await axios.put(`${API_BASE}/api/customers/${editingId}`, payload);
+        await customerService.update(editingId, payload);
       } else {
-        await axios.post(`${API_BASE}/api/customers`, payload);
+        await customerService.create(payload);
       }
       setModalOpen(false);
       setEditingId(null);
@@ -454,7 +430,7 @@ const CustomerPage: FC = () => {
     if (!confirm("Delete this customer?")) return;
     setDeleting(id);
     try {
-      await axios.delete(`${API_BASE}/api/customers/${id}`);
+      await customerService.delete(id);
       await fetchCustomers(page);
     } catch (err) {
       console.error("Delete failed", err);
@@ -466,10 +442,7 @@ const CustomerPage: FC = () => {
 
   const handleActivate = async (id: ID) => {
     try {
-      await axios.put(`${API_BASE}/api/customers/${id}`, {
-        is_active: true,
-        status: "active",
-      });
+      await customerService.update(id, { is_active: true, status: "active" });
       await fetchCustomers(page);
       window.alert("Customer activated");
     } catch (err) {
@@ -498,18 +471,16 @@ const CustomerPage: FC = () => {
 
       {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
 
-      
-
-        <div className="flex justify-between gap-3 flex-col sm:flex-row">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    placeholder="Search customers..."
-                    className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
-                    value={q}
+      <div className="flex justify-between gap-3 flex-col sm:flex-row">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            placeholder="Search customers..."
+            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
+            value={q}
             onChange={(e) => setQ(e.target.value)}
-                  />
-                </div>
+          />
+        </div>
 
         <Button onClick={() => openCreate()}>
           <Plus className="h-4 w-4 mr-2" /> Add Customer

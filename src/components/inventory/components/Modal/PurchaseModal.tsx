@@ -117,13 +117,16 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                     <select
                       required
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={pp.product_id}
+                      value={pp.product_id ?? ""}
                       onChange={(e) => {
+                        const val = e.target.value;
+                        const parsedId = val === "" ? "" : parseInt(val);
                         const selectedProduct = (productCatalog || []).find(
-                          (p) => p.id === parseInt(e.target.value)
+                          (p) => p.id === parsedId
                         );
                         const updated = [...purchaseProducts];
-                        updated[idx].product_id = e.target.value;
+                        updated[idx].product_id =
+                          parsedId === "" ? "" : parsedId;
                         if (selectedProduct) {
                           updated[idx].cost_price =
                             selectedProduct.cost_price || 0;
@@ -154,7 +157,10 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                       value={pp.quantity ?? ""}
                       onChange={(e) => {
                         const updated = [...purchaseProducts];
-                        updated[idx].quantity = e.target.value === "" ? "" : parseFloat(e.target.value) || 1;
+                        updated[idx].quantity =
+                          e.target.value === ""
+                            ? ""
+                            : parseFloat(e.target.value) || 1;
                         setPurchaseProducts(updated);
                       }}
                     />
@@ -162,16 +168,16 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Cost Price (AED) *
+                      Cost Price (AED)
                     </label>
                     <input
                       type="number"
                       required
                       min="0"
-                      step="1"
+                      step="0.01"
                       className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                      value={pp.cost_price ?? ""}
-                      
+                      value={pp.cost_price ?? 0}
+                      readOnly
                     />
                   </div>
                 </div>
@@ -205,7 +211,10 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                       value={pp.reorder_level ?? ""}
                       onChange={(e) => {
                         const updated = [...purchaseProducts];
-                        updated[idx].reorder_level = e.target.value === "" ? "" : parseInt(e.target.value) || 0;
+                        updated[idx].reorder_level =
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value) || 0;
                         setPurchaseProducts(updated);
                       }}
                     />
@@ -223,7 +232,10 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
                       value={pp.max_stock ?? ""}
                       onChange={(e) => {
                         const updated = [...purchaseProducts];
-                        updated[idx].max_stock = e.target.value === "" ? "" : parseInt(e.target.value) || 0;
+                        updated[idx].max_stock =
+                          e.target.value === ""
+                            ? ""
+                            : parseInt(e.target.value) || 0;
                         setPurchaseProducts(updated);
                       }}
                     />

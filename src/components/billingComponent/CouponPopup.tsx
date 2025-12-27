@@ -3,13 +3,12 @@ import { Button } from "../ui/button";
 import { Tag, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-
-const API_BASE = "http://localhost:5000";
-export const CouponPopup = ({ 
-  show, 
-  onClose, 
-  onSelectCoupon 
-}: { 
+const API_BASE = "https://billingbackend-1vei.onrender.com";
+export const CouponPopup = ({
+  show,
+  onClose,
+  onSelectCoupon,
+}: {
   show: boolean;
   onClose: () => void;
   onSelectCoupon: (coupon: any) => void;
@@ -70,7 +69,9 @@ export const CouponPopup = ({
         {isLoadingCoupons ? (
           <div className="text-center py-8">
             <div className="h-6 w-6 mx-auto animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-            <p className="text-sm text-muted-foreground mt-2">Loading coupons...</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Loading coupons...
+            </p>
           </div>
         ) : availableCoupons.length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -82,13 +83,16 @@ export const CouponPopup = ({
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-semibold text-primary">{coupon.code}</h4>
+                    <h4 className="font-semibold text-primary">
+                      {coupon.code}
+                    </h4>
                     <p className="text-sm text-muted-foreground mt-1">
                       {coupon.description || "Special discount coupon"}
                     </p>
                     {coupon.valid_from && coupon.valid_until && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Valid: {new Date(coupon.valid_from).toLocaleDateString()} -{" "}
+                        Valid:{" "}
+                        {new Date(coupon.valid_from).toLocaleDateString()} -{" "}
                         {new Date(coupon.valid_until).toLocaleDateString()}
                       </p>
                     )}
@@ -123,7 +127,18 @@ export const CouponPopup = ({
           <Button variant="outline" onClick={onClose} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={onClose} className="flex-1">
+          <Button
+            onClick={() => {
+              // signal parent to clear coupon selection
+              try {
+                onSelectCoupon(null as any);
+              } catch (e) {
+                /* ignore */
+              }
+              onClose();
+            }}
+            className="flex-1"
+          >
             Clear Coupon
           </Button>
         </div>

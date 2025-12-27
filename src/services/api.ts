@@ -184,18 +184,20 @@ export const reportsAPI = {
 // TENANT REPORT API (backend: /api/tenantreport)
 // ===============================
 export const tenantReportAPI = {
-  getSummary: async () => (await api.get("/api/tenantreport/summary")).data,
-  getSalesChart: async () =>
-    (await api.get("/api/tenantreport/sales-chart")).data,
-  getPurchaseChart: async () =>
-    (await api.get("/api/tenantreport/purchase-chart")).data,
-  getStockReport: async () =>
-    (await api.get("/api/tenantreport/stock-report")).data,
-  getProfitReport: async () =>
-    (await api.get("/api/tenantreport/profit-report")).data,
-  getPaymentSummary: async () =>
-    (await api.get("/api/tenantreport/payment-summary")).data,
-  getAnalytics: async () => (await api.get("/api/tenantreport/analytics")).data,
+  getSummary: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/summary", { params })).data,
+  getSalesChart: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/sales-chart", { params })).data,
+  getPurchaseChart: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/purchase-chart", { params })).data,
+  getStockReport: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/stock-report", { params })).data,
+  getProfitReport: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/profit-report", { params })).data,
+  getPaymentSummary: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/payment-summary", { params })).data,
+  getAnalytics: async (params: Record<string, any> = {}) =>
+    (await api.get("/api/tenantreport/analytics", { params })).data,
 };
 
 // tenantAPI report
@@ -271,10 +273,156 @@ export async function getTimeseries(
   const res = await fetch(`${API_BASE}/api/reports/tenant?${q.toString()}`, {
     headers: { "Content-Type": "application/json", ...authHeader() },
   });
-
   if (!res.ok) {
     const errorText = await res.text();
     console.error(`getTimeseries error (${res.status}):`, errorText);
+
+    // If the unified reports endpoint forbids access for tenant-level tokens,
+    // fall back to tenant-scoped endpoints (mounted at /api/tenantreport)
+    // to assemble a compatible timeseries response. This avoids noisy 403s
+    // in the console and lets the UI continue using tenant-scoped data.
+    if (res.status === 403) {
+      try {
+        // Compute range params matching backend controller expectations
+        const today = new Date().toISOString().split("T")[0];
+        const s7 = new Date();
+        s7.setDate(new Date().getDate() - 6);
+        const start7 = s7.toISOString().split("T")[0];
+        const s30 = new Date();
+        s30.setDate(new Date().getDate() - 29);
+        const start30 = s30.toISOString().split("T")[0];
+
+        let rangeParams: Record<string, string> = {
+          from: startDate,
+          to: endDate,
+        };
+        if (startDate === start7 && endDate === today) {
+          rangeParams = { range: "7d" };
+        } else if (startDate === start30 && endDate === today) {
+          rangeParams = { range: "30d" };
+        }
+
+        const [sales, purchases, stock, paymentSummary, summary] =
+          await Promise.all([
+            tenantReportAPI.getSalesChart(rangeParams).catch((e) => {
+              console.warn("getSalesChart fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getPurchaseChart(rangeParams).catch((e) => {
+              console.warn("getPurchaseChart fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getStockReport(rangeParams).catch((e) => {
+              console.warn("getStockReport fallback failed:", e);
+              return [];
+            }),
+            tenantReportAPI.getPaymentSummary(rangeParams).catch((e) => {
+              console.warn("getPaymentSummary fallback failed:", e);
+              return {};
+            }),
+            tenantReportAPI.getSummary(rangeParams).catch((e) => {
+              console.warn("getSummary fallback failed:", e);
+              return {};
+            }),
+          ]);
+
+        // Build timeseries by merging sales and purchases by date
+        const byDate: Record<string, any> = {};
+        const salesArr = Array.isArray(sales) ? sales : [];
+        const purchasesArr = Array.isArray(purchases) ? purchases : [];
+
+        salesArr.forEach((s: any) => {
+          const d = s.date ?? s.sale_date ?? s.day ?? "";
+          if (!d) return;
+          byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+          // Accumulate sales when multiple rows share the same date
+          byDate[d].sales += Number(
+            s.sales ?? s.total ?? s.value ?? s.total_sales ?? s.totalSales ?? 0
+          );
+        });
+
+        purchasesArr.forEach((p: any) => {
+          const d =
+            p.date ?? p.sale_date ?? p.day ?? (p.created_at || "").slice(0, 10);
+          if (!d) return;
+          byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
+          // Accumulate purchase totals when multiple rows share the same date
+          byDate[d].purchase += Number(
+            p.purchases ?? p.purchase ?? p.total ?? p.value ?? 0
+          );
+        });
+
+        const timeseries = Object.values(byDate).sort(
+          (a: any, b: any) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+
+        // Normalize stock items so later logic (which expects 'quantity' and 'cost_price') works
+        const stockArr = Array.isArray(stock) ? stock : [];
+        const stock_page_normalized = stockArr.map((it: any, idx: number) => {
+          const quantity = Number(it.available ?? it.quantity ?? it.qty ?? 0);
+          const value = Number(it.value ?? it.stock_value ?? 0);
+          const cost_price =
+            quantity > 0
+              ? Number((value / quantity).toFixed(2))
+              : Number(it.cost_price ?? 0);
+          return {
+            id: it.id ?? it.product_id ?? it.product ?? `s-${idx}`,
+            product_id: it.product_id ?? undefined,
+            product_name:
+              it.product ?? it.product_name ?? it.products?.name ?? "",
+            quantity,
+            cost_price,
+            reorder_level: it.reorder_level ?? it.reorder ?? 0,
+            ...it,
+          };
+        });
+
+        // Normalize payment summary into shape: { total_amount, modes: [{mode, total, count}] }
+        let payment_summary_normalized: any = {};
+        if (Array.isArray(paymentSummary)) {
+          const modes = paymentSummary.map((m: any) => ({
+            mode: m.mode || m.name || m.method || "Unknown",
+            total: Number(m.amount ?? m.value ?? m.total ?? 0),
+            count: m.count ?? 0,
+          }));
+          const total_amount = modes.reduce(
+            (s: number, mm: any) => s + Number(mm.total || 0),
+            0
+          );
+          payment_summary_normalized = { total_amount, modes };
+        } else if (paymentSummary && typeof paymentSummary === "object") {
+          // If server already returned an object with modes, normalize numbers
+          const modes = (paymentSummary.modes || []).map((m: any) => ({
+            mode: m.mode || m.name || m.method || "Unknown",
+            total: Number(m.amount ?? m.total ?? m.value ?? 0),
+            count: m.count ?? 0,
+          }));
+          const total_amount =
+            paymentSummary.total_amount ??
+            modes.reduce((s: number, mm: any) => s + Number(mm.total || 0), 0);
+          payment_summary_normalized = { total_amount, modes };
+        } else {
+          payment_summary_normalized = { total_amount: 0, modes: [] };
+        }
+
+        return {
+          timeseries,
+          stock_page: stock_page_normalized,
+          payment_summary: payment_summary_normalized,
+          summary: summary ?? {},
+        };
+      } catch (fallbackErr) {
+        console.warn(
+          "getTimeseries fallback to tenantReport endpoints failed:",
+          fallbackErr
+        );
+        throw new Error(
+          `Failed to fetch report: ${res.status} ${res.statusText}`
+        );
+      }
+    }
+
     throw new Error(`Failed to fetch report: ${res.status} ${res.statusText}`);
   }
 
@@ -513,6 +661,86 @@ export const pdfReportService = {
       throw error;
     }
   },
+  /**
+   * Tenant PDF endpoints (created by tenantReportPdf router)
+   */
+  generateSummaryPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/tenantReportPdf/summary/pdf", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `summary_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("Summary PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  generateStockPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/tenantReportPdf/stock/pdf", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `stock_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("Stock PDF generation error:", error);
+      throw error;
+    }
+  },
+
+  generateProfitPDF: async (params = {}) => {
+    try {
+      const response = await api.get("/api/tenantReportPdf/profit/pdf", {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `profit_report_${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error("Profit PDF generation error:", error);
+      throw error;
+    }
+  },
 };
 // ===============================
 // ACTIVITY API (Dummy)
@@ -693,10 +921,83 @@ export const plansAPI = planAPI;
 // PRODUCTS API
 // ===============================
 export const productService = {
-  getAll: async () => (await api.get("/api/products")).data,
+  // getAll supports optional query params: { search, page, limit }
+  // Normalizes product/category shapes so UI can rely on `category` (string) and `category_id`.
+  getAll: async (params: Record<string, any> = {}) => {
+    const res = await api.get("/api/products", { params });
+    const payload = res.data;
+
+    const raw = payload?.data ?? (Array.isArray(payload) ? payload : []);
+
+    const normalize = (p: any) => {
+      const categoryName =
+        p.category ??
+        p.category_name ??
+        p.categories?.name ??
+        (Array.isArray(p.categories) && p.categories[0]?.name) ??
+        p.product_category?.name ??
+        p.products?.category ??
+        p.products?.categories?.name ??
+        undefined;
+
+      const categoryId =
+        p.category_id ??
+        p.categoryId ??
+        p.categories?.id ??
+        (Array.isArray(p.categories) && p.categories[0]?.id) ??
+        p.product_category_id ??
+        undefined;
+
+      return {
+        ...p,
+        name: p.name ?? p.product_name ?? p.products?.name ?? "",
+        category:
+          typeof categoryName === "string"
+            ? categoryName
+            : categoryName?.toString() ?? "",
+        category_id: categoryId ?? undefined,
+        selling_price: Number(
+          p.selling_price ?? p.sellingPrice ?? p.price ?? 0
+        ),
+        cost_price: Number(p.cost_price ?? p.costPrice ?? p.unit_cost ?? 0),
+      } as any;
+    };
+
+    const normalized = raw.map(normalize);
+
+    // Preserve pagination / meta when backend returns an object with `data` and metadata
+    if (payload && payload.data) {
+      return { ...payload, data: normalized };
+    }
+
+    return normalized;
+  },
+
   getById: async (id) => (await api.get(`/api/products/${id}`)).data,
-  create: async (data) => (await api.post("/api/products", data)).data,
-  update: async (id, data) => (await api.put(`/api/products/${id}`, data)).data,
+
+  // create/update accept either JSON or FormData (for images)
+  create: async (data) => {
+    if (typeof FormData !== "undefined" && data instanceof FormData) {
+      const res = await api.post("/api/products", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res.data;
+    }
+    const res = await api.post("/api/products", data);
+    return res.data;
+  },
+
+  update: async (id, data) => {
+    if (typeof FormData !== "undefined" && data instanceof FormData) {
+      const res = await api.put(`/api/products/${id}`, data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res.data;
+    }
+    const res = await api.put(`/api/products/${id}`, data);
+    return res.data;
+  },
+
   delete: async (id) => (await api.delete(`/api/products/${id}`)).data,
 };
 
@@ -744,7 +1045,7 @@ export const walletAPI = {
 export const purchaseService = {
   // Accept optional pagination params: { page, limit, tenant_id }
   getAll: (params: Record<string, any> = {}) =>
-    api.get("api/purchases", { params }),
+    api.get("/api/purchases", { params }),
   getById: (id) => api.get(`api/purchases/${id}`),
   create: (data) => api.post("api/purchases", data),
   update: (id, data) => api.put(`api/purchases/${id}`, data),
@@ -753,11 +1054,13 @@ export const purchaseService = {
 
 // services/api.js - Add invoice service
 export const invoiceService = {
-  getAll: () => api.get("api/invoices"),
-  getById: (id) => api.get(`api/invoices/${id}`),
-  create: (data) => api.post("api/invoices", data),
-  delete: (id) => api.delete(`api/invoices/${id}`),
-  getStats: () => api.get("api/invoices/stats"),
+  // accept optional params object forwarded to axios (e.g., { search, page, limit })
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/invoices", { params }),
+  getById: (id) => api.get(`/api/invoices/${id}`),
+  create: (data) => api.post("/api/invoices", data),
+  delete: (id) => api.delete(`/api/invoices/${id}`),
+  getStats: () => api.get("/api/invoices/stats"),
 };
 
 // services/api.js - Add sales return service
@@ -817,6 +1120,16 @@ export const supplierService = {
     return (await api.get("/api/suppliers", { params })).data;
   },
 
+  // Normalized list: always returns an array of supplier objects
+  list: async (search = "") => {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    const res = await api.get("/api/suppliers", { params });
+    const payload = res.data;
+    // backend may return { data: [...] } or an array directly
+    return payload?.data ?? payload ?? [];
+  },
+
   // Get single supplier detail
   getById: async (id) => (await api.get(`/api/suppliers/${id}`)).data,
 
@@ -834,6 +1147,55 @@ export const supplierService = {
 // ===============================
 // EMPLOYEE API
 // ===============================
+// ===============================
+// CUSTOMER API
+// ===============================
+export const customerService = {
+  // list customers, supports pagination and search
+  list: async ({ page = 1, limit = 50, search = "" } = {}) => {
+    if (search && String(search).trim().length > 0) {
+      const res = await api.get(
+        `/api/customers/search/${encodeURIComponent(String(search))}`
+      );
+      const payload = res.data;
+      const data = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : payload?.data ?? [];
+      return { data, total: payload?.total ?? data.length };
+    }
+
+    const res = await api.get("/api/customers", { params: { page, limit } });
+    const payload = res.data;
+    const data = payload?.data ?? (Array.isArray(payload) ? payload : []);
+    return {
+      data,
+      total: payload?.total ?? payload?.totalRecords ?? data.length,
+    };
+  },
+
+  getById: async (id: string | number) => {
+    const res = await api.get(`/api/customers/${id}`);
+    return res.data;
+  },
+
+  create: async (payload: any) => {
+    const res = await api.post(`/api/customers`, payload);
+    return res.data;
+  },
+
+  update: async (id: string | number, payload: any) => {
+    const res = await api.put(`/api/customers/${id}`, payload);
+    return res.data;
+  },
+
+  delete: async (id: string | number) => {
+    const res = await api.delete(`/api/customers/${id}`);
+    return res.data;
+  },
+};
+
 export const employeeService = {
   // Get all employees
   getAll: async (params: Record<string, any> = {}) =>

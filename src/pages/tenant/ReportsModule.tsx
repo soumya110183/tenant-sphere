@@ -42,6 +42,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useReports } from "@/hooks/useReports";
 import { pdfReportService } from "@/services/api";
+import { tenantReportAPI } from "@/services/api";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
@@ -58,12 +59,14 @@ const ReportsModule = () => {
   >("daily");
   const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [profitReport, setProfitReport] = useState<any[] | null>(null);
 
   // Use the custom hook to fetch all report data
   const {
     loading,
     error,
     summary,
+    rawSummary,
     salesSeries,
     purchaseSeries,
     stockReport,
@@ -76,11 +79,19 @@ const ReportsModule = () => {
   });
 
   // Combine sales and purchase series for analytics chart
-  const combinedSeries = salesSeries.map((s, idx) => ({
-    date: s.date,
-    sales: s.sales || 0,
-    purchase: purchaseSeries[idx]?.purchase || 0,
-  }));
+  // Normalize backend shapes: support `date`/`sales` and `sale_date`/`total_sales` variants
+  const combinedSeries = salesSeries.map((s: any, idx: number) => {
+    const dateVal =
+      s.date ?? s.day ?? s.period ?? s.sale_date ?? s.saleDate ?? "";
+    const salesAmt = Number(
+      s.sales ?? s.total ?? s.value ?? s.total_sales ?? s.totalSales ?? 0
+    );
+    return {
+      date: dateVal,
+      sales: salesAmt || 0,
+      purchase: purchaseSeries[idx]?.purchase || 0,
+    };
+  });
 
   // derive today's sales from dailyMetrics or salesSeries
   const todayIso = new Date().toISOString().split("T")[0];
@@ -100,6 +111,17 @@ const ReportsModule = () => {
     if (!previous || previous === 0) return "+0%";
     const change = ((current - previous) / previous) * 100;
     return `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`;
+  };
+
+  const isCurrencyKey = (k: string) =>
+    /sale|sales|purchase|purchas|profit|revenue|amount|total|value/i.test(k);
+  const formatSummaryValue = (k: string, v: any) => {
+    if (v === null || v === undefined) return "-";
+    if (typeof v === "number") {
+      if (isCurrencyKey(k)) return `AED ${Number(v).toLocaleString()}`;
+      return Number(v).toLocaleString();
+    }
+    return String(v);
   };
 
   // derive yesterday's sales from dailyMetrics for percentage change
@@ -227,6 +249,51 @@ const ReportsModule = () => {
     }
   }, [salesSeries]);
 
+  // Fetch profit report when dateRange changes
+  useEffect(() => {
+    let mounted = true;
+    const fetchProfit = async () => {
+      try {
+        const tenantId = localStorage.getItem("tenant_id");
+
+        // Compute range params matching backend controller expectations
+        const today = new Date().toISOString().split("T")[0];
+        const s7 = new Date();
+        s7.setDate(new Date().getDate() - 6);
+        const start7 = s7.toISOString().split("T")[0];
+        const s30 = new Date();
+        s30.setDate(new Date().getDate() - 29);
+        const start30 = s30.toISOString().split("T")[0];
+
+        let params: any = { ...(tenantId ? { tenant_id: tenantId } : {}) };
+
+        if (dateRange.startDate === start7 && dateRange.endDate === today) {
+          params.range = "7d";
+        } else if (
+          dateRange.startDate === start30 &&
+          dateRange.endDate === today
+        ) {
+          params.range = "30d";
+        } else {
+          params.from = dateRange.startDate;
+          params.to = dateRange.endDate;
+        }
+
+        const res = await tenantReportAPI.getProfitReport(params);
+        const data = res?.data ?? res ?? [];
+        if (mounted) setProfitReport(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.warn("Failed to load profit report:", err);
+        if (mounted) setProfitReport([]);
+      }
+    };
+    fetchProfit();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange.startDate, dateRange.endDate]);
+
   // Router sync for tabs
   const navigate = useNavigate();
   const location = useLocation();
@@ -234,20 +301,22 @@ const ReportsModule = () => {
   const getInitialTab = () => {
     const path = location.pathname || "";
     if (path.includes("/report/sales")) return "sales";
+    if (path.includes("/report/profit")) return "profit-report";
     if (path.includes("/report/purchases")) return "purchases";
     if (path.includes("/report/stock")) return "stock";
     if (path.includes("/report/payments")) return "payments";
     if (path.includes("/report/analytics")) return "analytics";
-    // default to daily-summary
-    return "daily-summary";
+    // default to summary
+    return "summary";
   };
 
   const [activeTab, setActiveTab] = useState<string>(getInitialTab());
 
   useEffect(() => {
     const tabRoutes: Record<string, string> = {
-      "daily-summary": "/report",
+      summary: "/report",
       sales: "/report/sales",
+      "profit-report": "/report/profit",
       purchases: "/report/purchases",
       stock: "/report/stock",
       payments: "/report/payments",
@@ -265,6 +334,8 @@ const ReportsModule = () => {
     const path = location.pathname || "";
     if (path.includes("/report/sales") && activeTab !== "sales")
       setActiveTab("sales");
+    else if (path.includes("/report/profit") && activeTab !== "profit-report")
+      setActiveTab("profit-report");
     else if (path.includes("/report/purchases") && activeTab !== "purchases")
       setActiveTab("purchases");
     else if (path.includes("/report/stock") && activeTab !== "stock")
@@ -275,9 +346,9 @@ const ReportsModule = () => {
       setActiveTab("analytics");
     else if (
       (path === "/report" || path === "/report/") &&
-      activeTab !== "daily-summary"
+      activeTab !== "summary"
     )
-      setActiveTab("daily-summary");
+      setActiveTab("summary");
   }, [location.pathname]);
 
   // Handle PDF downloads
@@ -404,120 +475,45 @@ const ReportsModule = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card
-          className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
-          onClick={() => (window.location.href = "/inventory")}
-          title="Click to view low stock inventory"
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Today's Sales
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              AED {Number(todaySales || 0).toFixed(2)}
-            </div>
-            <p
-              className={`text-xs mt-1 ${
-                todaySalesChangeValue >= 0 ? "text-success" : "text-destructive"
-              }`}
-            >
-              {todaySalesChange} from yesterday
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Total Purchases
-            </CardTitle>
-            <ShoppingCart className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              AED {Number(summary.totalPurchases || 0).toLocaleString()}
-            </div>
-            <p
-              className={`text-xs mt-1 ${
-                purchasesChangeValue >= 0 ? "text-success" : "text-destructive"
-              }`}
-            >
-              {purchasesChange} from yesterday
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Period Total</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Profit
-            </CardTitle>
-            <BarChart3 className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              AED {Number(summary.profit || 0).toLocaleString()}
-            </div>
-            <p
-              className={`text-xs mt-1 ${
-                profitChangeValue >= 0 ? "text-success" : "text-destructive"
-              }`}
-            >
-              {profitChange} from yesterday
-            </p>
-            <p className="text-xs text-success mt-1">Net Profit</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Low Stock
-            </CardTitle>
-            <Package className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.lowStock}</div>
-            <p
-              className={`text-xs mt-1 ${
-                lowStockChangeValue >= 0 ? "text-success" : "text-destructive"
-              }`}
-            >
-              {lowStockChange} from yesterday
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Items below threshold
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Transactions
-            </CardTitle>
-            <CreditCard className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.transactions}</div>
-            <p
-              className={`text-xs mt-1 ${
-                transactionsChangeValue >= 0
-                  ? "text-success"
-                  : "text-destructive"
-              }`}
-            >
-              {transactionsChange} from yesterday
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">Total Invoices</p>
-          </CardContent>
-        </Card>
+      {/* Summary Cards (dynamic from backend `summary` object) */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {summary && Object.keys(summary).length > 0 ? (
+          Object.entries(summary)
+            .filter(
+              ([k, v]) =>
+                v !== null &&
+                v !== undefined &&
+                k !== "table" &&
+                k !== "transactions"
+            )
+            .slice(0, 8)
+            .map(([k, v]) => (
+              <Card
+                key={k}
+                className="transition-colors duration-150 ease-in-out"
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm text-muted-foreground capitalize">
+                    {k.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}
+                  </CardTitle>
+                  {isCurrencyKey(k) ? (
+                    <DollarSign className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatSummaryValue(k, v)}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+        ) : (
+          <div className="col-span-4 text-sm text-muted-foreground">
+            No summary metrics available from backend.
+          </div>
+        )}
       </div>
 
       {/* Tabs (route-aware) */}
@@ -527,25 +523,50 @@ const ReportsModule = () => {
         className="space-y-4"
       >
         <TabsList>
-          <TabsTrigger value="daily-summary">Daily Summary</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>
+          <TabsTrigger value="profit-report">Profit Report</TabsTrigger>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
-        {/* DAILY SUMMARY TABLE */}
-        <TabsContent value="daily-summary">
+        {/* SUMMARY TABLE: prefer backend-provided `summary.table`, fallback to `dailyMetrics` */}
+        <TabsContent value="summary">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Daily Metrics Table</CardTitle>
+              <CardTitle>Summary</CardTitle>
               <Button
                 size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
+                onClick={async () => {
+                  setDownloadingPDF("summary");
+                  try {
+                    const tenantId = localStorage.getItem("tenant_id");
+                    const params = {
+                      ...(tenantId ? { tenant_id: tenantId } : {}),
+                      start_date: dateRange.startDate,
+                      end_date: dateRange.endDate,
+                    };
+                    await pdfReportService.generateSummaryPDF(params);
+                    toast({
+                      title: "PDF Generated",
+                      description: "Summary PDF downloaded.",
+                    });
+                  } catch (err) {
+                    console.error("Summary PDF error:", err);
+                    toast({
+                      title: "Download Failed",
+                      description: "Failed to generate Summary PDF.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setDownloadingPDF(null);
+                  }
+                }}
+                disabled={downloadingPDF === "summary"}
               >
-                {downloadingPDF === "sales" ? (
+                {downloadingPDF === "summary" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <FileDown className="h-4 w-4" />
@@ -553,82 +574,104 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4 overflow-auto">
-              <Table className="min-w-[1200px] text-xs">
-                <TableHeader>
-                  <TableRow className="whitespace-nowrap">
-                    <TableHead>Date</TableHead>
-                    <TableHead>Sales (AED)</TableHead>
-                    <TableHead>Invoices</TableHead>
-                    <TableHead>Avg Bill (AED)</TableHead>
-                    <TableHead>Top Product</TableHead>
-                    <TableHead>Purchases (AED)</TableHead>
-                    <TableHead>Purchase Entries</TableHead>
-                    <TableHead>Profit (AED)</TableHead>
-                    <TableHead>Margin %</TableHead>
-                    <TableHead>Δ Prev Day %</TableHead>
-                    <TableHead>Δ Weekly Avg %</TableHead>
-                    <TableHead>Sold Qty</TableHead>
-                    <TableHead>Received Qty</TableHead>
-                    <TableHead>Cash (AED)</TableHead>
-                    <TableHead>UPI (AED)</TableHead>
-                    <TableHead>Card (AED)</TableHead>
-                    <TableHead>Credit (AED)</TableHead>
-                    <TableHead>Low Stock</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dailyMetrics.map((row) => (
-                    <TableRow key={row.date} className="whitespace-nowrap">
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell>{row.salesAmount.toLocaleString()}</TableCell>
-                      <TableCell>{row.invoiceCount}</TableCell>
-                      <TableCell>{row.avgBill.toLocaleString()}</TableCell>
-                      <TableCell>{row.topProduct}</TableCell>
-                      <TableCell>
-                        {row.purchaseAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell>{row.purchaseEntries}</TableCell>
-                      <TableCell>{row.dailyProfit.toLocaleString()}</TableCell>
-                      <TableCell>{row.marginPct.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {row.prevDaySalesChangePct === null
-                          ? "-"
-                          : row.prevDaySalesChangePct.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        {row.vsWeeklyAvgSalesChangePct.toFixed(2)}
-                      </TableCell>
-                      <TableCell>{row.soldItemsQty}</TableCell>
-                      <TableCell>{row.receivedItemsQty}</TableCell>
-                      <TableCell>{row.cash.toLocaleString()}</TableCell>
-                      <TableCell>{row.upi.toLocaleString()}</TableCell>
-                      <TableCell>{row.card.toLocaleString()}</TableCell>
-                      <TableCell>{row.credit.toLocaleString()}</TableCell>
-                      <TableCell>{row.lowStock}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {dailyMetrics.length === 0 && (
+              {Array.isArray(rawSummary?.table) &&
+              rawSummary.table.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px]">
+                    <thead>
+                      <tr className="border-b">
+                        {Object.keys(rawSummary.table[0]).map((col) => (
+                          <th key={col} className="text-left py-2 px-3 text-sm">
+                            {col.replace(/_/g, " ")}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rawSummary.table.map((row: any, idx: number) => (
+                        <tr key={idx} className="border-b hover:bg-muted/50">
+                          {Object.keys(rawSummary.table[0]).map((col) => (
+                            <td key={col} className="py-2 px-3 text-sm">
+                              {formatSummaryValue(col, row[col])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : rawSummary &&
+                typeof rawSummary === "object" &&
+                Object.keys(rawSummary).length > 0 ? (
+                // Fallback: render key/value pairs when backend returns a flat summary object
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[400px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-3 text-sm">Metric</th>
+                        <th className="text-right py-2 px-3 text-sm">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(rawSummary)
+                        .filter(([k]) => k !== "table")
+                        .map(([k, v]) => (
+                          <tr key={k} className="border-b hover:bg-muted/50">
+                            <td className="py-2 px-3 text-sm">
+                              {k.replace(/_/g, " ")}
+                            </td>
+                            <td className="py-2 px-3 text-sm text-right">
+                              {formatSummaryValue(k, v)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
                 <p className="text-muted-foreground text-sm">
-                  No daily data available for selected range.
+                  No summary data available from backend for selected range.
                 </p>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* SALES */}
-        <TabsContent value="sales">
+        {/* PROFIT REPORT */}
+        <TabsContent value="profit-report">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Sales Report</CardTitle>
+              <CardTitle>Profit Report (Revenue vs Cost)</CardTitle>
               <Button
                 size="sm"
-                onClick={() => handleDownloadPDF("sales")}
-                disabled={downloadingPDF === "sales"}
+                onClick={async () => {
+                  setDownloadingPDF("profit");
+                  try {
+                    const tenantId = localStorage.getItem("tenant_id");
+                    const params = {
+                      ...(tenantId ? { tenant_id: tenantId } : {}),
+                      start_date: dateRange.startDate,
+                      end_date: dateRange.endDate,
+                    };
+                    await pdfReportService.generateProfitPDF(params);
+                    toast({
+                      title: "PDF Generated",
+                      description: "Profit PDF downloaded.",
+                    });
+                  } catch (err) {
+                    console.error("Profit PDF error:", err);
+                    toast({
+                      title: "Download Failed",
+                      description: "Failed to generate Profit PDF.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setDownloadingPDF(null);
+                  }
+                }}
+                disabled={downloadingPDF === "profit"}
               >
-                {downloadingPDF === "sales" ? (
+                {downloadingPDF === "profit" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <FileDown className="h-4 w-4" />
@@ -636,26 +679,138 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="sales"
-                    stroke="hsl(var(--primary))"
-                    name="Sales (AED)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">Product</th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Revenue (AED)
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Cost (AED)
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Profit (AED)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profitReport && profitReport.length > 0 ? (
+                      profitReport.map((p: any, idx: number) => (
+                        <tr key={idx} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-sm">
+                            {p.product ||
+                              p.product_name ||
+                              p.name ||
+                              `Product #${p.product_id || idx}`}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED {Number(p.revenue || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED {Number(p.cost || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED{" "}
+                            {Number(
+                              (p.revenue || 0) - (p.cost || 0)
+                            ).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No profit data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* PURCHASES */}
+        {/* SALES */}
+        <TabsContent value="sales">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <CardTitle>Sales Report</CardTitle>
+                <div>
+                  <label className="text-xs text-muted-foreground mr-2">
+                    Granularity
+                  </label>
+                  <select
+                    value={granularity}
+                    onChange={(e) => setGranularity(e.target.value as any)}
+                    className="px-2 py-1 border rounded text-sm"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Button
+                  size="sm"
+                  onClick={() => handleDownloadPDF("sales")}
+                  disabled={downloadingPDF === "sales"}
+                >
+                  {downloadingPDF === "sales" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">Date</th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Sales (AED)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesSeries && salesSeries.length > 0 ? (
+                      salesSeries.map((s: any) => (
+                        <tr key={s.date} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-sm">{s.date}</td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED{" "}
+                            {Number(s.sales ?? s.total ?? 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No sales data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PURCHASES (Table) */}
         <TabsContent value="purchases">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -673,20 +828,42 @@ const ReportsModule = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={purchaseSeries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="purchase"
-                    fill="hsl(var(--primary))"
-                    name="Purchases (AED)"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">Date</th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Purchases (AED)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseSeries && purchaseSeries.length > 0 ? (
+                      purchaseSeries.map((p: any) => (
+                        <tr key={p.date} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-3 text-sm">{p.date}</td>
+                          <td className="py-2 px-3 text-sm text-right">
+                            AED{" "}
+                            {Number(
+                              p.purchase || p.purchases || 0
+                            ).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No purchase data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -698,10 +875,34 @@ const ReportsModule = () => {
               <CardTitle>Stock Overview</CardTitle>
               <Button
                 size="sm"
-                onClick={() => handleDownloadPDF("inventory")}
-                disabled={downloadingPDF === "inventory"}
+                onClick={async () => {
+                  setDownloadingPDF("stock");
+                  try {
+                    const tenantId = localStorage.getItem("tenant_id");
+                    const params = {
+                      ...(tenantId ? { tenant_id: tenantId } : {}),
+                      start_date: dateRange.startDate,
+                      end_date: dateRange.endDate,
+                    };
+                    await pdfReportService.generateStockPDF(params);
+                    toast({
+                      title: "PDF Generated",
+                      description: "Stock PDF downloaded.",
+                    });
+                  } catch (err) {
+                    console.error("Stock PDF error:", err);
+                    toast({
+                      title: "Download Failed",
+                      description: "Failed to generate Stock PDF.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setDownloadingPDF(null);
+                  }
+                }}
+                disabled={downloadingPDF === "stock"}
               >
-                {downloadingPDF === "inventory" ? (
+                {downloadingPDF === "stock" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <FileDown className="h-4 w-4" />
@@ -741,55 +942,64 @@ const ReportsModule = () => {
           </Card>
         </TabsContent>
 
-        {/* PAYMENTS */}
+        {/* PAYMENTS (Table) */}
         <TabsContent value="payments">
           <Card>
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <RePieChart>
-                    <Pie
-                      data={paymentSummary}
-                      dataKey="value"
-                      nameKey="mode"
-                      outerRadius={100}
-                      label
-                    >
-                      {paymentSummary.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </RePieChart>
-                </ResponsiveContainer>
-                <div className="space-y-4">
-                  {paymentSummary.map((pm, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{
-                            backgroundColor: COLORS[idx % COLORS.length],
-                          }}
-                        />
-                        <span className="font-medium">{pm.mode}</span>
-                      </div>
-                      <span className="text-lg font-bold">
-                        AED {pm.value.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[400px]">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-sm">
+                        Payment Mode
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">
+                        Amount (AED)
+                      </th>
+                      <th className="text-right py-2 px-3 text-sm">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentSummary && paymentSummary.length > 0 ? (
+                      (() => {
+                        const total =
+                          paymentSummary.reduce(
+                            (s: number, p: any) => s + Number(p.value || 0),
+                            0
+                          ) || 1;
+                        return paymentSummary.map((pm: any, idx: number) => (
+                          <tr
+                            key={pm.mode || idx}
+                            className="border-b hover:bg-muted/50"
+                          >
+                            <td className="py-2 px-3 text-sm">{pm.mode}</td>
+                            <td className="py-2 px-3 text-sm text-right">
+                              AED {Number(pm.value || 0).toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-sm text-right">
+                              {((Number(pm.value || 0) / total) * 100).toFixed(
+                                1
+                              )}
+                              %
+                            </td>
+                          </tr>
+                        ));
+                      })()
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="text-center py-8 text-muted-foreground"
+                        >
+                          No payment data available for selected range.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

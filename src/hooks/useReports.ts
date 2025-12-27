@@ -86,6 +86,7 @@ export interface UseReportsReturn {
   loading: boolean;
   error: string | null;
   summary: Summary;
+  rawSummary?: any;
   salesSeries: RechartsPoint[];
   purchaseSeries: RechartsPoint[];
   stockReport: Array<{
@@ -158,6 +159,7 @@ export function useReports({
     Array<{ mode: string; value: number }>
   >([]);
   const [dailyMetrics, setDailyMetrics] = useState<DailyMetricsRow[]>([]);
+  const [rawSummary, setRawSummary] = useState<any>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -185,6 +187,29 @@ export function useReports({
           (Array.isArray(reportRes.timeseries) &&
             reportRes.timeseries.length === 0)
         ) {
+          // Compute range params to match backend controller expectations
+          const computeRangeParams = (start: string, end: string) => {
+            try {
+              const today = new Date().toISOString().split("T")[0];
+              const s7 = new Date();
+              s7.setDate(new Date().getDate() - 6);
+              const start7 = s7.toISOString().split("T")[0];
+              const s30 = new Date();
+              s30.setDate(new Date().getDate() - 29);
+              const start30 = s30.toISOString().split("T")[0];
+
+              if (start === start7 && end === today) return { range: "7d" };
+              if (start === start30 && end === today) return { range: "30d" };
+
+              // Custom date range
+              return { from: start, to: end };
+            } catch (e) {
+              return { from: start, to: end };
+            }
+          };
+
+          const rangeParams = computeRangeParams(startDate, endDate);
+
           // Parallel tenant-specific calls
           // Helper to log server errors and return a safe fallback value
           const wrap = async (p: Promise<any>, name: string, fallback: any) =>
@@ -210,24 +235,28 @@ export function useReports({
             invoicesResp,
             purchasesResp,
           ] = await Promise.all([
-            wrap(tenantReportAPI.getSummary(), "tenantReport.getSummary", null),
             wrap(
-              tenantReportAPI.getSalesChart(),
+              tenantReportAPI.getSummary(rangeParams),
+              "tenantReport.getSummary",
+              null
+            ),
+            wrap(
+              tenantReportAPI.getSalesChart(rangeParams),
               "tenantReport.getSalesChart",
               []
             ),
             wrap(
-              tenantReportAPI.getPurchaseChart(),
+              tenantReportAPI.getPurchaseChart(rangeParams),
               "tenantReport.getPurchaseChart",
               []
             ),
             wrap(
-              tenantReportAPI.getStockReport(),
+              tenantReportAPI.getStockReport(rangeParams),
               "tenantReport.getStockReport",
               []
             ),
             wrap(
-              tenantReportAPI.getPaymentSummary(),
+              tenantReportAPI.getPaymentSummary(rangeParams),
               "tenantReport.getPaymentSummary",
               null
             ),
@@ -254,7 +283,8 @@ export function useReports({
             const d = s.date || s.day || s.label || s.month || s.month_label;
             if (!d) return;
             byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
-            byDate[d].sales = Number(
+            // Accumulate sales for the same date instead of overwriting
+            byDate[d].sales += Number(
               s.sales ?? s.total ?? s.value ?? s.amount ?? 0
             );
           });
@@ -262,7 +292,10 @@ export function useReports({
             const d = p.date || p.day || (p.created_at || "").slice(0, 10);
             if (!d) return;
             byDate[d] = byDate[d] || { date: d, sales: 0, purchase: 0 };
-            byDate[d].purchase = Number(p.purchase ?? p.total ?? p.value ?? 0);
+            // Accumulate purchase totals for the same date instead of overwriting
+            byDate[d].purchase += Number(
+              p.purchases ?? p.purchase ?? p.total ?? p.value ?? 0
+            );
           });
 
           const timeseries = Object.values(byDate).sort(
@@ -275,14 +308,15 @@ export function useReports({
             ? paymentSummary
             : paymentSummary?.modes || [];
           const totalPaymentAmount = paymentModesArr.reduce(
-            (s: number, m: any) => s + Number(m.value ?? m.total ?? 0),
+            (s: number, m: any) =>
+              s + Number(m.amount ?? m.value ?? m.total ?? 0),
             0
           );
           const payment_summary_normalized = {
             total_amount: totalPaymentAmount,
             modes: paymentModesArr.map((m: any) => ({
               mode: m.mode || m.name || m.method || "Unknown",
-              total: Number(m.value ?? m.total ?? 0),
+              total: Number(m.amount ?? m.value ?? m.total ?? 0),
               count: m.count || 0,
             })),
           };
@@ -361,11 +395,23 @@ export function useReports({
         );
         const profit = totalSales - totalPurchases;
 
-        // Total transactions from timeseries counts
-        const transactions = timeseriesRaw.reduce(
+        // Total transactions from timeseries counts. If the backend timeseries
+        // does not include per-period `sales_count`, fall back to invoice
+        // page length so `summary.transactions` is not always zero.
+        let transactions = timeseriesRaw.reduce(
           (s: number, t: TimeSeriesPoint) => s + (Number(t.sales_count) || 0),
           0
         );
+
+        if (!transactions || transactions === 0) {
+          // Try to derive from invoices list (tenant-specific fallback)
+          try {
+            const invCount = Array.isArray(invoices) ? invoices.length : 0;
+            if (invCount && invCount > 0) transactions = invCount;
+          } catch (e) {
+            // keep transactions as-is (0) if anything fails
+          }
+        }
 
         const lowStock = inventory.filter((it) => {
           const qty = Number(it.quantity ?? 0);
@@ -426,6 +472,10 @@ export function useReports({
         }));
 
         // --- Commit to state ---
+        // preserve raw backend-provided summary object if present
+        const raw = reportRes?.summary ?? null;
+        setRawSummary(raw);
+
         setSummary({
           totalSales: Number(totalSales.toFixed(2)),
           totalPurchases: Number(totalPurchases.toFixed(2)),
@@ -585,6 +635,7 @@ export function useReports({
     loading,
     error,
     summary,
+    rawSummary,
     salesSeries,
     purchaseSeries,
     stockReport,

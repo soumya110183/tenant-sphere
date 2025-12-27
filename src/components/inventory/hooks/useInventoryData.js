@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -13,7 +13,7 @@ import {
 export const useInventoryData = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [products, setProducts] = useState([]);
   const [baseInventory, setBaseInventory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,18 +83,25 @@ export const useInventoryData = () => {
       const formattedData = rawData.map((ret) => ({
         id: ret.id,
         originalSaleId: ret.sales_id,
-        date: ret.created_at || ret.return_date || ret.date || new Date().toISOString().split("T")[0],
-        productName: ret.product_name || ret.name || `Product #${ret.product_id}`,
+        date:
+          ret.created_at ||
+          ret.return_date ||
+          ret.date ||
+          new Date().toISOString().split("T")[0],
+        productName:
+          ret.product_name || ret.name || `Product #${ret.product_id}`,
         productId: ret.product_id,
         quantity: ret.quantity,
         reason: ret.reason || ret.return_reason || "N/A",
         refundType: ret.refund_type || ret.type || "Cash",
         totalRefund: ret.total_refund || ret.refund_amount || ret.amount || 0,
-        items: [{
-          name: ret.product_name || ret.name || `Product #${ret.product_id}`,
-          qty: ret.quantity,
-          reason: ret.reason || ret.return_reason || "N/A",
-        }],
+        items: [
+          {
+            name: ret.product_name || ret.name || `Product #${ret.product_id}`,
+            qty: ret.quantity,
+            reason: ret.reason || ret.return_reason || "N/A",
+          },
+        ],
       }));
 
       setSalesReturns(formattedData);
@@ -111,8 +118,7 @@ export const useInventoryData = () => {
 
   const loadPurchaseReturns = async () => {
     try {
-      const tenantId = localStorage.getItem("tenant_id");
-      const params = tenantId ? { tenant_id: tenantId } : {};
+      const params = {};
       const response = await purchaseReturnService.getAll(params);
       const apiData = response?.data;
       let rawData = [];
@@ -126,20 +132,30 @@ export const useInventoryData = () => {
       const formattedData = rawData.map((ret) => ({
         id: ret.id,
         supplierId: ret.Suppliers_id || null,
-        supplierName: ret.Suppliers_id ? `Supplier #${ret.Suppliers_id}` : "N/A",
+        supplierName: ret.Suppliers_id
+          ? `Supplier #${ret.Suppliers_id}`
+          : "N/A",
         date: ret.created_at || new Date().toISOString().split("T")[0],
-        productName: ret.products?.name || ret.select_product || `Product #${ret.product_id}`,
+        productName:
+          ret.products?.name ||
+          ret.select_product ||
+          `Product #${ret.product_id}`,
         productId: ret.product_id,
         quantity: ret.quantity,
         reason: ret.reason || "N/A",
         refundMethod: ret.refund_method || "N/A",
         amountAdjusted: 0,
-        items: [{
-          name: ret.products?.name || ret.select_product || `Product #${ret.product_id}`,
-          qty: ret.quantity,
-          reason: ret.reason || "N/A",
-          productId: ret.product_id,
-        }],
+        items: [
+          {
+            name:
+              ret.products?.name ||
+              ret.select_product ||
+              `Product #${ret.product_id}`,
+            qty: ret.quantity,
+            reason: ret.reason || "N/A",
+            productId: ret.product_id,
+          },
+        ],
       }));
 
       setPurchaseReturns(formattedData);
@@ -198,6 +214,6 @@ export const useInventoryData = () => {
     refreshAll,
     loadInventory,
     loadSales,
-    setProducts
+    setProducts,
   };
 };

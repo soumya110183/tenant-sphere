@@ -161,136 +161,30 @@ const TenantDashboard = () => {
     return [];
   };
 
-  const loadDashboardData = async () => {
-    try {
-      setDashboardData((prev) => ({ ...prev, isLoading: true }));
-
-      // Load invoices (sales)
-      const invoicesResponse = await invoiceService.getAll();
-      const invoices = parseInvoicesArray(invoicesResponse);
-
-      // Load inventory
-      const inventoryResponse = await inventoryService.getAll();
-      const inventory = parseInventoryArray(inventoryResponse);
-
-      // Load purchases for additional stats
-      const purchasesResponse = await purchaseService.getAll();
-      const purchases = parseInvoicesArray(purchasesResponse);
-
-      console.log("Inventory raw response:", inventoryResponse);
-      console.log("Dashboard data loaded:", {
-        invoices: invoices.length,
-        inventory: inventory.length,
-        purchases: purchases.length,
-      });
-
-      // Calculate today's sales
-      const today = new Date().toISOString().split("T")[0];
-      const todaySales = invoices
-        .filter((invoice) => invoice.created_at?.startsWith(today))
-        .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
-
-      // Calculate total products and low stock items
-      const totalProducts = inventory.length;
-      const lowStockItems = inventory.filter((item) => {
-        const quantity = item.quantity ?? item.qty ?? 0;
-        const reorderLevel = item.reorder_level ?? item.reorderLevel ?? 0;
-        return reorderLevel > 0 && quantity <= reorderLevel;
-      }).length;
-
-      // Calculate revenue data for last 6 months
-      const lastSixMonths = getLastSixMonths();
-      const revenueData = lastSixMonths.map((monthData) => {
-        const monthRevenue = invoices
-          .filter((invoice) => {
-            if (!invoice.created_at) return false;
-            const invoiceDate = new Date(invoice.created_at);
-            return (
-              invoiceDate.getMonth() === monthData.fullDate.getMonth() &&
-              invoiceDate.getFullYear() === monthData.fullDate.getFullYear()
-            );
-          })
-          .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
-
-        return {
-          month: monthData.month,
-          revenue: monthRevenue,
-        };
-      });
-
-      // Calculate sales data for last 7 days
-      const lastSevenDays = getLastSevenDays();
-      const salesData = lastSevenDays.map((dayData) => {
-        const daySales = invoices
-          .filter((invoice) => {
-            if (!invoice.created_at) return false;
-            return invoice.created_at.startsWith(dayData.date);
-          })
-          .reduce((sum, invoice) => sum + (invoice.total_amount || 0), 0);
-
-        return {
-          day: dayData.day,
-          sales: daySales,
-        };
-      });
-
-      // Get recent orders (last 10 invoices)
-      const recentOrders = invoices.slice(0, 10).map((invoice) => ({
-        id: `#${invoice.invoice_number || invoice.id}`,
-        customer: "Walk-in Customer", // You can add customer name to invoices if needed
-        amount: invoice.total_amount || 0,
-        status: "Completed", // All invoices are completed sales
-        time: formatTimeAgo(invoice.created_at),
-      }));
-
-      // Calculate total orders (all invoices)
-      const totalOrders = invoices.length;
-
-      setDashboardData({
-        todaySales,
-        totalProducts,
-        lowStockItems,
-        totalOrders,
-        revenueData,
-        salesData,
-        recentOrders,
-        isLoading: false,
-      });
-    } catch (error) {
-      console.error("Error loading dashboard data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load dashboard data",
-        variant: "destructive",
-      });
-      setDashboardData((prev) => ({ ...prev, isLoading: false }));
-    }
-  };
-
-  // Helper function to format time ago
   // Helper function to parse date with timezone awareness
-  const parseDateSafely = (dateString) => {
+  const parseDateSafely = (dateString: any) => {
     if (!dateString) return null;
+
+    if (typeof dateString !== "string") return new Date(String(dateString));
 
     // If the date string already has timezone info, use it directly
     if (dateString.includes("Z") || dateString.includes("+")) {
       return new Date(dateString);
     }
 
-    // If it's a naive datetime (no timezone), assume it's UTC
-    // and convert to local time
+    // If it's a naive datetime (no timezone), assume it's UTC and convert to local time
     return new Date(dateString + "Z");
   };
 
-  // Updated formatTimeAgo with better timezone handling
-  const formatTimeAgo = (dateString) => {
+  // formatTimeAgo with timezone handling
+  const formatTimeAgo = (dateString: any) => {
     if (!dateString) return "Unknown time";
 
     const date = parseDateSafely(dateString);
     if (!date || isNaN(date.getTime())) return "Invalid date";
 
     const now = new Date();
-    const diffMs = now - date;
+    const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
@@ -313,6 +207,104 @@ const TenantDashboard = () => {
       year: "numeric",
     });
   };
+
+  // Build dashboard data from reports API (useReports) to avoid pagination issues
+  useEffect(() => {
+    const build = async () => {
+      try {
+        // derive today's sales from salesSeries
+        const todayIso = new Date().toISOString().split("T")[0];
+        const todayPoint = salesSeries.find((p: any) =>
+          String(p.date || "").startsWith(todayIso)
+        );
+        const todaySales = Number(todayPoint?.sales || 0);
+
+        // products and low stock come from stockReport
+        const totalProducts = Array.isArray(stockReport)
+          ? stockReport.length
+          : 0;
+        const lowStockItems = Array.isArray(stockReport)
+          ? stockReport.filter((s) => String(s.status).toLowerCase() === "low")
+              .length
+          : 0;
+
+        // total orders from summary.transactions (fallback to 0)
+        const totalOrders = Number(summary?.transactions || 0);
+
+        // revenueData: map last 6 months using salesSeries
+        const lastSixMonths = getLastSixMonths();
+        const revenueData = lastSixMonths.map((monthData) => {
+          const monthRevenue = (salesSeries || []).reduce(
+            (sum: number, p: any) => {
+              try {
+                const d = new Date(p.date);
+                return (
+                  sum +
+                  (d.getMonth() === monthData.fullDate.getMonth() &&
+                  d.getFullYear() === monthData.fullDate.getFullYear()
+                    ? Number(p.sales || 0)
+                    : 0)
+                );
+              } catch (e) {
+                return sum;
+              }
+            },
+            0
+          );
+          return { month: monthData.month, revenue: monthRevenue };
+        });
+
+        // salesData: last 7 days from salesSeries
+        const lastSevenDays = getLastSevenDays();
+        const salesData = lastSevenDays.map((dayData) => {
+          const pt = (salesSeries || []).find((p: any) =>
+            String(p.date || "").startsWith(dayData.date)
+          );
+          return { day: dayData.day, sales: Number(pt?.sales || 0) };
+        });
+
+        // recentOrders: fetch small recent page to show list (1 request only)
+        let recentOrders: any[] = [];
+        try {
+          const invResp = await invoiceService.getAll({ page: 1, limit: 10 });
+          const invs = parseInvoicesArray(invResp).slice(0, 10);
+          recentOrders = invs.map((invoice) => ({
+            id: `#${invoice.invoice_number || invoice.id}`,
+            customer:
+              invoice.customer_name || invoice.customer || "Walk-in Customer",
+            amount: invoice.total_amount || 0,
+            status: invoice.status || "Completed",
+            time: formatTimeAgo(invoice.created_at),
+          }));
+        } catch (e) {
+          recentOrders = [];
+        }
+
+        setDashboardData({
+          todaySales,
+          totalProducts,
+          lowStockItems,
+          totalOrders,
+          revenueData,
+          salesData,
+          recentOrders,
+          isLoading: false,
+        });
+      } catch (err) {
+        console.error("Failed to build dashboard from reports:", err);
+        toast({
+          title: "Error",
+          description: "Failed to build dashboard data",
+          variant: "destructive",
+        });
+        setDashboardData((prev) => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    build();
+    // rebuild whenever reports data changes
+  }, [salesSeries, purchaseSeries, stockReport, summary]);
+
   // Calculate percentage change (for demo - you can implement real comparison)
   const calculatePercentageChange = (current, previous = current * 0.85) => {
     if (!previous) return "+0%";
@@ -365,18 +357,7 @@ const TenantDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    loadDashboardData();
-    // Poll every 60s for dynamic updates
-    const interval = setInterval(loadDashboardData, 60000);
-    // Listen for inventory update events dispatched elsewhere
-    const listener = () => loadDashboardData();
-    window.addEventListener("inventory-updated", listener);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("inventory-updated", listener);
-    };
-  }, []);
+  // Dashboard data is built from reports hook; no polling needed here.
 
   if (dashboardData.isLoading) {
     return (
@@ -403,10 +384,10 @@ const TenantDashboard = () => {
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card
-  className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
-  onClick={() => (window.location.href = "/inventory/sales")}
-  title="Click to view low stock inventory"
->
+          className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
+          onClick={() => (window.location.href = "/inventory/sales")}
+          title="Click to view low stock inventory"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Today's Sales
@@ -423,11 +404,11 @@ const TenantDashboard = () => {
             </p>
           </CardContent>
         </Card>
-          <Card
-  className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
-  onClick={() => (window.location.href = "/stock")}
-  title="Click to view low stock inventory"
->
+        <Card
+          className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
+          onClick={() => (window.location.href = "/stock")}
+          title="Click to view low stock inventory"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Products
@@ -445,7 +426,7 @@ const TenantDashboard = () => {
         </Card>
 
         <Card
-           className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
+          className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
           onClick={() => (window.location.href = "/inventory")}
           title="Click to view low stock inventory"
         >
@@ -470,7 +451,7 @@ const TenantDashboard = () => {
         </Card>
 
         <Card
-           className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
+          className="cursor-pointer transition-colors duration-200 ease-in-out hover:bg-gray-50"
           onClick={() => (window.location.href = "/inventory/sales")}
           title="Click to view sales in inventory"
         >

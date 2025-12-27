@@ -357,6 +357,45 @@ export const BillingTable = ({
     };
   }, [showSuggestions, currentInputIndex]);
 
+  // Close suggestions when clicking outside of suggestions or inputs, or when pressing Escape
+  useEffect(() => {
+    if (!showSuggestions) return;
+
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+
+      // If click was inside suggestion container, keep open
+      if (suggestionRef.current && suggestionRef.current.contains(target))
+        return;
+
+      // If click was inside any input, keep open
+      const insideInput = inputRefs.current.some(
+        (el) => el && el.contains && el.contains(target)
+      );
+      if (insideInput) return;
+
+      // otherwise close
+      setShowSuggestions(false);
+      setPortalPos(null);
+      setCurrentInputIndex(null);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowSuggestions(false);
+        setPortalPos(null);
+        setCurrentInputIndex(null);
+      }
+    };
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showSuggestions]);
+
   return (
     <>
       <Card className="lg:col-span-2">

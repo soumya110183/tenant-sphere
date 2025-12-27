@@ -41,7 +41,7 @@ const SalesView = ({ sales = [], openModal, handleDelete }) => {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
-                  Invoice No
+                  Inv
                 </th>
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Date & Time

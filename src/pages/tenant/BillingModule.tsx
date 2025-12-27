@@ -63,6 +63,7 @@ const SupermarketBilling = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [employees, setEmployees] = useState<Customer[]>([]);
+  const [coupons, setCoupons] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
@@ -185,7 +186,29 @@ const SupermarketBilling = () => {
   useEffect(() => {
     fetchCustomers();
     fetchEmployees();
+    fetchCoupons();
   }, [fetchCustomers]);
+
+  // Fetch coupons (client can provide to BillSummary for offline search)
+  const fetchCoupons = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/discounts`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
+      });
+      const json = await res.json();
+      if (res.ok && json?.data) {
+        // only coupon-type discounts
+        setCoupons((json.data || []).filter((r: any) => r.type === "coupon"));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch coupons", e);
+      setCoupons([]);
+    }
+  }, []);
 
   // Auto preview when rows/customer/coupon change
   useEffect(() => {
@@ -243,7 +266,7 @@ const SupermarketBilling = () => {
     }));
   };
 
-  const handleApplyDiscounts = async () => {
+  const handleApplyDiscounts = async (showToast = false) => {
     const itemsPayload = buildItemsPayload();
     if (!itemsPayload.length) {
       toast({
@@ -276,10 +299,12 @@ const SupermarketBilling = () => {
 
       setPreview(json.preview || null);
       setPreviewItems(json.items || []);
-      toast({
-        title: "Discounts applied",
-        description: "Preview updated with active discounts & coupon",
-      });
+      if (showToast) {
+        toast({
+          title: "Discounts applied",
+          description: "Preview updated with active discounts & coupon",
+        });
+      }
     } catch (err: any) {
       console.error("Preview error:", err);
       toast({
@@ -301,13 +326,26 @@ const SupermarketBilling = () => {
   };
 
   // Coupon management
-  const handleSelectCoupon = (coupon: any) => {
-    setCouponCode(coupon.code);
-    setShowCouponPopup(false);
-    toast({
-      title: "Coupon Applied",
-      description: `${coupon.code} - ${coupon.description || "Coupon applied"}`,
-    });
+  const handleSelectCoupon = async (coupon: any) => {
+    try {
+      setCouponCode(coupon?.code ?? "");
+      setShowCouponPopup(false);
+      toast({
+        title: "Coupon Applied",
+        description: `${coupon?.code || ""} - ${
+          coupon?.description || "Coupon applied"
+        }`,
+      });
+
+      // Immediately run preview/apply with the selected coupon so totals update
+      try {
+        await handleApplyDiscounts(true);
+      } catch (err) {
+        console.error("Apply discounts after coupon select failed", err);
+      }
+    } catch (err) {
+      console.error("handleSelectCoupon error:", err);
+    }
   };
 
   // Redeem points management
@@ -511,13 +549,56 @@ const SupermarketBilling = () => {
         description: "Receipt opened",
       });
 
-      // reset UI
+      // refresh customers and update selected customer (so loyalty points reflect latest invoice)
+      try {
+        await fetchCustomers();
+        if (selectedCustomer) {
+          try {
+            const token = localStorage.getItem("auth_token");
+            const custRes = await fetch(
+              `${API_BASE}/api/customers/${selectedCustomer.id}`,
+              {
+                headers: {
+                  Authorization: token ? `Bearer ${token}` : "",
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            if (custRes.ok) {
+              const cj = await custRes.json();
+              const updated = cj.data ?? cj;
+              setSelectedCustomer({
+                id: updated.id ?? updated._id ?? selectedCustomer.id,
+                name:
+                  updated.name ?? updated.full_name ?? selectedCustomer.name,
+                phone: updated.phone ?? selectedCustomer.phone,
+                loyalty_points:
+                  updated.loyalty_points ??
+                  updated.loyaltyPoints ??
+                  selectedCustomer.loyalty_points ??
+                  0,
+                membership_tier:
+                  updated.membership_tier ??
+                  updated.membershipTier ??
+                  selectedCustomer.membership_tier,
+                email: updated.email ?? selectedCustomer.email,
+                address: updated.address ?? selectedCustomer.address,
+              } as any);
+            }
+          } catch (e) {
+            console.warn("Failed to refresh selected customer", e);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to refresh customers list", e);
+      }
+
+      // reset other UI fields (keep selectedCustomer so loyalty points remain visible)
       setRows([{ code: "", name: "", qty: 1, price: 0, tax: 0, total: 0 }]);
       setPreview(null);
       setPreviewItems([]);
       setCouponCode("");
       setRedeemPoints("");
-      setSelectedCustomer(null);
     } catch (err: any) {
       toast({
         title: "Error",
@@ -606,6 +687,8 @@ const SupermarketBilling = () => {
               onApplyDiscounts={handleApplyDiscounts}
               onClearDiscounts={handleClearDiscounts}
               onOpenCouponPopup={() => setShowCouponPopup(true)}
+              onCouponChange={setCouponCode}
+              onSelectCoupon={handleSelectCoupon}
               onOpenRedeemPopup={() => setShowRedeemPopup(true)}
               onGenerateInvoice={handleGenerateInvoice}
               isApplyingDiscounts={isApplyingDiscounts}
@@ -620,6 +703,7 @@ const SupermarketBilling = () => {
               onEmployeeSelect={handleEmployeeSelect}
               onClearEmployee={handleClearEmployee}
               onRefreshEmployees={fetchEmployees}
+              coupons={coupons}
             />
           </div>
         </div>

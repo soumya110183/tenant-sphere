@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,91 +22,39 @@ import {
 // API Configuration
 const API_BASE_URL = "http://localhost:5000/api/products";
 
-// Helper function to get auth token
-const getAuthToken = () => {
-  return localStorage.getItem("auth_token") || "";
-};
+// Use centralized productService from services/api
+import { productService } from "../services/api";
 
-// API Service
-const productService = {
-  async getAll(search = "", limit = 100, offset = 0) {
-    const params = new URLSearchParams();
-    params.append("limit", String(limit));
-    params.append("offset", String(offset));
-    if (search) params.append("search", search);
+// runtime holder for categories to avoid JSX prop typing friction
+let productModalCategories: any[] = [];
 
-    const response = await fetch(`${API_BASE_URL}?${params}`, {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) throw new Error("Failed to fetch products");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async create(productData) {
-    const response = await fetch(API_BASE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(productData),
-    });
-    if (!response.ok) throw new Error("Failed to create product");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async update(id, productData) {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(productData),
-    });
-    if (!response.ok) throw new Error("Failed to update product");
-    const result = await response.json();
-    return result.data;
-  },
-
-  async delete(id) {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) throw new Error("Failed to delete product");
-    return true;
-  },
-};
-
-// Product Stats Card Component
-const ProductStatsCard = ({ stat }) => (
-  <Card>
-    <CardContent className="pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div
-            className={`text-2xl font-bold ${stat.color || "text-foreground"}`}
-          >
-            {stat.value}
+// Product Stats Card Component (dynamic icon rendering, optional click)
+const ProductStatsCard = ({ stat, onClick = undefined }: any) => {
+  const Icon = stat.icon;
+  return (
+    <Card onClick={onClick} className={onClick ? "cursor-pointer" : ""}>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div
+              className={`text-2xl font-bold ${
+                stat.color || "text-foreground"
+              }`}
+            >
+              {stat.value}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+          {Icon ? (
+            <Icon
+              className={`h-8 w-8 ${stat.color || "text-muted-foreground"}`}
+            />
+          ) : null}
         </div>
-        <stat.icon
-          className={`h-8 w-8 ${stat.color || "text-muted-foreground"}`}
-        />
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 // Search and Filter Component for Products
 const ProductSearchFilter = ({
@@ -115,6 +64,7 @@ const ProductSearchFilter = ({
   setFilterCategory,
   categories,
   onAddProduct,
+  onAddCategory,
   isLoading,
 }) => (
   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -137,22 +87,29 @@ const ProductSearchFilter = ({
     >
       <option value="All">All Categories</option>
       {categories.map((cat) => (
-        <option key={cat} value={cat}>
-          {cat}
+        <option key={cat?.id ?? cat} value={cat?.name ?? cat}>
+          {cat?.name ?? cat}
         </option>
       ))}
     </select>
-    <Button onClick={onAddProduct} disabled={isLoading}>
-      <Plus className="h-4 w-4 mr-2" />
-      Add Product
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button onClick={onAddProduct} disabled={isLoading}>
+        <Plus className="h-4 w-4 mr-2" />
+        Add Product
+      </Button>
+      <Button onClick={onAddCategory} variant="outline" disabled={isLoading}>
+        + Add Category
+      </Button>
+    </div>
   </div>
 );
 
 // Product Table Row Component
 const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
-  const margin = product.selling_price - product.cost_price;
-  const marginPercent = ((margin / product.cost_price) * 100).toFixed(1);
+  const margin = (product.selling_price || 0) - (product.cost_price || 0);
+  const marginPercent = product.cost_price
+    ? ((margin / product.cost_price) * 100).toFixed(1)
+    : "0.0";
 
   return (
     <tr className="border-b hover:bg-muted/50">
@@ -230,29 +187,28 @@ const ProductTableRow = ({ product, onEdit, onDelete, isDeleting }) => {
 };
 
 // Product Modal Component
-const ProductModal = ({
-  showModal,
-  editingProduct,
-  formData,
-  setFormData,
-  onClose,
-  onSubmit,
-  isSubmitting,
-}) => {
+type ProductModalProps = {
+  showModal: any;
+  editingProduct?: any;
+  formData: any;
+  setFormData: any;
+  onClose: any;
+  onSubmit: any;
+  isSubmitting: any;
+  categories?: any[];
+};
+const ProductModal = (props: ProductModalProps) => {
+  const {
+    showModal,
+    editingProduct,
+    formData,
+    setFormData,
+    onClose,
+    onSubmit,
+    isSubmitting,
+  } = props;
+  const categories = (props as any).categories ?? productModalCategories;
   if (!showModal) return null;
-
-  const categories = [
-    "Grocery",
-    "Beverage",
-    "Dairy",
-    "Bakery",
-    "Personal Care",
-    "Household",
-    "Frozen Foods",
-    "Snacks",
-    "Baby Care",
-    "Health & Wellness",
-  ];
 
   const units = [
     "kg",
@@ -268,10 +224,7 @@ const ProductModal = ({
   ];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -337,15 +290,28 @@ const ProductModal = ({
                   <select
                     className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                     value={formData.category || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      const catObj = (categories || []).find(
+                        (c) => (c?.name ?? c) === selected
+                      );
+                      setFormData({
+                        ...formData,
+                        category: selected,
+                        category_id: catObj
+                          ? catObj.id ?? catObj._id ?? catObj
+                          : undefined,
+                      });
+                    }}
                     disabled={isSubmitting}
                   >
                     <option value="">Select Category</option>
                     {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
+                      <option
+                        key={cat && (cat.id ?? cat._id ?? cat.name ?? cat)}
+                        value={cat.name ?? cat}
+                      >
+                        {cat.name ?? cat}
                       </option>
                     ))}
                   </select>
@@ -636,6 +602,93 @@ const ProductModal = ({
   );
 };
 
+// Category Modal Component
+const CategoryModal = ({
+  showModal,
+  formData,
+  setFormData,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}) => {
+  if (!showModal) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4">
+      <div
+        className="bg-background rounded-lg w-full max-w-lg max-h-[60vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center sticky top-0 bg-background z-10">
+          <h2 className="text-lg sm:text-xl font-bold">Add Category</h2>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="p-4 sm:p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Category Name *
+            </label>
+            <input
+              required
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+              value={formData.name || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              placeholder="Enter category name"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Description
+            </label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+              value={formData.description || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              placeholder="Optional description"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-4 border-t">
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" /> Save
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 // Error Alert Component
 const ErrorAlert = ({ message, onClose }) => (
   <div className="fixed top-4 right-4 z-50 max-w-md animate-in slide-in-from-top">
@@ -658,41 +711,100 @@ const ErrorAlert = ({ message, onClose }) => (
 
 // Main Product Catalog Component
 const ProductCatalog = () => {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [showModal, setShowModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [formData, setFormData] = useState<any>({});
+  const [categoryForm, setCategoryForm] = useState<any>({});
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [productsPage, setProductsPage] = useState(1);
+  const [PRODUCTS_PAGE_SIZE] = useState(10);
+  const [productsTotalRecords, setProductsTotalRecords] = useState(0);
+  const [productsTotalPages, setProductsTotalPages] = useState(1);
+  const [jumpInput, setJumpInput] = useState<string>(String(productsPage));
 
   // Load products on component mount
   useEffect(() => {
     loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounced search effect
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm) {
-        loadProducts(searchTerm);
-      } else {
-        loadProducts();
-      }
+      setProductsPage(1);
+      loadProducts(searchTerm, 1);
     }, 500);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
-  const loadProducts = async (search = "") => {
+  // Reload when page changes
+  useEffect(() => {
+    loadProducts(searchTerm, productsPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsPage]);
+
+  const loadProducts = async (search = "", page = 1) => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await productService.getAll(search);
-      setProducts(data);
+      // centralized productService.getAll() returns all products
+      const params: Record<string, any> = { page, limit: PRODUCTS_PAGE_SIZE };
+      if (search) params.search = search;
+      const data = await productService.getAll(params);
+      // support both shapes: array or { data: [...], meta... }
+      const rawProducts: any[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+
+      // extract total records/pages when available (support Supabase controller fields)
+      let total =
+        Number(
+          data?.totalRecords ??
+            data?.meta?.total ??
+            data?.total ??
+            data?.pagination?.total ??
+            0
+        ) || 0;
+      // fallback to array length when backend returns plain array (no pagination meta)
+      if (!total) total = rawProducts.length;
+
+      const totalPages =
+        Number(
+          data?.totalPages ??
+            data?.meta?.last_page ??
+            Math.max(1, Math.ceil(total / PRODUCTS_PAGE_SIZE))
+        ) || Math.max(1, Math.ceil(total / PRODUCTS_PAGE_SIZE));
+
+      // if backend provided page info, reflect it (keeps UI in sync)
+      const backendPage =
+        Number(data?.page ?? data?.currentPage ?? page) || page;
+
+      setProductsTotalRecords(total);
+      setProductsTotalPages(totalPages);
+      setProductsPage(backendPage);
+
+      // if a search term is provided, filter client-side (name match)
+      const filtered = search
+        ? rawProducts.filter((p) =>
+            String(p?.name || "")
+              .toLowerCase()
+              .includes(search.toLowerCase())
+          )
+        : rawProducts;
+      setProducts(filtered);
     } catch (err) {
       console.error("Error loading products:", err);
       setError(
@@ -711,6 +823,11 @@ const ProductCatalog = () => {
         name: product.name,
         brand: product.brand,
         category: product.category,
+        category_id:
+          product.category_id ??
+          product.categoryId ??
+          categoriesList.find((c) => (c.name ?? c) === product.category)?.id ??
+          undefined,
         unit: product.unit,
         cost_price: product.cost_price,
         selling_price: product.selling_price,
@@ -728,6 +845,7 @@ const ProductCatalog = () => {
         name: "",
         brand: "",
         category: "",
+        category_id: undefined,
         unit: "",
         cost_price: 0,
         selling_price: 0,
@@ -744,6 +862,96 @@ const ProductCatalog = () => {
     setShowModal(true);
   };
 
+  const openCategoryModal = () => {
+    setCategoryForm({ name: "", description: "" });
+    setShowCategoryModal(true);
+  };
+
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false);
+    setCategoryForm({});
+  };
+
+  const handleCategorySave = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!categoryForm.name || !String(categoryForm.name).trim()) {
+      setError("Category name is required");
+      return;
+    }
+
+    setIsCategorySubmitting(true);
+    try {
+      const apiRoot = API_BASE_URL.replace(/\/api\/products\/?$/, "");
+      const payload = {
+        name: categoryForm.name,
+        description: categoryForm.description || "",
+      };
+
+      const res = await fetch(`${apiRoot}/api/categories`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const j = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(j?.message || j?.error || "Failed to create category");
+      }
+
+      const newCategory = j?.data || j;
+      await loadCategories();
+      if (newCategory && newCategory.name) {
+        setFormData((prev) => ({
+          ...(prev || {}),
+          category: newCategory.name,
+          category_id:
+            newCategory.id ??
+            newCategory._id ??
+            newCategory.category_id ??
+            undefined,
+        }));
+      }
+      closeCategoryModal();
+    } catch (err) {
+      console.error("Create category failed:", err);
+      setError(err.message || "Failed to create category");
+    } finally {
+      setIsCategorySubmitting(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const apiRoot = API_BASE_URL.replace(/\/api\/products\/?$/, "");
+      const res = await fetch(`${apiRoot}/api/categories`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
+      });
+      if (!res.ok) {
+        console.warn("Failed to fetch categories", res.status);
+        return;
+      }
+      const j = await res.json().catch(() => null);
+      const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+      const normalized = list.map((c) => ({
+        id: c.id ?? c._id ?? c.id,
+        name: c.name ?? c,
+        description: c.description ?? "",
+      }));
+      setCategoriesList(normalized);
+    } catch (e) {
+      console.warn("loadCategories error:", e);
+    }
+  };
+
+  React.useEffect(() => {
+    loadCategories();
+  }, []);
+
   const closeModal = () => {
     setShowModal(false);
     setEditingProduct(null);
@@ -758,8 +966,27 @@ const ProductCatalog = () => {
       setError(null);
 
       let result;
+      // Ensure payload always includes both category name and category_id
+      const resolvedCategoryId =
+        formData.category_id ??
+        categoriesList.find((c) => (c.name ?? c) === formData.category)?.id ??
+        categoriesList.find((c) => c.id === formData.category)?.id;
+
+      const resolvedCategoryName =
+        formData.category ||
+        (categoriesList.find((c) => c.id === formData.category_id)?.name ??
+          categoriesList.find((c) => c.id === resolvedCategoryId)?.name);
+
+      const payload = {
+        ...formData,
+        category: resolvedCategoryName || formData.category || "",
+        category_id: resolvedCategoryId ?? formData.category_id ?? undefined,
+        // include alias in case backend expects `categoryId`
+        categoryId: resolvedCategoryId ?? formData.category_id ?? undefined,
+      };
+
       if (editingProduct) {
-        result = await productService.update(editingProduct.id, formData);
+        result = await productService.update(editingProduct.id, payload);
         // Update existing product in state
         setProducts((prevProducts) =>
           prevProducts.map((p) =>
@@ -769,7 +996,7 @@ const ProductCatalog = () => {
           )
         );
       } else {
-        result = await productService.create(formData);
+        result = await productService.create(payload);
         // Add new product to state
         setProducts((prevProducts) => [
           ...prevProducts,
@@ -843,9 +1070,17 @@ const ProductCatalog = () => {
     },
   ];
 
+  // build category filter options from backend categoriesList when available
+  const derivedCategoriesFromList = (categoriesList || [])
+    .map((c) => c?.name)
+    .filter(Boolean);
   const categories = [
     "All",
-    ...new Set(products.map((p) => p.category).filter(Boolean)),
+    ...new Set(
+      derivedCategoriesFromList.length > 0
+        ? derivedCategoriesFromList
+        : products.map((p) => p.category).filter(Boolean)
+    ),
   ];
 
   const filteredProducts = products.filter((product) => {
@@ -886,6 +1121,7 @@ const ProductCatalog = () => {
           setFilterCategory={setFilterCategory}
           categories={categories}
           onAddProduct={() => openModal()}
+          onAddCategory={() => openCategoryModal()}
           isLoading={isLoading}
         />
 
@@ -968,9 +1204,125 @@ const ProductCatalog = () => {
             )}
           </CardContent>
         </Card>
+        {productsTotalRecords > PRODUCTS_PAGE_SIZE && (
+          <div className="flex items-center justify-between mt-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProductsPage(Math.max(1, productsPage - 1))}
+                disabled={productsPage === 1}
+              >
+                Prev
+              </Button>
+
+              <span className="text-sm text-gray-500">
+                Page {productsPage} of {productsTotalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setProductsPage(
+                    Math.min(productsPage + 1, productsTotalPages)
+                  )
+                }
+                disabled={productsPage >= productsTotalPages}
+              >
+                Next
+              </Button>
+
+              {/* Jump to page input */}
+              <div className="flex items-center gap-2 ml-3">
+                <input
+                  type="text"
+                  placeholder="page or 'next'/'prev'"
+                  value={jumpInput}
+                  onChange={(e) => setJumpInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = (jumpInput || "")
+                        .toString()
+                        .trim()
+                        .toLowerCase();
+                      if (v === "next" || v === "n") {
+                        setProductsPage((p) =>
+                          Math.min(p + 1, productsTotalPages)
+                        );
+                      } else if (
+                        v === "prev" ||
+                        v === "previous" ||
+                        v === "p"
+                      ) {
+                        setProductsPage((p) => Math.max(1, p - 1));
+                      } else {
+                        const num = Number(v);
+                        if (!isNaN(num) && num >= 1) {
+                          setProductsPage(
+                            Math.min(
+                              Math.max(1, Math.floor(num)),
+                              productsTotalPages
+                            )
+                          );
+                        }
+                      }
+                    }
+                  }}
+                  className="w-36 px-2 py-1 border rounded text-sm"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const v = (jumpInput || "").toString().trim().toLowerCase();
+                    if (v === "next" || v === "n") {
+                      setProductsPage((p) =>
+                        Math.min(p + 1, productsTotalPages)
+                      );
+                    } else if (v === "prev" || v === "previous" || v === "p") {
+                      setProductsPage((p) => Math.max(1, p - 1));
+                    } else {
+                      const num = Number(v);
+                      if (!isNaN(num) && num >= 1) {
+                        setProductsPage(
+                          Math.min(
+                            Math.max(1, Math.floor(num)),
+                            productsTotalPages
+                          )
+                        );
+                      }
+                    }
+                  }}
+                >
+                  Go
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              Showing{" "}
+              {Math.min(
+                (productsPage - 1) * PRODUCTS_PAGE_SIZE + 1,
+                productsTotalRecords
+              )}
+              -
+              {Math.min(
+                productsPage * PRODUCTS_PAGE_SIZE,
+                productsTotalRecords
+              )}{" "}
+              of {productsTotalRecords}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product Modal */}
+      {/* expose categories to the modal via runtime holder to avoid JSX prop typing friction */}
+      {(() => {
+        productModalCategories = categoriesList || [];
+        return null;
+      })()}
       <ProductModal
         showModal={showModal}
         editingProduct={editingProduct}
@@ -979,6 +1331,16 @@ const ProductCatalog = () => {
         onClose={closeModal}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
+      />
+
+      {/* Category Modal */}
+      <CategoryModal
+        showModal={showCategoryModal}
+        formData={categoryForm}
+        setFormData={setCategoryForm}
+        onClose={closeCategoryModal}
+        onSubmit={handleCategorySave}
+        isSubmitting={isCategorySubmitting}
       />
     </div>
   );

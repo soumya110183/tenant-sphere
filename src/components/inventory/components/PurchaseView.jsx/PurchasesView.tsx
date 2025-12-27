@@ -56,9 +56,9 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                 <th className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Total Amount
                 </th>
-                <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
+                {/* <th className="text-right py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium">
                   Actions
-                </th>
+                </th> */}
               </tr>
             </thead>
             <tbody>

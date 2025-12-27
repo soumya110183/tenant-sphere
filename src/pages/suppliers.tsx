@@ -1,5 +1,6 @@
 import React, { FC, useCallback, useEffect, useState } from "react";
-import axios from "axios";
+import { createPortal } from "react-dom";
+import { supplierService } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import {
   Search,
@@ -17,8 +18,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-const API_BASE = "http://localhost:5000";
 
 interface Supplier {
   id?: number;
@@ -60,11 +59,8 @@ const SupplierModal: FC<any> = ({
 }) => {
   if (!show) return null;
 
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4"
-      onClick={onClose}
-    >
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[99999] p-4">
       <div
         className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -185,7 +181,8 @@ const SupplierModal: FC<any> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -210,11 +207,8 @@ const SupplierPage: FC = () => {
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await axios.get(`${API_BASE}/api/suppliers`, {
-        params: { search: q },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSuppliers(resp.data.data ?? []);
+      const list = await supplierService.list(q);
+      setSuppliers(list ?? []);
     } catch (err) {
       console.error("Failed to fetch suppliers", err);
     } finally {
@@ -262,13 +256,9 @@ const SupplierPage: FC = () => {
 
     try {
       if (editingId) {
-        await axios.put(`${API_BASE}/api/suppliers/${editingId}`, form, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await supplierService.update(editingId, form);
       } else {
-        await axios.post(`${API_BASE}/api/suppliers`, form, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await supplierService.create(form);
       }
       setModalOpen(false);
       fetchSuppliers();
@@ -286,9 +276,7 @@ const SupplierPage: FC = () => {
     setDeleting(id);
 
     try {
-      await axios.delete(`${API_BASE}/api/suppliers/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await supplierService.delete(id);
       fetchSuppliers();
     } finally {
       setDeleting(null);
@@ -303,16 +291,16 @@ const SupplierPage: FC = () => {
       </div>
 
       {/* Search + Add Button */}
-         <div className="flex justify-between gap-3 flex-col sm:flex-row">
-                        <div className="relative w-full sm:w-64">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <input
-                            placeholder="Search suppliers..."
-                            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
-                            value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                          />
-                        </div>
+      <div className="flex justify-between gap-3 flex-col sm:flex-row">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            placeholder="Search suppliers..."
+            className="w-full pl-10 pr-3 py-2 border rounded-md text-sm bg-background"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
 
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" /> Add Supplier
