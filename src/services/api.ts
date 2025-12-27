@@ -18,15 +18,69 @@ const api = axios.create({
 
 // Interceptor to attach Bearer token to every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("auth_token");
-  if (token) {
-    // ensure headers object exists (safer for some axios/TS setups)
-    // header typing can vary, cast to any for assignment here
+  try {
+    const token = localStorage.getItem("auth_token");
+    const tenantId = localStorage.getItem("tenant_id");
+    // ensure headers object exists
     if (!config.headers) config.headers = {} as any;
-    (config.headers as any).Authorization = `Bearer ${token}`;
+    if (token) (config.headers as any).Authorization = `Bearer ${token}`;
+    // NOTE: do NOT set a custom `X-Tenant-Id` header here because some
+    // backends do not allow that header in CORS preflight's
+    // Access-Control-Allow-Headers. We send tenant via query param below.
+
+    // If caller explicitly opted out (set `skip_tenant: true` in params),
+    // do not add tenant_id. Remove the flag before sending to avoid
+    // leaking internal params to the backend.
+    const skipTenant = config.params?.skip_tenant === true;
+    if (skipTenant) {
+      // create a shallow copy without the skip flag
+      const { skip_tenant, ...rest } = config.params || {};
+      config.params = rest as any;
+    } else {
+      // if request params do not include tenant_id, and we have one, add as query param
+      if (tenantId) {
+        config.params = {
+          ...(config.params || {}),
+          tenant_id: config.params?.tenant_id ?? tenantId,
+        };
+      }
+    }
+
+    // lightweight debug so we can see failing requests in console
+    // avoid noisy logs in production by checking hostname
+    if (
+      typeof window !== "undefined" &&
+      window.location.hostname === "localhost"
+    ) {
+      console.debug(
+        "API request:",
+        config.method,
+        config.url,
+        "params:",
+        config.params,
+        "headers:",
+        config.headers
+      );
+    }
+  } catch (e) {
+    // swallow storage access errors
   }
   return config;
 });
+
+// Response interceptor to surface auth failures in console for easier debugging
+api.interceptors.response.use(
+  (resp) => resp,
+  (err) => {
+    if (err && err.response) {
+      const status = err.response.status;
+      if (status === 401 || status === 403) {
+        console.warn("API auth error:", status, err.response.data);
+      }
+    }
+    return Promise.reject(err);
+  }
+);
 
 // ===============================
 // TENANT API
@@ -1003,7 +1057,9 @@ export const productService = {
 
 export const inventoryService = {
   // ✅ Get all inventory items (joined with product details)
-  getAll: async () => (await api.get("/api/inventory")).data,
+  // Accepts optional params object forwarded to axios (e.g., { search, page, limit })
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/inventory", { params }).then((r) => r.data),
 
   // ✅ Get single inventory item by ID
   getById: async (id) => (await api.get(`/api/inventory/${id}`)).data,
@@ -1090,11 +1146,8 @@ export const purchaseReturnService = {
 // ===============================
 export const staffService = {
   // Get all staff users belonging to the current tenant
-  getAll: async (search = "") => {
-    const params: Record<string, string> = {};
-    if (search) params.search = search;
-    return (await api.get("/api/staff", { params })).data;
-  },
+  getAll: (params: Record<string, any> = {}) =>
+    api.get("/api/staff", { params }),
 
   // Get single staff detail
   getById: async (id) => (await api.get(`/api/staff/${id}`)).data,

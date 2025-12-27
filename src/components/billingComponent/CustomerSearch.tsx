@@ -37,6 +37,7 @@ export const CustomerSearch = ({
     []
   );
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Close suggestions when clicking outside or pressing Escape
@@ -83,6 +84,7 @@ export const CustomerSearch = ({
 
     setCustomerSuggestions(filtered);
     setShowCustomerSuggestions(true);
+    setHighlightedIndex(filtered.length > 0 ? 0 : -1);
   };
 
   const handleCustomerSelect = (customer: Customer) => {
@@ -97,6 +99,7 @@ export const CustomerSearch = ({
       setCustomerSuggestions(customers);
     }
     setShowCustomerSuggestions(true);
+    setHighlightedIndex(customerSearch.trim() ? 0 : -1);
   };
 
   const handleClearClick = () => {
@@ -117,6 +120,40 @@ export const CustomerSearch = ({
           value={customerSearch}
           onChange={(e) => handleSearchChange(e.target.value)}
           onFocus={handleInputFocus}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (!showCustomerSuggestions) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHighlightedIndex((h) =>
+                h < customerSuggestions.length - 1 ? h + 1 : 0
+              );
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHighlightedIndex((h) =>
+                h > 0 ? h - 1 : customerSuggestions.length - 1
+              );
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              const highlighted = customerSuggestions[highlightedIndex];
+              if (highlighted) {
+                handleCustomerSelect(highlighted);
+              } else {
+                // try exact match by name
+                const exact = customers.find(
+                  (c) =>
+                    String(c.name || "")
+                      .trim()
+                      .toLowerCase() ===
+                    String(customerSearch || "")
+                      .trim()
+                      .toLowerCase()
+                );
+                if (exact) handleCustomerSelect(exact);
+              }
+            } else if (e.key === "Escape") {
+              setShowCustomerSuggestions(false);
+            }
+          }}
         />
 
         {/* Clear / Close button inside input */}
@@ -133,11 +170,19 @@ export const CustomerSearch = ({
 
         {showCustomerSuggestions && customerSuggestions.length > 0 && (
           <div className="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-full z-[999] max-h-60 overflow-y-auto mt-1">
-            {customerSuggestions.map((c) => (
+            {customerSuggestions.map((c, idx) => (
               <div
                 key={c.id}
-                className="p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700"
-                onClick={() => handleCustomerSelect(c)}
+                className={`p-2 cursor-pointer border-b border-gray-100 dark:border-gray-700 ${
+                  idx === highlightedIndex
+                    ? "bg-gray-100 dark:bg-gray-700"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-700"
+                }`}
+                onMouseEnter={() => setHighlightedIndex(idx)}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  handleCustomerSelect(c);
+                }}
               >
                 <p className="font-semibold text-sm text-foreground dark:text-white">
                   {c.name}

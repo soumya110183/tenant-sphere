@@ -4,6 +4,7 @@ import {
   tenantReportAPI,
   getInvoices,
   getPurchases,
+  invoiceService,
 } from "@/services/api";
 
 /* -----------------------------
@@ -98,6 +99,8 @@ export interface UseReportsReturn {
   }>;
   paymentSummary: Array<{ mode: string; value: number }>;
   dailyMetrics: DailyMetricsRow[];
+  recentInvoices?: Invoice[];
+  invoicesTotal?: number;
 }
 
 // Daily metrics row used for the consolidated table view
@@ -160,6 +163,8 @@ export function useReports({
   >([]);
   const [dailyMetrics, setDailyMetrics] = useState<DailyMetricsRow[]>([]);
   const [rawSummary, setRawSummary] = useState<any>(null);
+  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
+  const [invoicesTotal, setInvoicesTotal] = useState<number>(0);
 
   useEffect(() => {
     let mounted = true;
@@ -382,6 +387,60 @@ export function useReports({
           reportRes?.timeseries || []
         );
 
+        // Attempt to fetch a single invoices page from the invoices endpoint
+        // to obtain a recent invoices list and an authoritative total count
+        let axiosInvoicesResp: any = null;
+        try {
+          axiosInvoicesResp = await invoiceService.getAll({
+            page: 1,
+            limit: 10,
+          });
+        } catch (e) {
+          axiosInvoicesResp = null;
+        }
+
+        const axiosInvoicesList: Invoice[] = axiosInvoicesResp
+          ? normalizeList<Invoice>(axiosInvoicesResp?.data ?? axiosInvoicesResp)
+          : [];
+
+        // Read total from body or headers when available
+        let invoicesCountFromAxios: number | undefined = undefined;
+        if (axiosInvoicesResp) {
+          const headerCount =
+            axiosInvoicesResp?.headers?.["x-total-count"] ||
+            axiosInvoicesResp?.headers?.["x-total-records"] ||
+            axiosInvoicesResp?.headers?.["X-Total-Count"] ||
+            axiosInvoicesResp?.headers?.["X-Total-Records"];
+          const body = axiosInvoicesResp?.data ?? axiosInvoicesResp;
+          const bodyTotal =
+            typeof body?.totalRecords === "number"
+              ? body.totalRecords
+              : typeof body?.total === "number"
+              ? body.total
+              : typeof body?.count === "number"
+              ? body.count
+              : undefined;
+          invoicesCountFromAxios =
+            bodyTotal ?? (headerCount ? Number(headerCount) : undefined);
+        }
+
+        // Prefer the invoices fetched directly from invoices endpoint when available
+        const invoicesVar: Invoice[] = axiosInvoicesList.length
+          ? axiosInvoicesList
+          : invoices;
+
+        if (axiosInvoicesList && axiosInvoicesList.length > 0) {
+          setRecentInvoices(axiosInvoicesList.slice(0, 10));
+        } else {
+          setRecentInvoices([]);
+        }
+        if (
+          typeof invoicesCountFromAxios === "number" &&
+          !isNaN(invoicesCountFromAxios)
+        ) {
+          setInvoicesTotal(Number(invoicesCountFromAxios));
+        }
+
         // --- Summary calculations from timeseries (not paginated data) ---
         // Backend timeseries contains ALL data aggregated, not just the paginated subset
         const totalSales = timeseriesRaw.reduce(
@@ -497,7 +556,7 @@ export function useReports({
 
         // Group invoices and purchases by date for additional metrics
         const invoiceByDate: Record<string, Invoice[]> = {};
-        invoices.forEach((inv) => {
+        invoicesVar.forEach((inv) => {
           const d = (inv.created_at || "").slice(0, 10);
           if (!d) return;
           (invoiceByDate[d] = invoiceByDate[d] || []).push(inv);
@@ -641,6 +700,8 @@ export function useReports({
     stockReport,
     paymentSummary,
     dailyMetrics,
+    recentInvoices,
+    invoicesTotal,
   };
 }
 

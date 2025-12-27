@@ -456,7 +456,7 @@ const ReportsModule = () => {
               className="px-3 py-2 border rounded-md"
             />
           </div>
-          <Button
+          {/* <Button
             onClick={() => handleDownloadPDF("all")}
             disabled={downloadingPDF === "all"}
           >
@@ -471,7 +471,7 @@ const ReportsModule = () => {
                 Export All
               </>
             )}
-          </Button>
+          </Button> */}
         </div>
       </div>
 

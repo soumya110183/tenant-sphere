@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, X, Save } from "lucide-react";
-import { PurchaseModal } from "@/components/inventory/components/Modal/PurchaseModal";
+import { PurchaseModal } from "@/components/inventory/components/Modal/PurchaseModalNew";
 
 // This will contain ALL your original modal form logic
 // I'm just showing the structure - you would copy your entire modal JSX here
@@ -89,10 +89,7 @@ const Modal = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         className="bg-background rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

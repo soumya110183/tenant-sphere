@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Separator } from "@radix-ui/react-dropdown-menu";
 import {
@@ -481,6 +481,22 @@ export default function BillSummary({
   const [couponSuggestions, setCouponSuggestions] = useState<any[]>([]);
   const [showCouponSuggestions, setShowCouponSuggestions] = useState(false);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [couponHighlightedIndex, setCouponHighlightedIndex] =
+    useState<number>(-1);
+  const [couponWarning, setCouponWarning] = useState<string | null>(null);
+
+  // Customer autocomplete UI state (fallback when CustomerSearch is not provided)
+  const [customerQueryLocal, setCustomerQueryLocal] = useState<string>(
+    selectedCustomer?.name ?? ""
+  );
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [customerSuggestionsLocal, setCustomerSuggestionsLocal] = useState<
+    any[]
+  >([]);
+  const [customerHighlightedIndex, setCustomerHighlightedIndex] =
+    useState<number>(-1);
+  const [customerWarning, setCustomerWarning] = useState<string | null>(null);
+  const customerInputRef = useRef<HTMLInputElement | null>(null);
 
   const resetForm = () =>
     setForm({
@@ -590,6 +606,53 @@ export default function BillSummary({
     setCouponQuery(couponCode || "");
   }, [couponCode]);
 
+  // Keep local customer query in sync when parent selectedCustomer changes
+  React.useEffect(() => {
+    setCustomerQueryLocal(selectedCustomer?.name ?? "");
+    setShowCustomerSuggestions(false);
+    setCustomerSuggestionsLocal([]);
+    setCustomerHighlightedIndex(-1);
+    setCustomerWarning(null);
+  }, [selectedCustomer]);
+
+  // Filter customers as the user types (client-side filtering only)
+  const updateCustomerSuggestions = (q: string) => {
+    if (!q || q.trim().length === 0) {
+      setCustomerSuggestionsLocal([]);
+      setShowCustomerSuggestions(false);
+      setCustomerHighlightedIndex(-1);
+      return;
+    }
+    const term = q.trim().toLowerCase();
+    const list = Array.isArray(customers)
+      ? customers.filter((c: any) => {
+          const name = String(c.name || "").toLowerCase();
+          const phone = String(c.phone || "").toLowerCase();
+          const email = String(c.email || "").toLowerCase();
+          return (
+            name.includes(term) || phone.includes(term) || email.includes(term)
+          );
+        })
+      : [];
+    setCustomerSuggestionsLocal(list.slice(0, 10));
+    setShowCustomerSuggestions(list.length > 0);
+    setCustomerHighlightedIndex(list.length > 0 ? 0 : -1);
+  };
+
+  const selectCustomerLocal = (c: any) => {
+    if (!c) return;
+    setCustomerQueryLocal(c.name || "");
+    setShowCustomerSuggestions(false);
+    setCustomerSuggestionsLocal([]);
+    setCustomerHighlightedIndex(-1);
+    setCustomerWarning(null);
+    try {
+      onCustomerSelect(c);
+    } catch (e) {
+      // preserve UI even if parent handler throws
+    }
+  };
+
   // Coupon search: use client-side filtering when `coupons` prop is provided,
   // otherwise fall back to debounced backend search.
   React.useEffect(() => {
@@ -609,6 +672,7 @@ export default function BillSummary({
       });
       setCouponSuggestions(filtered);
       setShowCouponSuggestions(true);
+      setCouponHighlightedIndex(filtered.length > 0 ? 0 : -1);
       setLoadingCoupons(false);
       return;
     }
@@ -632,6 +696,7 @@ export default function BillSummary({
         const list = res.ok ? j.data ?? (Array.isArray(j) ? j : []) : [];
         setCouponSuggestions(list);
         setShowCouponSuggestions(true);
+        setCouponHighlightedIndex(list.length > 0 ? 0 : -1);
       } catch (e) {
         console.warn("Coupon search failed", e);
         setCouponSuggestions([]);
@@ -1098,11 +1163,117 @@ export default function BillSummary({
               onClearCustomer={onClearCustomer}
             />
           ) : (
-            <Input
-              value={selectedCustomer?.name ?? ""}
-              readOnly
-              placeholder="Select or add customer"
-            />
+            <div className="relative">
+              <Input
+                ref={(el: any) => (customerInputRef.current = el)}
+                value={customerQueryLocal}
+                onChange={(e: any) => {
+                  const v = e.target.value;
+                  setCustomerQueryLocal(v);
+                  setCustomerWarning(null);
+                  updateCustomerSuggestions(v);
+                }}
+                onFocus={() => {
+                  updateCustomerSuggestions(customerQueryLocal);
+                }}
+                onBlur={() =>
+                  setTimeout(() => setShowCustomerSuggestions(false), 150)
+                }
+                onKeyDown={(e: any) => {
+                  if (
+                    showCustomerSuggestions &&
+                    customerSuggestionsLocal.length > 0
+                  ) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setCustomerHighlightedIndex((h) =>
+                        h < customerSuggestionsLocal.length - 1 ? h + 1 : 0
+                      );
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setCustomerHighlightedIndex((h) =>
+                        h > 0 ? h - 1 : customerSuggestionsLocal.length - 1
+                      );
+                      return;
+                    }
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const highlighted =
+                        customerSuggestionsLocal[customerHighlightedIndex];
+                      if (highlighted) {
+                        selectCustomerLocal(highlighted);
+                        return;
+                      }
+                    }
+                  }
+
+                  // If Enter pressed and no highlighted suggestion, try exact match
+                  if (e.key === "Enter") {
+                    const exact = Array.isArray(customers)
+                      ? customers.find(
+                          (c: any) =>
+                            String(c.name || "")
+                              .trim()
+                              .toLowerCase() ===
+                            String(customerQueryLocal || "")
+                              .trim()
+                              .toLowerCase()
+                        )
+                      : undefined;
+                    if (exact) {
+                      e.preventDefault();
+                      selectCustomerLocal(exact);
+                    } else if (
+                      !showCustomerSuggestions ||
+                      customerSuggestionsLocal.length === 0
+                    ) {
+                      // show a gentle warning UI
+                      setCustomerWarning("Customer not found");
+                    }
+                  }
+                }}
+                placeholder="Search or add customer"
+                className={`w-full px-3 py-2 border rounded-md bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary ${
+                  customerWarning ? "border-red-500" : ""
+                }`}
+              />
+
+              {showCustomerSuggestions &&
+                customerSuggestionsLocal.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 border rounded shadow z-50 max-h-52 overflow-auto">
+                    {customerSuggestionsLocal.map((c: any, idx: number) => (
+                      <button
+                        key={c.id ?? c.phone ?? idx}
+                        type="button"
+                        className={`w-full text-left px-3 py-2 ${
+                          idx === customerHighlightedIndex
+                            ? "bg-gray-100"
+                            : "hover:bg-muted/50"
+                        }`}
+                        onMouseEnter={() => setCustomerHighlightedIndex(idx)}
+                        onMouseDown={(ev) => {
+                          // mousedown to prevent input blur before click
+                          ev.preventDefault();
+                          selectCustomerLocal(c);
+                        }}
+                      >
+                        <div className="font-medium text-sm">{c.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {c.phone || c.email || ""}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+              {customerWarning && (
+                <div className="text-sm text-red-600 mt-1">
+                  {customerWarning}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Selected employee display */}
@@ -1153,33 +1324,71 @@ export default function BillSummary({
                   setTimeout(() => setShowCouponSuggestions(false), 150)
                 }
                 onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") {
+                    if (!showCouponSuggestions) {
+                      setShowCouponSuggestions(true);
+                      return;
+                    }
+                    e.preventDefault();
+                    setCouponHighlightedIndex((h) =>
+                      h < couponSuggestions.length - 1 ? h + 1 : 0
+                    );
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    if (!showCouponSuggestions) return;
+                    e.preventDefault();
+                    setCouponHighlightedIndex((h) =>
+                      h > 0 ? h - 1 : couponSuggestions.length - 1
+                    );
+                    return;
+                  }
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (couponQuery && typeof onCouponChange === "function") {
-                      const code = couponQuery.trim();
-                      onCouponChange(code);
-                      // if this code matches one of the loaded suggestions, pass the full coupon object
-                      try {
-                        const matched = couponSuggestions.find(
-                          (cc: any) => String(cc.code) === String(code)
-                        );
-                        if (matched && typeof onSelectCoupon === "function")
-                          onSelectCoupon(matched);
-                      } catch (e) {
-                        // ignore
-                      }
-                      setShowCouponSuggestions(false);
-                      toast({
-                        title: "Coupon set",
-                        description: code,
-                      });
-                      // apply discounts immediately after selecting coupon via Enter
-                      try {
-                        onApplyDiscounts?.(true);
-                      } catch (err) {
-                        /* ignore */
+                    if (showCouponSuggestions && couponHighlightedIndex >= 0) {
+                      const picked = couponSuggestions[couponHighlightedIndex];
+                      if (picked) {
+                        // select highlighted
+                        if (typeof onCouponChange === "function")
+                          onCouponChange(picked.code);
+                        if (typeof onSelectCoupon === "function")
+                          onSelectCoupon(picked);
+                        setCouponQuery(picked.code || "");
+                        setShowCouponSuggestions(false);
+                        setCouponWarning(null);
+                        toast({
+                          title: "Coupon set",
+                          description: picked.code,
+                        });
+                        try {
+                          onApplyDiscounts?.(true);
+                        } catch (err) {}
+                        return;
                       }
                     }
+
+                    // no highlighted suggestion: try exact match
+                    if (couponQuery && typeof onCouponChange === "function") {
+                      const code = couponQuery.trim();
+                      const matched = couponSuggestions.find(
+                        (cc: any) => String(cc.code) === String(code)
+                      );
+                      if (matched) {
+                        if (typeof onSelectCoupon === "function")
+                          onSelectCoupon(matched);
+                        setShowCouponSuggestions(false);
+                        setCouponWarning(null);
+                        toast({ title: "Coupon set", description: code });
+                        try {
+                          onApplyDiscounts?.(true);
+                        } catch (err) {}
+                      } else {
+                        setCouponWarning("Coupon not found");
+                      }
+                    }
+                  }
+                  if (e.key === "Escape") {
+                    setShowCouponSuggestions(false);
                   }
                 }}
                 placeholder="Search coupons or enter code"
@@ -1188,33 +1397,34 @@ export default function BillSummary({
 
               {showCouponSuggestions && couponSuggestions.length > 0 && (
                 <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 border rounded shadow z-50 max-h-52 overflow-auto">
-                  {couponSuggestions.map((c: any) => (
+                  {couponSuggestions.map((c: any, idx: number) => (
                     <button
                       key={c.id ?? c.code}
-                      className="w-full text-left px-3 py-2 hover:bg-muted/50"
-                      onClick={() => {
-                        // let parent know about selected coupon
+                      className={`w-full text-left px-3 py-2 ${
+                        idx === couponHighlightedIndex
+                          ? "bg-gray-100"
+                          : "hover:bg-muted/50"
+                      }`}
+                      onMouseEnter={() => setCouponHighlightedIndex(idx)}
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        // select coupon on mouse down to avoid blur
                         if (typeof onCouponChange === "function")
                           onCouponChange(c.code);
-                        // provide the full coupon object to parent (same as CouponPopup)
                         if (typeof onSelectCoupon === "function")
                           onSelectCoupon(c);
-                        // close suggestions and update local query
                         setCouponQuery(c.code || "");
                         setShowCouponSuggestions(false);
-                        // optionally show toast
+                        setCouponWarning(null);
                         toast({
                           title: "Coupon selected",
                           description: `${c.code} ${
                             c.description ? "- " + c.description : ""
                           }`,
                         });
-                        // apply discounts immediately after selecting coupon
                         try {
                           onApplyDiscounts?.(true);
-                        } catch (err) {
-                          /* ignore */
-                        }
+                        } catch (err) {}
                       }}
                     >
                       <div className="font-medium text-sm">{c.code}</div>

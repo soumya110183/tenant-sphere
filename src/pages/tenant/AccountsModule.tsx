@@ -119,6 +119,15 @@ const AccountsModule = () => {
     fetchData();
   }, []);
 
+  const formatAED = (value: any) => {
+    const num = Number(value ?? 0) || 0;
+    return new Intl.NumberFormat("en-AE", {
+      style: "currency",
+      currency: "AED",
+      maximumFractionDigits: 2,
+    }).format(num);
+  };
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -209,46 +218,71 @@ const AccountsModule = () => {
           <p className="text-muted-foreground">View all financial statements</p>
         </div>
 
-        <Button>
+        {/* <Button>
           <Download className="mr-2 h-4 w-4" />
           Export
-        </Button>
+        </Button> */}
       </div>
 
-      {/* SUMMARY CARDS */}
-      <div className="grid md:grid-cols-4 gap-4">
-        <Card className="relative">
-          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-primary" />
-          <CardHeader className="flex">
-            <CardTitle className="text-sm text-muted-foreground">Total Assets</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.assetTotal || 0}</CardContent>
-        </Card>
+      {/* SUMMARY CARDS (config-driven) */}
+      {(() => {
+        const asset = Number(balanceSheet?.totals?.assetTotal ?? 0) || 0;
+        const liability =
+          Number(balanceSheet?.totals?.liabilityTotal ?? 0) || 0;
 
-        <Card className="relative">
-          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-red-500" />
-          <CardHeader className="flex">
-            <CardTitle className="text-sm text-muted-foreground">Liabilities</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.liabilityTotal || 0}</CardContent>
-        </Card>
+        const summaryCards = [
+          {
+            label: "Total Assets",
+            value: asset,
+            icon: DollarSign,
+            iconClass: "text-primary",
+          },
+          {
+            label: "Liabilities",
+            value: liability,
+            icon: DollarSign,
+            iconClass: "text-red-500",
+          },
+          {
+            label: "Equity",
+            value: asset - liability,
+            icon: DollarSign,
+            iconClass: "text-green-600",
+          },
+        ];
 
-        <Card className="relative">
-          <DollarSign className="absolute top-3 right-3 h-5 w-5 text-green-600" />
-          <CardHeader className="flex">
-            <CardTitle className="text-sm text-muted-foreground">Equity</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">AED {balanceSheet?.totals?.equityTotal || 0}</CardContent>
-        </Card>
+        return (
+          <div className="grid md:grid-cols-4 gap-4">
+            {summaryCards.map((c) => (
+              <Card key={c.label} className="relative">
+                <c.icon
+                  className={`absolute top-3 right-3 h-5 w-5 ${c.iconClass}`}
+                />
+                <CardHeader className="flex">
+                  <CardTitle className="text-sm text-muted-foreground">
+                    {c.label}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold">
+                  {formatAED(c.value)}
+                </CardContent>
+              </Card>
+            ))}
 
-        <Card className="relative">
-          <Receipt className="absolute top-3 right-3 h-5 w-5 text-primary" />
-          <CardHeader className="flex">
-            <CardTitle className="text-sm text-muted-foreground">VAT Payable</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">AED {vat[0]?.vat_payable || 0}</CardContent>
-        </Card>
-      </div>
+            <Card className="relative">
+              <Receipt className="absolute top-3 right-3 h-5 w-5 text-primary" />
+              <CardHeader className="flex">
+                <CardTitle className="text-sm text-muted-foreground">
+                  VAT Payable
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-2xl font-bold">
+                {formatAED(vat[0]?.vat_payable)}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* TABS */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))}>
