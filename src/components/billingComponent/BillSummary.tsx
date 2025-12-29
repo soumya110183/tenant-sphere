@@ -44,7 +44,7 @@ import { CustomerSearch } from "./CustomerSearch";
 
 const API_BASE =
   (import.meta as any)?.env?.VITE_API_URL ??
-  "http://localhost:5000";
+  "https://billingbackend-1vei.onrender.com";
 
 type BillRow = {
   code: string;

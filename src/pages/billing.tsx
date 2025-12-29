@@ -29,7 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 const SupermarketBilling = () => {
   const { toast } = useToast();

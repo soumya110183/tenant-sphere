@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 // API Configuration
-const API_BASE_URL = "http://localhost:5000/api/products";
+const API_BASE_URL = "https://billingbackend-1vei.onrender.com/api/products";
 
 // Use centralized productService from services/api
 import { productService } from "../services/api";

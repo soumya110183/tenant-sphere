@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://billingbackend-1vei.onrender.com";
 
 export default function Coupons() {
   const [coupons, setCoupons] = useState<any[]>([]);
