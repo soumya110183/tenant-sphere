@@ -17,6 +17,7 @@ import {
   Mail,
   User,
   AlertCircle,
+  Package,
 } from "lucide-react";
 
 import { staffService } from "@/services/api"; // <-- your api.js path
@@ -120,6 +121,42 @@ const StaffModal = ({
             </div>
           </div>
 
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Phone</label>
+            <div className="flex items-center border rounded-md px-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="tel"
+                disabled={saving}
+                className="w-full px-2 py-2 bg-background text-sm"
+                placeholder="Phone number"
+                value={formData.phone || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          {/* Salary */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Salary</label>
+            <div className="flex items-center border rounded-md px-2">
+              <Package className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="number"
+                disabled={saving}
+                className="w-full px-2 py-2 bg-background text-sm"
+                placeholder="Monthly salary"
+                value={formData.salary ?? 0}
+                onChange={(e) =>
+                  setFormData({ ...formData, salary: Number(e.target.value) })
+                }
+              />
+            </div>
+          </div>
+
           {/* Password - only for creating */}
           {!editing && (
             <div>
@@ -215,7 +252,7 @@ const Staff = () => {
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [showModal, setShowModal] = useState(false);
   const [editingData, setEditingData] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ phone: "", salary: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
@@ -276,6 +313,9 @@ const Staff = () => {
         email: "",
         password: "",
         role: "staff",
+        position: "staff",
+        phone: "",
+        salary: 0,
         is_active: true,
       }
     );
@@ -287,10 +327,18 @@ const Staff = () => {
     e.preventDefault();
     try {
       setSaving(true);
+      // Build payload ensuring backend fields exist: position, phone, salary
+      const payload = {
+        ...formData,
+        position: formData.position ?? formData.role ?? "staff",
+        phone: formData.phone ?? "",
+        salary: Number(formData.salary || 0),
+      };
+
       if (editingData) {
-        await staffService.update(editingData.id, formData);
+        await staffService.update(editingData.id, payload);
       } else {
-        await staffService.create(formData);
+        await staffService.create(payload);
       }
       setShowModal(false);
       loadStaff();

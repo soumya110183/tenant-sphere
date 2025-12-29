@@ -957,44 +957,89 @@ function SalariesView({
                     </td>
                   </tr>
                 ) : (
-                  activeSalaries.map((s) => (
-                    <tr key={s._id} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-2 sm:px-4 font-medium text-sm">
-                        {s.employeeName}
-                      </td>
-                      <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
-                        AED {s.monthlySalary.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-2 sm:px-4">
-                        <Badge className="bg-green-500/10 text-green-500">
-                          <UserCheck className="h-3 w-3 mr-1 inline" />
-                          Active
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-2 sm:px-4">
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            size="sm"
-                            className="gap-1 bg-blue-600 hover:bg-blue-700"
-                            onClick={() => markSalaryPaid(s.employeeId)}
-                          >
-                            <CreditCard className="h-3 w-3" /> Process Payment
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1"
-                            onClick={() =>
-                              onOpenHistory &&
-                              onOpenHistory(s.employeeId, s.employeeName)
-                            }
-                          >
-                            <FileText className="h-3 w-3" /> History
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  activeSalaries.map((s) => {
+                    const currentMonth = new Date().toISOString().slice(0, 7); // yyyy-mm
+
+                    const isPaid = Array.isArray(salaryPayments)
+                      ? salaryPayments.some((p) => {
+                          try {
+                            const pid = String(
+                              p.employee_id ?? p.employeeId ?? ""
+                            ).trim();
+                            const sid = String(
+                              s.employeeId ?? s.employeeId ?? ""
+                            ).trim();
+                            if (!pid || !sid || pid !== sid) return false;
+
+                            // Normalize month: accept 'yyyy-mm', 'yyyy-mm-dd', or use created_at
+                            const rawMonth = String(
+                              p.month ?? p.created_at ?? ""
+                            ).trim();
+                            if (!rawMonth) return false;
+                            const normalizedPMonth = rawMonth.slice(0, 7); // yyyy-mm
+
+                            return (
+                              normalizedPMonth === currentMonth ||
+                              rawMonth.includes(currentMonth)
+                            );
+                          } catch (e) {
+                            return false;
+                          }
+                        })
+                      : false;
+
+                    return (
+                      <tr key={s._id} className="border-b hover:bg-muted/50">
+                        <td className="py-3 px-2 sm:px-4 font-medium text-sm">
+                          {s.employeeName}
+                        </td>
+                        <td className="py-3 px-2 sm:px-4 font-semibold text-sm">
+                          AED {s.monthlySalary.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-2 sm:px-4">
+                          <Badge className="bg-green-500/10 text-green-500">
+                            <UserCheck className="h-3 w-3 mr-1 inline" />
+                            Active
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-2 sm:px-4">
+                          <div className="flex gap-2 justify-end">
+                            {isPaid ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled
+                                className="gap-1 text-black"
+                              >
+                                <CreditCard className="h-3 w-3" /> Already paid for this month
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                className="gap-1 bg-blue-600 hover:bg-blue-700"
+                                onClick={() => markSalaryPaid(s.employeeId)}
+                              >
+                                <CreditCard className="h-3 w-3" /> Process
+                                Payment
+                              </Button>
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              onClick={() =>
+                                onOpenHistory &&
+                                onOpenHistory(s.employeeId, s.employeeName)
+                              }
+                            >
+                              <FileText className="h-3 w-3" /> History
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1736,7 +1781,27 @@ export default function Employees() {
       let payments: any[] = [];
       try {
         const spJson = await salaryService.getAll();
-        payments = (spJson || []).map((p: any) => ({
+
+        // Support multiple response shapes: array, { data: [] }, { success, data: [] }
+        let spArray: any[] = [];
+        if (Array.isArray(spJson)) {
+          spArray = spJson;
+        } else if (Array.isArray(spJson?.data)) {
+          spArray = spJson.data;
+        } else if (Array.isArray(spJson?.data?.data)) {
+          spArray = spJson.data.data;
+        } else if (spJson && typeof spJson === "object") {
+          // try to find first array property
+          const vals = Object.values(spJson).find(Array.isArray);
+          if (Array.isArray(vals)) spArray = vals as any[];
+        }
+
+        if (!Array.isArray(spArray)) {
+          console.warn("Unexpected salaryService.getAll() shape:", spJson);
+          spArray = [];
+        }
+
+        payments = spArray.map((p: any) => ({
           id: p.id || p._id || `${p.employee_id}-${p.month}`,
           employee_id: p.employee_id,
           employee_name:
@@ -1752,6 +1817,7 @@ export default function Employees() {
           payment_method: p.payment_method,
           created_at: p.created_at || p.createdAt || new Date().toISOString(),
         }));
+
         setSalaryPayments(payments);
       } catch (e) {
         console.warn("Failed to fetch salary payments:", e);

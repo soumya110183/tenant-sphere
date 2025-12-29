@@ -51,6 +51,9 @@ export const Modal = ({
   const [purchaseQuery, setPurchaseQuery] = useState("");
   const [purchaseResults, setPurchaseResults] = useState<any[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchaseFocused, setPurchaseFocused] = useState(false);
+  const [purchaseHighlightedIndex, setPurchaseHighlightedIndex] = useState<number>(-1);
+  const purchaseListRef = useRef<HTMLDivElement | null>(null);
   // Helper: compute refund lines & total for sales return modal
   let selectedSale: any = null;
   let refundComputation: {
@@ -1092,46 +1095,106 @@ export const Modal = ({
                           className="w-full px-3 py-2 mb-2 border rounded-md bg-background text-sm"
                           value={purchaseQuery}
                           onChange={(e) => setPurchaseQuery(e.target.value)}
-                        />
-                        <select
-                          required
-                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                          value={formData.purchaseId || ""}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              purchaseId: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="">Select Purchase...</option>
-                          {(purchaseQuery && !purchaseLoading
-                            ? purchaseResults || []
-                            : purchases || []
-                          )
-                            .filter((p: any) => {
-                              const sid =
-                                p.supplier_id ??
-                                p.supplierId ??
-                                p.Suppliers_id ??
-                                p.supplier?.id ??
-                                p.supplier_id;
-                              return (
-                                String(sid) === String(formData.supplierId)
+                          onFocus={() => setPurchaseFocused(true)}
+                          onBlur={() => setTimeout(() => setPurchaseFocused(false), 150)}
+                          onKeyDown={(e) => {
+                            const list = purchaseResults || [];
+                            if (list.length === 0) return;
+                            if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              setPurchaseHighlightedIndex((i) =>
+                                Math.min((i < 0 ? 0 : i) + 1, list.length - 1)
                               );
-                            })
-                            .map((p: any) => (
-                              <option key={p.id} value={p.id}>
-                                PO #{p.invoice_number || p.id}
-                              </option>
-                            ))}
-                          {purchaseLoading && <option>Searching...</option>}
-                          {purchaseQuery &&
-                            !purchaseLoading &&
-                            purchaseResults.length === 0 && (
-                              <option value="">No purchases found</option>
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              setPurchaseHighlightedIndex((i) =>
+                                Math.max((i < 0 ? 0 : i) - 1, 0)
+                              );
+                            } else if (e.key === "Enter") {
+                              e.preventDefault();
+                              const idx = purchaseHighlightedIndex >= 0 ? purchaseHighlightedIndex : 0;
+                              const sel = list[idx];
+                              if (sel) {
+                                setFormData({ ...formData, purchaseId: String(sel.id) });
+                                setPurchaseQuery(sel.invoice_number ?? String(sel.id));
+                                setPurchaseResults([]);
+                                setPurchaseFocused(false);
+                                setPurchaseHighlightedIndex(-1);
+                              }
+                            } else if (e.key === "Escape") {
+                              setPurchaseFocused(false);
+                              setPurchaseHighlightedIndex(-1);
+                            }
+                          }}
+                        />
+
+                        {((purchaseQuery && (purchaseFocused || purchaseResults.length > 0)) || purchaseFocused) ? (
+                          <div
+                            ref={purchaseListRef}
+                            className="max-h-48 overflow-y-auto border rounded-md bg-white mt-2"
+                            style={{ display: purchaseLoading || purchaseResults.length > 0 ? undefined : "none" }}
+                          >
+                            {purchaseLoading ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">Searching...</div>
+                            ) : purchaseResults.length === 0 ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">No purchases</div>
+                            ) : (
+                              purchaseResults.map((p, idx) => {
+                                const isActive = idx === purchaseHighlightedIndex;
+                                const sid = p.supplier_id ?? p.supplierId ?? p.Suppliers_id ?? p.supplier?.id;
+                                if (String(sid) !== String(formData.supplierId)) return null;
+                                return (
+                                  <button
+                                    key={p.id}
+                                    data-idx={idx}
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      setFormData({ ...formData, purchaseId: String(p.id) });
+                                      setPurchaseQuery(p.invoice_number ?? String(p.id));
+                                      setPurchaseResults([]);
+                                      setPurchaseFocused(false);
+                                      setPurchaseHighlightedIndex(-1);
+                                    }}
+                                    onMouseEnter={() => setPurchaseHighlightedIndex(idx)}
+                                    className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center ${
+                                      isActive ? "bg-primary/10 dark:bg-primary/600 text-foreground dark:text-white" : "hover:bg-muted/30"
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="font-medium">PO #{p.invoice_number ?? p.id}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {p.created_at ? new Date(p.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "N/A"}
+                                      </div>
+                                    </div>
+                                    <div className="text-sm font-semibold">AED {Number(p.total_amount || p.total || 0).toFixed(2)}</div>
+                                  </button>
+                                );
+                              })
                             )}
-                        </select>
+                          </div>
+                        ) : (
+                          <select
+                            required
+                            className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                            value={formData.purchaseId || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, purchaseId: e.target.value })
+                            }
+                          >
+                            <option value="">Select Purchase...</option>
+                            {(purchases || [])
+                              .filter((p: any) => {
+                                const sid = p.supplier_id ?? p.supplierId ?? p.Suppliers_id ?? p.supplier?.id ?? p.supplier_id;
+                                return String(sid) === String(formData.supplierId);
+                              })
+                              .map((p: any) => (
+                                <option key={p.id} value={p.id}>
+                                  PO #{p.invoice_number || p.id}
+                                </option>
+                              ))}
+                          </select>
+                        )}
                       </div>
                     </div>
                   )}

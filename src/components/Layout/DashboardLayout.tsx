@@ -11,9 +11,9 @@ export const DashboardLayout = () => {
       {/* Content wrapper */}
       <div
         className={
-          // On desktop, reserve space for expanded sidebar width (w-64).
-          // On mobile, no left padding; the Sidebar becomes an overlay drawer.
-          "min-h-[100dvh] lg:pl-64 flex flex-col"
+          // Reserve space for sidebar across breakpoints so content isn't hidden.
+          // Small screens: collapsed sidebar uses w-16 -> pl-16; Large: expanded w-64 -> lg:pl-64
+          "min-h-[100dvh] pl-16 lg:pl-64 flex flex-col"
         }
       >
         {/* Top navbar (optional: make it sticky if you want) */}
