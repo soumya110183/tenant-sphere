@@ -435,6 +435,13 @@ const CustomerPage: FC = () => {
     }
   };
 
+  const openCreate = () => {
+    setFormErrors({});
+    setForm(initialForm);
+    setEditingId(null);
+    setModalOpen(true);
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     if (!form.name || !form.name.trim()) errors.name = "Name is required";
